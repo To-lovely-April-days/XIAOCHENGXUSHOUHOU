@@ -1,0 +1,59 @@
+<!-- 新建工单 -->
+<view class="new-card" hover-class="btn-hover" bindtap="toNew" aria-role="button" aria-label="新建工单">
+  <view class="flex1">
+    <view class="new-title">新建工单</view>
+    <view class="new-sub">填写客户、设备、故障情况与服务价格</view>
+  </view>
+  <view class="new-plus"><ui-icon name="plus" color="#1D1D1F" size="24" stroke="2.2" /></view>
+</view>
+
+<!-- 最近客户 -->
+<view wx:if="{{customers.length}}" class="recent">
+  <text class="recent-label">最近客户</text>
+  <scroll-view scroll-x enable-flex class="recent-scroll" show-scrollbar="{{false}}">
+    <view class="recent-inner">
+      <view wx:for="{{customers}}" wx:key="idx" class="recent-chip" hover-class="btn-hover" data-idx="{{item.idx}}" bindtap="onCustomer">{{item.customerName}}</view>
+    </view>
+  </scroll-view>
+</view>
+
+<!-- 我提交的工单 -->
+<view class="sec-head">
+  <text class="sec-title">我提交的工单</text>
+  <view class="sec-link" hover-class="btn-hover" bindtap="toAll">全部工单<ui-icon name="right" color="#1D1D1F" size="16" stroke="2" /></view>
+</view>
+
+<scroll-view scroll-x enable-flex class="filter-scroll" show-scrollbar="{{false}}" aria-label="按状态筛选">
+  <view class="filter-inner">
+    <view wx:for="{{filters}}" wx:key="key" class="chip {{filter === item.key ? 'active' : ''}}" data-key="{{item.key}}" bindtap="onFilter" aria-role="button" aria-selected="{{filter === item.key}}">
+      {{item.label}}<text class="chip-count">{{item.count}}</text>
+    </view>
+  </view>
+</scroll-view>
+
+<view wx:if="{{status === 'loading'}}" class="state-box">加载中…</view>
+<view wx:elif="{{status === 'error'}}">
+  <empty text="工单加载失败" desc="{{errorText}}">
+    <view class="btn-sm btn-secondary" hover-class="btn-hover" bindtap="onRetry">重试</view>
+  </empty>
+</view>
+<view wx:elif="{{!items.length}}">
+  <empty text="{{filter === 'all' ? '还没有提交过工单' : '该状态下暂无工单'}}" desc="{{filter === 'all' ? '点上方「新建工单」，提交后可在这里跟踪进度' : ''}}" />
+</view>
+<view wx:else class="list-card {{listLoading ? 'dim' : ''}}">
+  <view wx:for="{{items}}" wx:key="id" class="o-item" hover-class="row-hover" data-id="{{item.id}}" bindtap="toDetail">
+    <view class="o-top">
+      <text class="o-name ellipsis">{{item.customerName}}</text>
+      <urgency-tag urgency="{{item.urgency}}" />
+      <text class="{{item.free ? 'o-free' : 'o-price'}}">{{item.priceText}}</text>
+    </view>
+    <view class="o-mid">
+      <status-tag status="{{item.status}}" />
+      <avatar wx:if="{{item.assignee}}" user="{{item.assignee}}" size="20" />
+      <text class="o-note ellipsis">{{item.note}}</text>
+    </view>
+    <view class="o-segs" aria-label="{{item.progressLabel}}">
+      <view wx:for="{{item.segs}}" wx:for-item="s" wx:key="i" class="o-seg {{s.on ? 'on' : ''}}"></view>
+    </view>
+  </view>
+</view>

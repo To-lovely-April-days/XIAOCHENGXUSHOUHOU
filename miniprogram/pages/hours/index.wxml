@@ -1,0 +1,159 @@
+<view class="page hours tabbar-space">
+  <!-- 标题行（与胶囊对齐） -->
+  <view style="height: {{statusBarHeight}}px;"></view>
+  <view class="head" style="height: {{navBarHeight}}px; padding-right: {{sideWidth}}px;">
+    <text class="head-title">我的工时</text>
+  </view>
+
+  <!-- 非工程师 -->
+  <view wx:if="{{role && !isEngineer}}" class="body">
+    <empty text="工时统计仅对售后工程师开放" desc="销售和主管可在工单详情中查看现场打卡与工时。">
+      <view class="btn-secondary btn-sm" hover-class="btn-hover" bindtap="goHome">返回首页</view>
+    </empty>
+  </view>
+
+  <block wx:elif="{{isEngineer}}">
+    <view class="segmented seg" aria-role="tablist">
+      <view class="segmented-item {{tab === 'day' ? 'active' : ''}}" data-tab="day" bindtap="onTab" aria-role="tab" aria-selected="{{tab === 'day'}}">按天</view>
+      <view class="segmented-item {{tab === 'month' ? 'active' : ''}}" data-tab="month" bindtap="onTab" aria-role="tab" aria-selected="{{tab === 'month'}}">按月</view>
+    </view>
+
+    <!-- ========== 按天 ========== -->
+    <block wx:if="{{tab === 'day'}}">
+      <view wx:if="{{todayLoading}}" class="state">加载中…</view>
+      <view wx:elif="{{todayError}}" class="body">
+        <empty text="{{todayError}}" desc="请检查网络后重试">
+          <view class="btn-secondary btn-sm" hover-class="btn-hover" bindtap="retryToday">重新加载</view>
+        </empty>
+      </view>
+      <block wx:else>
+        <view class="today">
+          <canvas type="2d" id="clock" class="clock" aria-label="今日现场时间表盘"></canvas>
+          <view class="today-info">
+            <view class="today-date">{{todayLabel}}</view>
+            <view class="today-total">{{todayHm}}<text wx:if="{{todaySs}}" class="today-ss">{{todaySs}}</text></view>
+            <view class="today-state">
+              <block wx:if="{{running}}"><view class="dot"></view><text>现场计时中</text></block>
+              <text wx:elif="{{entries.length}}">今日现场工时</text>
+              <text wx:else class="muted">今日暂无现场打卡</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="body">
+          <view wx:if="{{!entries.length}}">
+            <empty text="今天还没有现场打卡" desc="到达客户现场后，点底部「打卡」拍照打卡，离开时再打离场卡。" />
+          </view>
+
+          <view wx:for="{{entries}}" wx:key="key" class="card entry" hover-class="entry-hover" data-id="{{item.orderId}}" bindtap="onEntryTap">
+            <view class="entry-top">
+              <text class="entry-name ellipsis">{{item.customerName}}</text>
+              <text class="entry-dur {{item.running ? 'red' : ''}}">{{item.dur}}</text>
+            </view>
+            <view class="entry-sub">{{item.orderNo}} · 工时 = 离场 − 到场<text wx:if="{{item.isSupplement}}" class="amber"> · 含主管补录</text></view>
+            <view class="pair">
+              <!-- 到场 -->
+              <view class="side">
+                <view wx:if="{{item.arrive.photo}}" class="shot" data-url="{{item.arrive.photo}}" catchtap="onPhotoTap">
+                  <image class="shot-img" src="{{item.arrive.photo}}" mode="aspectFill" lazy-load />
+                  <text class="shot-label">{{item.arrive.title}}</text>
+                </view>
+                <view wx:else class="shot shot-empty"><text>{{item.arrive.title}}</text></view>
+                <view class="side-note {{item.arrive.distClass}}">{{item.arrive.distText}}</view>
+              </view>
+              <!-- 离场 -->
+              <view class="side">
+                <block wx:if="{{item.leave}}">
+                  <view wx:if="{{item.leave.photo}}" class="shot" data-url="{{item.leave.photo}}" catchtap="onPhotoTap">
+                    <image class="shot-img" src="{{item.leave.photo}}" mode="aspectFill" lazy-load />
+                    <text class="shot-label">{{item.leave.title}}</text>
+                  </view>
+                  <view wx:else class="shot shot-empty"><text>{{item.leave.title}}</text></view>
+                  <view class="side-note {{item.leave.distClass}}">{{item.leave.distText}}</view>
+                </block>
+                <block wx:else>
+                  <view class="shot shot-wait"><text>离场 · 待打卡</text></view>
+                  <view class="side-note">离开现场时拍照</view>
+                </block>
+              </view>
+            </view>
+          </view>
+
+          <view wx:if="{{running}}" class="leave-btn" hover-class="btn-hover" bindtap="goLeave" aria-role="button">
+            <ui-icon name="camera" color="#FFFFFF" size="20" stroke="2" />
+            <text>离场打卡</text>
+          </view>
+
+          <view class="tip">漏打卡或打卡有误，请联系主管在后台补录，补录记录会单独标注。</view>
+        </view>
+      </block>
+    </block>
+
+    <!-- ========== 按月 ========== -->
+    <block wx:else>
+      <view class="month-head">
+        <view class="month-switch">
+          <view class="arrow" hover-class="btn-hover" bindtap="prevMonth" aria-role="button" aria-label="上个月">
+            <ui-icon name="back" color="#1D1D1F" size="16" stroke="2.2" />
+          </view>
+          <text class="month-label">{{monthLabel}} · 本月现场工时</text>
+          <view class="arrow {{canNext ? '' : 'arrow-off'}}" hover-class="{{canNext ? 'btn-hover' : 'none'}}" bindtap="nextMonth" aria-role="button" aria-label="下个月" aria-disabled="{{!canNext}}">
+            <ui-icon name="right" color="{{canNext ? '#1D1D1F' : '#C7C7C5'}}" size="16" stroke="2.2" />
+          </view>
+        </view>
+        <view class="month-sum">
+          <view class="month-total">{{monthLoading ? '—' : monthTotal}}</view>
+          <view class="month-days">
+            <view class="month-days-num">{{monthLoading ? '—' : tripDays + ' 天'}}</view>
+            <view class="month-days-label">有打卡</view>
+          </view>
+        </view>
+      </view>
+
+      <view wx:if="{{monthLoading}}" class="state">加载中…</view>
+      <view wx:elif="{{monthError}}" class="body">
+        <empty text="{{monthError}}" desc="请检查网络后重试">
+          <view class="btn-secondary btn-sm" hover-class="btn-hover" bindtap="retryMonth">重新加载</view>
+        </empty>
+      </view>
+      <block wx:else>
+        <view class="calendar" aria-label="{{monthLabel}}日历，颜色越深工时越长">
+          <view class="cal-grid">
+            <text wx:for="{{weekHead}}" wx:key="*this" class="cal-head">{{item}}</text>
+            <view wx:for="{{cells}}" wx:key="key" class="cal-cell {{item.blank ? 'cal-blank' : ''}} {{item.today ? 'cal-today' : ''}}" style="{{item.blank ? '' : 'background: ' + item.bg + '; color: ' + item.fg + ';'}}">
+              <text wx:if="{{!item.blank}}">{{item.day}}</text>
+              <view wx:if="{{item.dot}}" class="cal-dot"></view>
+            </view>
+          </view>
+          <view class="legend">
+            <view class="legend-item"><view class="legend-dot" style="background: #C81E2B;"></view><text>颜色越深工时越长</text></view>
+            <view class="legend-item"><view class="legend-dot" style="background: #D18A00;"></view><text>含主管补录</text></view>
+          </view>
+        </view>
+
+        <view class="body">
+          <empty wx:if="{{!days.length}}" text="本月暂无现场打卡" />
+          <view wx:else class="card day-list">
+            <view wx:for="{{days}}" wx:key="date" class="day-row" hover-class="entry-hover" data-id="{{item.orderId}}" bindtap="onEntryTap">
+              <view class="day-date">
+                <text class="day-week">{{item.week}}</text>
+                <text class="day-num">{{item.day}}</text>
+              </view>
+              <view class="day-main">
+                <text class="day-customer ellipsis">{{item.customer}}</text>
+                <text class="day-note ellipsis {{item.noteClass}}">{{item.note}}</text>
+              </view>
+              <text class="day-dur {{item.running ? 'red' : ''}}">{{item.dur}}</text>
+            </view>
+          </view>
+          <view class="tip tip-sm">页面显示到分钟；导出时按小时保留 1 位小数。</view>
+        </view>
+      </block>
+    </block>
+  </block>
+  <view wx:if="{{!role && loginError}}" class="body">
+    <empty text="{{loginError}}">
+      <view class="btn-secondary btn-sm" hover-class="btn-hover" bindtap="onLoginRetry">重试</view>
+    </empty>
+  </view>
+</view>

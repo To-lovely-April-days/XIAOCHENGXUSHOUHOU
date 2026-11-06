@@ -1,0 +1,32 @@
+<!-- 只在非滚动区域拦截 touchmove（防止页面穿透滚动），列表 scroll-view 不拦截，否则无法滚动 -->
+<view wx:if="{{show}}" class="as-root">
+  <view class="as-mask" bindtap="close" catchtouchmove="noop" aria-role="button" aria-label="关闭"></view>
+  <view class="as-sheet" aria-role="dialog" aria-label="{{title}}">
+    <view class="as-handle" catchtouchmove="noop"></view>
+    <view class="as-head" catchtouchmove="noop">
+      <text class="as-title">{{title}}</text>
+      <view class="as-cancel" hover-class="as-hover" bindtap="close">取消</view>
+    </view>
+    <view wx:if="{{subtitle}}" class="as-sub" catchtouchmove="noop">{{subtitle}}</view>
+
+    <scroll-view scroll-y class="as-list" aria-role="radiogroup" aria-label="选择工程师">
+      <view wx:if="{{loading}}" class="as-state">加载中…</view>
+      <view wx:elif="{{error}}" class="as-state">
+        <text>{{error}}</text>
+        <view class="as-retry" bindtap="load">重试</view>
+      </view>
+      <view wx:elif="{{!engineers.length}}" class="as-state">暂无可指派的工程师，请在后台添加账号</view>
+      <view wx:for="{{engineers}}" wx:key="id" class="as-item" hover-class="as-item-hover"
+            data-id="{{item.id}}" bindtap="onPick" aria-role="radio" aria-checked="{{pickId === item.id}}">
+        <view class="as-item-main">
+          <view class="as-name">{{item.name}}<text wx:if="{{item.current}}" class="as-current">当前处理人</text></view>
+          <view class="as-load">{{item.loadText}}</view>
+        </view>
+        <view class="as-radio {{pickId === item.id ? 'on' : ''}}"><view class="as-radio-dot"></view></view>
+      </view>
+    </scroll-view>
+
+    <view class="as-note" catchtouchmove="noop">指派后工单进入“待启动”，被指派人收到钉钉群提醒；状态记录中会保留指派人和时间。</view>
+    <view catchtouchmove="noop" class="as-confirm {{canConfirm && !submitting ? '' : 'disabled'}}" hover-class="{{canConfirm ? 'as-hover' : 'none'}}" bindtap="onConfirm">{{confirmLabel}}</view>
+  </view>
+</view>

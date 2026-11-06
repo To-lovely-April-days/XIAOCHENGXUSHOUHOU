@@ -1,0 +1,63 @@
+<view class="page me tabbar-space">
+  <!-- 顶部与胶囊对齐的空白 -->
+  <view style="height: {{statusBarHeight + navBarHeight}}px;"></view>
+
+  <view class="profile">
+    <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar" hover-class="btn-hover" aria-label="更换头像">
+      <avatar user="{{user}}" size="64" />
+      <view class="avatar-edit"><ui-icon name="camera" color="#FFFFFF" size="12" stroke="2.2" /></view>
+    </button>
+    <view class="profile-info">
+      <view class="row name-row">
+        <text class="name ellipsis">{{user ? user.name : ''}}</text>
+        <text wx:if="{{roleName}}" class="role-tag">{{roleName}}</text>
+      </view>
+      <view class="subline num-font">{{subline}}</view>
+    </view>
+  </view>
+
+  <view wx:if="{{stats.length}}" class="stats" style="grid-template-columns: repeat({{stats.length}}, minmax(0, 1fr));">
+    <view wx:for="{{stats}}" wx:key="label" class="stat" hover-class="btn-hover" data-key="{{item.key}}" bindtap="onStatTap">
+      <view class="stat-value">{{item.value}}</view>
+      <view class="stat-label">{{item.label}}</view>
+    </view>
+  </view>
+
+  <view wx:if="{{error}}" class="load-error" bindtap="onRetry">{{error}}，点击重试</view>
+
+  <view class="menu card">
+    <block wx:if="{{isEngineer}}">
+      <view class="menu-item" hover-class="menu-hover" bindtap="goHours">
+        <text class="menu-text">我的工时</text>
+        <text class="menu-extra num-font">{{monthText}}</text>
+        <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+      </view>
+      <view class="menu-item" hover-class="menu-hover" bindtap="goMyOrders">
+        <text class="menu-text">我的工单</text>
+        <text class="menu-extra num-font">{{activeText}}</text>
+        <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+      </view>
+    </block>
+    <button class="menu-item menu-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar" hover-class="menu-hover">
+      <text class="menu-text">更换头像</text>
+      <text wx:if="{{uploading}}" class="menu-extra">上传中</text>
+      <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+    </button>
+  </view>
+
+  <view class="menu card">
+    <view class="menu-item" hover-class="menu-hover" bindtap="goPrivacy">
+      <text class="menu-text">用户隐私保护指引</text>
+      <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+    </view>
+    <view class="menu-item" hover-class="menu-hover" bindtap="onVersionTap">
+      <text class="menu-text">当前版本</text>
+      <text class="menu-extra num-font">{{version}}</text>
+      <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+    </view>
+  </view>
+
+  <view class="foot-note">当前微信已绑定员工账号。更换手机或微信，请联系售后主管在后台解绑后重新验证。姓名、角色和手机号由主管维护。</view>
+
+  <view wx:if="{{showDev}}" class="dev-logout" hover-class="btn-hover" bindtap="onDevLogout">退出登录（调试）</view>
+</view>

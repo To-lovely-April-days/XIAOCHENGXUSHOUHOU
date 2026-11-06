@@ -1,0 +1,15 @@
+<view wx:if="{{!hidden && items.length}}" class="tabbar">
+  <view wx:for="{{items}}" wx:key="key" class="tab {{item.center ? 'tab-center' : ''}}" data-index="{{index}}" bindtap="onTap"
+        aria-role="tab" aria-label="{{item.text}}" aria-selected="{{selected === item.key}}">
+    <block wx:if="{{item.center}}">
+      <view class="center-btn" style="background: {{item.btnBg}}; box-shadow: 0 8rpx 24rpx {{item.shadow}};">
+        <image class="center-icon" src="{{item.iconSrc}}" />
+      </view>
+      <text class="label label-center" style="color: {{item.labelColor}};">{{item.text}}</text>
+    </block>
+    <block wx:else>
+      <image class="icon" src="{{selected === item.key ? item.iconOn : item.iconOff}}" />
+      <text class="label {{selected === item.key ? 'on' : ''}}">{{item.text}}</text>
+    </block>
+  </view>
+</view>

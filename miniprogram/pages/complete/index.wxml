@@ -1,0 +1,108 @@
+<nav-bar title="完工提交" />
+
+<view class="page cp">
+  <view wx:if="{{loading && !order}}" class="cp-state muted">加载中…</view>
+  <empty wx:elif="{{loadError && !order}}" text="{{loadError}}">
+    <button class="btn-sm btn-secondary" hover-class="btn-hover" bindtap="onRetry">重新加载</button>
+  </empty>
+
+  <block wx:else>
+    <view class="cp-notice">提交后工单进入「待验收」，主管确认后闭环</view>
+
+    <view class="cp-order">
+      <text class="cp-order-name ellipsis flex1">{{order.customerName}}</text>
+      <text class="cp-order-no num">{{order.orderNo}}</text>
+    </view>
+
+    <view wx:if="{{!canSubmit}}" class="cp-warn">
+      <ui-icon name="warning" color="#9A5B00" size="16" stroke="2" />
+      <text class="flex1">{{blockText}}</text>
+    </view>
+    <view wx:elif="{{onSite}}" class="cp-warn" bindtap="goCheckin">
+      <ui-icon name="warning" color="#9A5B00" size="16" stroke="2" />
+      <text class="flex1">你还在现场计时中，提交完工前请先离场打卡</text>
+      <text class="cp-warn-link">去打卡</text>
+    </view>
+
+    <!-- 文本 -->
+    <view class="cp-card">
+      <view class="cp-field">
+        <view class="cp-label">现场确认的故障原因 <text class="red">*</text></view>
+        <textarea class="cp-textarea" value="{{faultCause}}" data-field="faultCause" bindinput="onInput"
+          auto-height maxlength="500" disable-default-padding placeholder="如：加热棒接线端子氧化，接触不良"
+          placeholder-class="placeholder" />
+      </view>
+      <view class="cp-field">
+        <view class="cp-label">解决措施 <text class="red">*</text></view>
+        <textarea class="cp-textarea" value="{{solution}}" data-field="solution" bindinput="onInput"
+          auto-height maxlength="1000" disable-default-padding placeholder="处理过程与验证结果"
+          placeholder-class="placeholder" />
+      </view>
+      <view class="cp-field cp-field-last">
+        <view class="cp-label">更换备件</view>
+        <input class="cp-input" value="{{partsReplaced}}" data-field="partsReplaced" bindinput="onInput"
+          maxlength="200" placeholder="没有可不填，如：接线端子 ×2" placeholder-class="placeholder" />
+      </view>
+    </view>
+
+    <!-- 运行状况 -->
+    <view class="cp-card cp-mt" role="radiogroup">
+      <view class="cp-label cp-radio-title">设备运行状况 <text class="red">*</text></view>
+      <view wx:for="{{runOptions}}" wx:key="value" class="cp-radio {{index === runOptions.length - 1 ? 'last' : ''}}"
+        data-value="{{item.value}}" bindtap="onPickRun" aria-role="radio" aria-checked="{{runStatus === item.value}}">
+        <text>{{item.label}}</text>
+        <view class="cp-ring {{runStatus === item.value ? 'on' : ''}}"><view class="cp-ring-dot"></view></view>
+      </view>
+    </view>
+
+    <!-- 照片 -->
+    <view class="cp-card cp-mt">
+      <view class="cp-photo-head">
+        <text class="cp-label">处理照片 <text class="red">*</text></text>
+        <text class="cp-photo-tip">至少 1 张，需包含维修前原状</text>
+      </view>
+      <view class="cp-grid">
+        <view wx:for="{{photos}}" wx:key="key" class="cp-thumb" data-list="photos" data-key="{{item.key}}" bindtap="onTapPhoto">
+          <image class="cp-thumb-img" src="{{item.path}}" mode="aspectFill" />
+          <view wx:if="{{item.status === 'uploading'}}" class="cp-thumb-mask">上传中</view>
+          <view wx:elif="{{item.status === 'fail'}}" class="cp-thumb-mask fail"><view>上传失败</view><view>点击重试</view></view>
+          <view class="cp-thumb-del" data-list="photos" data-key="{{item.key}}" catchtap="onRemovePhoto" aria-role="button" aria-label="删除照片">
+            <ui-icon name="close" color="#FFFFFF" size="10" stroke="2.6" />
+          </view>
+        </view>
+        <view wx:if="{{photos.length < maxPhotos}}" class="cp-add" hover-class="btn-hover" data-list="photos" bindtap="onAddPhoto"
+          aria-role="button" aria-label="拍照添加处理照片">
+          <ui-icon name="plus" color="#6E6E73" size="22" stroke="2" />
+        </view>
+      </view>
+
+      <!-- 签字件 -->
+      <view class="cp-sign" hover-class="btn-hover" data-list="signatures" bindtap="onAddPhoto" aria-role="button">
+        <view class="flex1">
+          <view class="cp-sign-title">客户签字件 <text wx:if="{{needSignature}}" class="red">*</text><text wx:else class="cp-sign-opt">选填</text></view>
+          <view class="cp-sign-desc">拍摄客户签字的现场维修记录表</view>
+        </view>
+        <text wx:if="{{signatures.length}}" class="cp-sign-status green">已上传 {{signatures.length}} 张</text>
+        <text wx:elif="{{needSignature}}" class="cp-sign-status amber">未上传</text>
+        <text wx:else class="cp-sign-status muted-3">未上传</text>
+        <ui-icon name="{{signatures.length ? 'plus' : 'right'}}" color="#AEAEB2" size="18" stroke="2" />
+      </view>
+      <view wx:if="{{signatures.length}}" class="cp-grid cp-grid-sign">
+        <view wx:for="{{signatures}}" wx:key="key" class="cp-thumb" data-list="signatures" data-key="{{item.key}}" bindtap="onTapPhoto">
+          <image class="cp-thumb-img" src="{{item.path}}" mode="aspectFill" />
+          <view wx:if="{{item.status === 'uploading'}}" class="cp-thumb-mask">上传中</view>
+          <view wx:elif="{{item.status === 'fail'}}" class="cp-thumb-mask fail"><view>上传失败</view><view>点击重试</view></view>
+          <view class="cp-thumb-del" data-list="signatures" data-key="{{item.key}}" catchtap="onRemovePhoto" aria-role="button" aria-label="删除签字件">
+            <ui-icon name="close" color="#FFFFFF" size="10" stroke="2.6" />
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="footer-space"></view>
+    <view class="footer-bar">
+      <button class="{{canSubmit && !submitting ? 'btn-primary' : 'btn-disabled'}} cp-submit" hover-class="btn-hover"
+        bindtap="onSubmit">{{submitting ? '提交中…' : '提交完工'}}</button>
+    </view>
+  </block>
+</view>

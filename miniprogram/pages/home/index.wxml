@@ -1,0 +1,22 @@
+<view class="page tabbar-space">
+  <!-- 自定义页头：与胶囊按钮垂直对齐 -->
+  <view style="height: {{statusBarHeight}}px;"></view>
+  <view class="head" style="height: {{navBarHeight}}px; padding-right: {{sideWidth}}px;">
+    <view wx:if="{{user}}" class="head-user" hover-class="head-hover" bindtap="toMe" aria-role="button" aria-label="我的">
+      <view class="head-avatar"><avatar user="{{user}}" size="36" /></view>
+      <view class="head-text">
+        <view class="head-name ellipsis">{{user.name}}</view>
+        <view class="head-sub ellipsis">{{subText}}</view>
+      </view>
+    </view>
+  </view>
+
+  <home-engineer wx:if="{{role === 'Engineer'}}" id="home-child" bind:meta="onMeta" />
+  <home-sales wx:elif="{{role === 'Sales'}}" id="home-child" />
+  <home-supervisor wx:elif="{{role === 'Supervisor'}}" id="home-child" bind:meta="onMeta" />
+  <view wx:elif="{{user}}" class="state">当前账号角色暂不支持，请联系售后主管</view>
+  <empty wx:elif="{{loadError}}" text="{{loadError}}">
+    <view class="btn-secondary btn-sm" hover-class="btn-hover" bindtap="onRetry">重试</view>
+  </empty>
+  <view wx:else class="state">加载中…</view>
+</view>

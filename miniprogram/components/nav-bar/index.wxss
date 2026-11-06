@@ -1,0 +1,11 @@
+.nav { width: 100%; z-index: 800; }
+.nav-fixed { position: fixed; left: 0; top: 0; right: 0; }
+.nav-bar { display: flex; align-items: center; }
+.nav-side { flex-shrink: 0; height: 100%; display: flex; align-items: center; }
+.nav-left { padding-left: 8rpx; }
+.nav-right { justify-content: flex-end; }
+.nav-back { width: 80rpx; height: 80rpx; display: flex; align-items: center; justify-content: center; }
+.nav-back-icon { width: 44rpx; height: 44rpx; }
+.nav-hover { opacity: 0.6; }
+.nav-title { flex: 1; min-width: 0; text-align: center; font-size: 34rpx; font-weight: 600; display: flex; justify-content: center; align-items: center; }
+.ellipsis { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

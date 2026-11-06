@@ -1,0 +1,63 @@
+<!-- 问候 -->
+<view class="greet">
+  <view class="greet-title">{{greeting}}</view>
+  <view class="greet-sub">今日 <text class="greet-num">{{onSiteCount}}</text> 人在客户现场 · <text class="greet-num">{{todoCount}}</text> 项待处理</view>
+</view>
+
+<view wx:if="{{status === 'loading'}}" class="state-box">加载中…</view>
+<view wx:elif="{{status === 'error'}}" class="mt12">
+  <empty text="首页加载失败" desc="{{errorText}}">
+    <view class="btn-sm btn-secondary" hover-class="btn-hover" bindtap="onRetry">重试</view>
+  </empty>
+</view>
+
+<view wx:else class="main">
+  <!-- 今日现场时间轴 -->
+  <view class="tl-card" aria-label="今日现场时间轴">
+    <view class="tl-head">
+      <text class="tl-title">今日现场时间轴</text>
+      <text class="tl-now">现在 {{nowText}}</text>
+    </view>
+    <view wx:if="{{!rows.length}}" class="tl-empty">暂无工程师账号</view>
+    <view wx:else class="tl-body">
+      <view wx:for="{{rows}}" wx:key="key" class="tl-row">
+        <avatar user="{{item.engineer}}" size="28" />
+        <text class="tl-name ellipsis">{{item.name}}</text>
+        <view class="tl-track" aria-label="{{item.aria}}">
+          <view wx:for="{{grid}}" wx:for-item="g" wx:key="h" class="tl-grid" style="left: {{g.left}};"></view>
+          <view wx:for="{{item.segs}}" wx:for-item="s" wx:key="i" class="tl-bar" style="left: {{s.left}}; width: {{s.width}};" data-id="{{s.orderId}}" catchtap="toDetail"></view>
+          <text wx:if="{{item.empty}}" class="tl-note ellipsis">{{item.empty}}</text>
+          <view wx:if="{{showNow}}" class="tl-nowline" style="left: {{nowLeft}};"></view>
+        </view>
+      </view>
+      <view class="tl-axis">
+        <text wx:for="{{ticks}}" wx:key="h" class="tl-tick" style="left: {{item.left}};">{{item.h}}</text>
+      </view>
+    </view>
+    <view class="tl-foot">红色条为到场至离场的现场时间，来自打卡记录</view>
+  </view>
+
+  <!-- 待处理事项 -->
+  <view aria-label="待处理事项">
+    <view class="sec-head">
+      <text class="sec-title">待处理事项 <text class="sec-count">{{todoCount}}</text></text>
+      <text class="sec-tip">补录、导出请在电脑后台</text>
+    </view>
+    <empty wx:if="{{!todos.length}}" text="暂无待处理事项" desc="新的待指派、待验收和打卡异常会出现在这里" />
+    <view wx:else class="list-card">
+      <view wx:for="{{todos}}" wx:key="key" class="todo">
+        <view class="flex1" data-id="{{item.orderId}}" bindtap="toDetail" hover-class="row-hover">
+          <view class="todo-title">
+            <text class="todo-name ellipsis">{{item.title}}</text>
+            <text wx:if="{{item.urgent}}" class="todo-urgent">紧急</text>
+            <text wx:if="{{item.suffix}}" class="todo-suffix">· {{item.suffix}}</text>
+          </view>
+          <view class="todo-sub {{item.tone}}">{{item.subtitle}}</view>
+        </view>
+        <view class="todo-btn {{item.primary ? 'primary' : ''}}" hover-class="btn-hover" data-index="{{index}}" bindtap="onTodo" aria-role="button">{{item.btn}}</view>
+      </view>
+    </view>
+  </view>
+</view>
+
+<assign-sheet show="{{sheetShow}}" order="{{sheetOrder}}" bind:done="onAssigned" bind:close="onSheetClose" />

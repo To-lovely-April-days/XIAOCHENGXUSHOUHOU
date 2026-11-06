@@ -1,0 +1,37 @@
+<nav-bar title="我的工单" />
+<view class="page safe-bottom">
+  <view class="desc">本人认领的工单，含已闭环的历史记录</view>
+
+  <view class="chips" aria-role="tablist" aria-label="筛选">
+    <view wx:for="{{filters}}" wx:key="key" class="chip {{filter === item.key ? 'active' : ''}}"
+          data-key="{{item.key}}" bindtap="onFilter" aria-role="tab" aria-selected="{{filter === item.key}}">
+      {{item.label}}<text class="chip-count">{{item.count}}</text>
+    </view>
+  </view>
+
+  <view wx:if="{{!ready}}" class="state">加载中…</view>
+  <empty wx:elif="{{error}}" text="{{error}}">
+    <view class="btn-secondary btn-sm" hover-class="btn-hover" bindtap="retry">重试</view>
+  </empty>
+  <empty wx:elif="{{!rows.length}}" text="该状态下暂无工单" />
+  <block wx:else>
+    <view wx:for="{{rows}}" wx:key="id" class="card row-card" hover-class="card-hover" hover-stay-time="80"
+          data-id="{{item.id}}" bindtap="goDetail">
+      <view class="row gap8">
+        <text class="customer flex1 ellipsis">{{item.customerName}}</text>
+        <text class="price num-bold {{item.priceFree ? 'free' : ''}}">{{item.priceText}}</text>
+      </view>
+      <view class="device ellipsis">{{item.device}}</view>
+      <view class="row gap8 foot">
+        <status-tag status="{{item.status}}" />
+        <text class="note ellipsis {{item.running ? 'red' : ''}}">{{item.note}}</text>
+        <view class="hours">
+          <view class="hours-label">现场工时</view>
+          <view class="hours-value num-bold">{{item.hours}}</view>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <view wx:if="{{ready}}" class="tip" bindtap="goHall">认领新工单请到底部“工单”进入工单大厅。</view>
+</view>

@@ -1,0 +1,49 @@
+page { background: #F6F6F4; }
+.login { min-height: 100vh; display: flex; flex-direction: column; }
+.brand { padding: 32rpx 48rpx 40rpx; }
+.logo { width: 112rpx; height: 112rpx; border-radius: 32rpx; background: #C81E2B; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 36rpx; font-weight: 700; }
+.brand-title { margin-top: 32rpx; font-size: 52rpx; line-height: 68rpx; font-weight: 700; }
+.brand-sub { margin-top: 8rpx; font-size: 30rpx; line-height: 44rpx; color: #6E6E73; }
+
+.panel { flex: 1; margin: 0 32rpx; background: #FFFFFF; border-radius: 40rpx 40rpx 0 0; box-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.04), 0 8rpx 28rpx rgba(0, 0, 0, 0.04); padding: 40rpx 40rpx calc(48rpx + env(safe-area-inset-bottom)); }
+
+.steps { display: flex; align-items: center; gap: 20rpx; font-size: 26rpx; }
+.step { display: flex; align-items: center; gap: 12rpx; color: #1D1D1F; font-weight: 600; }
+.step-no { width: 40rpx; height: 40rpx; border-radius: 20rpx; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 24rpx; }
+.step-line { flex: 1; height: 2rpx; background: #E5E5E3; }
+
+.mt-18 { margin-top: 36rpx; }
+.verify-btn { margin-top: 48rpx; border-radius: 20rpx; }
+
+.agree { margin-top: 28rpx; min-height: 88rpx; display: flex; align-items: center; gap: 16rpx; font-size: 26rpx; line-height: 40rpx; color: #6E6E73; }
+.agree-box { width: 36rpx; height: 36rpx; flex-shrink: 0; border-radius: 18rpx; border: 3rpx solid #AEAEB2; background: #FFFFFF; display: flex; align-items: center; justify-content: center; }
+.agree-box.on { border-color: #1D1D1F; background: #1D1D1F; }
+.agree-text { flex: 1; }
+.agree-link { color: #1D1D1F; font-weight: 600; }
+.error-box { margin-top: 16rpx; padding: 20rpx 24rpx; border-radius: 20rpx; background: #FBEDEE; line-height: 40rpx; }
+.tip { margin-top: 72rpx; font-size: 26rpx; line-height: 40rpx; color: #6E6E73; }
+.tip + .tip { margin-top: 16rpx; }
+
+.dev { margin-top: 48rpx; border-top: 2rpx dashed #E3E3E1; padding-top: 24rpx; }
+.dev-toggle { font-size: 26rpx; color: #9A5B00; text-align: center; padding: 12rpx 0; }
+.dev-form { margin-top: 16rpx; display: flex; gap: 16rpx; }
+.dev-input { flex: 1; height: 88rpx; padding: 0 24rpx; border-radius: 20rpx; background: #F6F6F4; font-size: 30rpx; }
+.dev-btn { width: 160rpx; height: 88rpx; border-radius: 20rpx; background: #1D1D1F; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 30rpx; font-weight: 600; }
+.dev-btn.disabled { background: #C7C7C5; }
+
+.matched { margin-top: 40rpx; display: flex; align-items: center; gap: 20rpx; border-radius: 24rpx; background: #F0F0EE; padding: 24rpx 28rpx; }
+.matched-text { font-size: 28rpx; line-height: 40rpx; color: #1D1D1F; }
+
+.avatar-area { margin-top: 56rpx; display: flex; flex-direction: column; align-items: center; }
+.avatar-btn { position: relative; width: 192rpx !important; height: 192rpx; padding: 0; border-radius: 50%; background: transparent; overflow: visible; }
+.avatar-img { width: 192rpx; height: 192rpx; border-radius: 50%; display: block; background: #E5E5E3; }
+.avatar-empty { width: 192rpx; height: 192rpx; border-radius: 50%; border: 3rpx dashed #C7C7C5; background: #F6F6F4; display: flex; align-items: center; justify-content: center; }
+.avatar-badge { position: absolute; right: 4rpx; bottom: 4rpx; width: 56rpx; height: 56rpx; border-radius: 28rpx; background: #1D1D1F; border: 6rpx solid #FFFFFF; display: flex; align-items: center; justify-content: center; }
+.avatar-title { margin-top: 24rpx; font-size: 30rpx; font-weight: 600; }
+.avatar-desc { margin-top: 8rpx; font-size: 26rpx; line-height: 40rpx; color: #6E6E73; text-align: center; }
+
+.name-row { margin-top: 48rpx; border-top: 2rpx solid #ECECEA; border-bottom: 2rpx solid #ECECEA; padding: 24rpx 0; display: flex; align-items: center; justify-content: space-between; font-size: 30rpx; }
+.name-note { font-size: 24rpx; font-weight: 400; color: #6E6E73; }
+
+.actions { margin-top: 64rpx; display: flex; flex-direction: column; gap: 8rpx; }
+.enter-btn { border-radius: 24rpx; }

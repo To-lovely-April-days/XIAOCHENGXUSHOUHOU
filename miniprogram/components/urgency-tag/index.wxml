@@ -1,0 +1,1 @@
+<text wx:if="{{visible}}" class="urgency-tag {{size === 'md' ? 'md' : ''}}" style="background: {{bg}}; color: {{fg}};">{{label}}</text>

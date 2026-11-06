@@ -1,0 +1,25 @@
+.as-root { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 1000; display: flex; flex-direction: column; justify-content: flex-end; }
+.as-mask { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.4); }
+.as-sheet { position: relative; background: #FFFFFF; border-radius: 40rpx 40rpx 0 0; padding: 16rpx 40rpx calc(56rpx + env(safe-area-inset-bottom)); }
+.as-handle { width: 72rpx; height: 10rpx; border-radius: 6rpx; background: #D1D1CF; margin: 0 auto; }
+.as-head { display: flex; align-items: center; justify-content: space-between; margin-top: 24rpx; }
+.as-title { font-size: 36rpx; font-weight: 700; color: #1D1D1F; }
+.as-cancel { height: 88rpx; display: flex; align-items: center; font-size: 30rpx; color: #6E6E73; }
+.as-sub { font-size: 26rpx; color: #6E6E73; }
+.as-list { margin-top: 20rpx; max-height: 50vh; }
+.as-state { padding: 48rpx 0; text-align: center; font-size: 28rpx; color: #6E6E73; }
+.as-retry { margin-top: 16rpx; color: #1D1D1F; font-weight: 600; }
+.as-item { min-height: 112rpx; border-bottom: 2rpx solid #ECECEA; display: flex; align-items: center; gap: 24rpx; padding: 12rpx 0; }
+.as-item-hover { opacity: 0.7; }
+.as-item-main { flex: 1; min-width: 0; }
+.as-name { font-size: 32rpx; font-weight: 600; color: #1D1D1F; }
+.as-current { margin-left: 12rpx; font-size: 22rpx; font-weight: 500; color: #6E6E73; }
+.as-load { margin-top: 2rpx; font-size: 26rpx; color: #6E6E73; }
+.as-radio { width: 44rpx; height: 44rpx; border-radius: 22rpx; border: 4rpx solid #C7C7C5; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.as-radio.on { border-color: #1D1D1F; }
+.as-radio-dot { width: 20rpx; height: 20rpx; border-radius: 10rpx; background: transparent; }
+.as-radio.on .as-radio-dot { background: #1D1D1F; }
+.as-note { margin-top: 20rpx; font-size: 24rpx; line-height: 36rpx; color: #6E6E73; }
+.as-confirm { margin-top: 28rpx; height: 104rpx; border-radius: 20rpx; background: #1D1D1F; color: #FFFFFF; font-size: 34rpx; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.as-confirm.disabled { background: #C7C7C5; }
+.as-hover { opacity: 0.75; }

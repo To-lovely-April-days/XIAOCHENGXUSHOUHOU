@@ -1,0 +1,93 @@
+<nav-bar back="{{false}}" background="#F6F6F4" />
+<view class="login">
+  <view class="brand">
+    <view class="logo">霍桐</view>
+    <view class="brand-title">霍桐售后工单</view>
+    <view class="brand-sub">售后服务工单与现场打卡 · 仅限公司员工使用</view>
+  </view>
+
+  <view class="panel">
+    <view class="steps" aria-label="绑定步骤">
+      <view class="step">
+        <view class="step-no" style="background: {{step === 'verify' ? '#1D1D1F' : '#2F7A4B'}};">
+          <ui-icon wx:if="{{step !== 'verify'}}" name="check" color="#FFFFFF" size="12" stroke="3" />
+          <text wx:else>1</text>
+        </view>
+        <text>验证手机号</text>
+      </view>
+      <view class="step-line"></view>
+      <view class="step" style="color: {{step === 'verify' ? '#6E6E73' : '#1D1D1F'}};">
+        <view class="step-no" style="background: {{step === 'verify' ? '#C7C7C5' : '#1D1D1F'}};">2</view>
+        <text>设置头像</text>
+      </view>
+    </view>
+
+    <!-- 第 1 步：验证手机号 -->
+    <block wx:if="{{step === 'verify'}}">
+      <view class="notice mt-18">首次使用需验证手机号。系统将匹配售后主管在后台登记的员工账号，绑定当前微信后自动登录，之后无需重复验证。</view>
+
+      <button wx:if="{{agreed}}" class="btn-primary verify-btn" hover-class="btn-hover"
+              open-type="getPhoneNumber|agreePrivacyAuthorization"
+              bindgetphonenumber="onGetPhone" bindagreeprivacyauthorization="onAgreePrivacy"
+              disabled="{{busy}}">
+        <ui-icon name="phone" color="#FFFFFF" size="20" stroke="2" />
+        <text>手机号快速验证</text>
+      </button>
+      <view wx:else class="btn-primary btn-disabled verify-btn" bindtap="onVerifyBlocked" aria-role="button" aria-disabled="true">
+        <ui-icon name="phone" color="#FFFFFF" size="20" stroke="2" />
+        <text>手机号快速验证</text>
+      </view>
+
+      <view class="agree" bindtap="toggleAgree" aria-role="checkbox" aria-checked="{{agreed}}">
+        <view class="agree-box {{agreed ? 'on' : ''}}">
+          <ui-icon wx:if="{{agreed}}" name="check" color="#FFFFFF" size="12" stroke="3" />
+        </view>
+        <view class="agree-text">已阅读并同意 <text class="agree-link" catchtap="openPrivacy">《用户隐私保护指引》</text>，同意使用手机号、位置和相机</view>
+      </view>
+      <view wx:if="{{tried && !agreed}}" class="alert" aria-role="alert">请先勾选同意隐私保护指引</view>
+      <view wx:if="{{error}}" class="alert error-box" aria-role="alert">{{error}}</view>
+
+      <view class="tip">提示“未找到账号”时，请联系售后主管在后台添加，并核对登记的手机号是否与本机微信绑定的手机号一致。</view>
+      <view wx:if="{{loginHint}}" class="tip">{{loginHint}}</view>
+
+      <view wx:if="{{showDev}}" class="dev">
+        <view class="dev-toggle" bindtap="toggleDev">开发调试：输入手机号直接登录</view>
+        <view wx:if="{{devOpen}}" class="dev-form">
+          <input class="dev-input" type="number" maxlength="20" placeholder="员工登记的手机号" placeholder-class="placeholder"
+                 value="{{devPhone}}" bindinput="onDevPhone" confirm-type="done" bindconfirm="onDevLogin" />
+          <view class="dev-btn {{busy ? 'disabled' : ''}}" hover-class="btn-hover" bindtap="onDevLogin">登录</view>
+        </view>
+      </view>
+    </block>
+
+    <!-- 第 2 步：设置头像 -->
+    <block wx:else>
+      <view class="matched">
+        <ui-icon name="shield" color="#2F7A4B" size="22" stroke="2" />
+        <view class="matched-text">已匹配账号：<text class="bold">{{user.name}} · {{roleName}}</text>
+          <view class="text-body">{{phoneMasked}}<text wx:if="{{department}}"> · {{department}}</text></view>
+        </view>
+      </view>
+
+      <view class="avatar-area">
+        <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar" aria-label="设置头像" disabled="{{uploading}}">
+          <image wx:if="{{avatarUrl}}" class="avatar-img" src="{{avatarUrl}}" mode="aspectFill" />
+          <view wx:else class="avatar-empty"><ui-icon name="user" color="#6E6E73" size="40" stroke="1.6" /></view>
+          <view class="avatar-badge"><ui-icon name="camera" color="#FFFFFF" size="14" stroke="2.2" /></view>
+        </button>
+        <view class="avatar-title">{{avatarUrl ? '已设置头像' : '设置头像'}}</view>
+        <view class="avatar-desc">可使用微信头像或拍照上传；头像会显示在工单和打卡记录中，不设置则显示姓氏</view>
+      </view>
+
+      <view class="name-row">
+        <text class="muted">姓名</text>
+        <text class="bold">{{user.name}} <text class="name-note">· 由主管登记</text></text>
+      </view>
+
+      <view class="actions">
+        <view class="btn-primary enter-btn" hover-class="btn-hover" bindtap="goHome">进入</view>
+        <view class="btn-text" hover-class="btn-hover" bindtap="goHome">暂不设置</view>
+      </view>
+    </block>
+  </view>
+</view>

@@ -1,0 +1,265 @@
+<nav-bar title="工单详情" />
+
+<view class="page od">
+  <!-- 加载 / 错误 -->
+  <view wx:if="{{loading && !order}}" class="od-state muted">加载中…</view>
+  <view wx:elif="{{error && !order}}" class="od-state-wrap">
+    <empty text="{{error}}" desc="请检查网络后重试">
+      <view class="btn-secondary btn-sm" hover-class="btn-hover" bindtap="onRetry">重新加载</view>
+    </empty>
+  </view>
+
+  <block wx:elif="{{order}}">
+    <!-- 公共头部 -->
+    <view class="od-head">
+      <view class="row od-head-top">
+        <status-tag status="{{order.status}}" />
+        <urgency-tag urgency="{{order.urgency}}" size="md" />
+        <text class="od-no num-font">{{order.orderNo}}</text>
+      </view>
+      <view class="od-customer">{{order.customerName}}</view>
+      <view class="od-device">{{order.deviceModel}}<text wx:if="{{order.deviceSn}}"> · {{order.deviceSn}}</text></view>
+
+      <view class="od-grid">
+        <view class="od-cell">
+          <view class="od-cell-label">服务价格</view>
+          <view class="od-cell-num {{order.price === 0 ? 'green' : ''}}">{{priceText}}</view>
+        </view>
+        <view class="od-cell" wx:if="{{isEngineerView}}">
+          <view class="od-cell-label">产品阶段</view>
+          <view class="od-cell-text">{{order.productStage || '—'}}</view>
+        </view>
+        <view class="od-cell" wx:else>
+          <view class="od-cell-label">累计现场工时</view>
+          <view class="od-cell-num">{{order.serviceType === 'Onsite' ? hoursText : '—'}}</view>
+        </view>
+        <view class="od-cell">
+          <view class="od-cell-label">{{creatorLabel}}</view>
+          <view class="row od-creator" wx:if="{{order.creator}}">
+            <avatar user="{{order.creator}}" size="22" />
+            <text class="od-creator-name ellipsis">{{order.creator.name}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 处理人（销售 / 主管视角） -->
+      <view wx:if="{{!isEngineerView}}" class="od-assignee row">
+        <block wx:if="{{order.assignee}}">
+          <avatar user="{{order.assignee}}" size="40" />
+          <view class="flex1">
+            <view class="od-assignee-name">{{order.assignee.name}} <text class="od-assignee-role">· 处理人</text></view>
+            <view class="od-assignee-sub num-font">{{assigneeSub}}</view>
+          </view>
+        </block>
+        <view wx:else class="od-assignee-none muted">暂无处理人<text wx:if="{{order.status === 'Pending'}}">，等待认领或主管指派</text></view>
+      </view>
+    </view>
+
+    <!-- 异常警示 -->
+    <view wx:for="{{issues}}" wx:key="key" class="od-alert {{item.tone}}">
+      <view class="row od-alert-head">
+        <ui-icon name="warning" color="{{item.tone === 'red' ? '#C81E2B' : '#9A5B00'}}" size="18" stroke="2" />
+        <text class="od-alert-title">{{item.title}}</text>
+      </view>
+      <view class="od-alert-text">{{item.text}}</view>
+
+      <block wx:if="{{item.canSupplement}}">
+        <view wx:if="{{!(supp.open && supp.punchId === item.punchId)}}" class="od-alert-btn" hover-class="btn-hover" data-id="{{item.punchId}}" bindtap="openSupp">补录离场时间</view>
+        <view wx:else class="od-supp">
+          <view wx:if="{{supp.arriveText}}" class="od-supp-hint">对应 {{supp.arriveText}}，离场须晚于到场且同一天</view>
+          <picker mode="time" value="{{supp.time || supp.minTime}}" start="{{supp.minTime}}" end="23:59" bindchange="onSuppTime">
+            <view class="od-supp-field row-between">
+              <text class="od-supp-label">离场时间</text>
+              <text class="{{supp.time ? 'num-font bold' : 'placeholder'}}">{{supp.time || '请选择'}}</text>
+            </view>
+          </picker>
+          <view class="od-supp-label od-supp-label-top">补录原因（必填）</view>
+          <textarea class="od-supp-input" value="{{supp.reason}}" placeholder="如：手机电量耗尽，工程师电话确认约 18:20 离场" placeholder-class="placeholder" maxlength="200" auto-height bindinput="onSuppReason" />
+          <view class="row od-supp-actions">
+            <view class="od-supp-save {{busy ? 'disabled' : ''}}" hover-class="btn-hover" bindtap="saveSupp">保存补录</view>
+            <view class="od-supp-cancel" hover-class="btn-hover" bindtap="cancelSupp">取消</view>
+          </view>
+          <view class="od-supp-note">保存后记录补录人和时间，导出时单独标注</view>
+        </view>
+      </block>
+    </view>
+
+    <!-- tabs -->
+    <view class="segmented od-tabs" aria-role="tablist">
+      <view wx:for="{{tabs}}" wx:key="key" class="segmented-item {{tab === item.key ? 'active' : ''}}" data-key="{{item.key}}" bindtap="onTab" aria-role="tab" aria-selected="{{tab === item.key}}">{{item.label}}</view>
+    </view>
+
+    <view class="od-main">
+      <!-- 进度（销售 / 主管） -->
+      <block wx:if="{{tab === 'progress'}}">
+        <view class="od-card od-progress">
+          <view wx:for="{{steps}}" wx:key="key" class="od-step" data-url="{{item.photo}}" bindtap="onPreviewPhoto">
+            <view class="od-rail">
+              <view class="od-step-dot {{item.state}}"></view>
+              <view wx:if="{{!item.last}}" class="od-step-line {{item.lineOn ? 'on' : ''}}"></view>
+            </view>
+            <view class="od-step-body">
+              <view class="od-step-title {{item.state === 'current' ? 'red' : ''}} {{item.state === 'future' ? 'muted' : ''}}">{{item.title}}</view>
+              <view class="od-step-sub num-font {{item.subClass}}">{{item.sub}}</view>
+            </view>
+            <text class="od-step-tag" style="color: {{item.tagColor}};">{{item.tag}}</text>
+          </view>
+          <view wx:if="{{!steps.length}}" class="od-empty-line muted">暂无记录</view>
+        </view>
+        <view class="od-note">{{progressNote}}</view>
+      </block>
+
+      <!-- 信息 -->
+      <block wx:if="{{tab === 'info'}}">
+        <view wx:if="{{order.status === 'OnHold' && order.holdReason}}" class="notice od-hold">暂停原因：{{order.holdReason}}</view>
+
+        <view class="od-card">
+          <view class="od-h3">故障情况</view>
+          <view class="od-quote">“{{order.symptom}}”</view>
+          <view wx:for="{{infoRows}}" wx:key="key" class="od-kv">
+            <text class="od-kv-label">{{item.label}}</text>
+            <text class="od-kv-value">{{item.value}}</text>
+          </view>
+          <block wx:if="{{!isEngineerView}}">
+            <view class="od-kv" wx:if="{{order.contactName || order.contactPhone}}" data-phone="{{order.contactPhone}}" bindtap="onCall">
+              <text class="od-kv-label">客户联系人</text>
+              <text class="od-kv-value">{{order.contactName}}<text wx:if="{{order.contactPhone}}"> · <text class="num-font">{{contactPhoneText}}</text></text></text>
+            </view>
+            <view class="od-kv" wx:if="{{order.address}}" bindtap="onNav">
+              <text class="od-kv-label">客户地址</text>
+              <text class="od-kv-value">{{order.address}}</text>
+            </view>
+          </block>
+        </view>
+
+        <!-- 客户（工程师视角） -->
+        <view wx:if="{{isEngineerView}}" class="od-card mt-card">
+          <view class="od-h3">客户</view>
+          <view class="od-contact row">
+            <view class="flex1">
+              <view class="od-contact-name">{{order.contactName || '—'}}</view>
+              <view class="od-contact-phone num-font">{{contactPhoneText}}</view>
+            </view>
+            <view wx:if="{{order.contactPhone}}" class="od-circle" hover-class="btn-hover" data-phone="{{order.contactPhone}}" bindtap="onCall" aria-role="button" aria-label="拨打客户电话">
+              <ui-icon name="phone" size="20" stroke="2" />
+            </view>
+          </view>
+          <view class="od-addr row">
+            <view class="flex1 od-addr-text">{{order.address || '—'}}</view>
+            <view wx:if="{{canNav}}" class="od-circle" hover-class="btn-hover" bindtap="onNav" aria-role="button" aria-label="导航到客户地址">
+              <ui-icon name="location" size="20" stroke="2" />
+            </view>
+          </view>
+        </view>
+
+        <!-- 完工信息 -->
+        <view wx:if="{{completionRows.length}}" class="od-card mt-card">
+          <view class="od-h3">完工信息</view>
+          <view wx:for="{{completionRows}}" wx:key="key" class="od-kv {{index === 0 ? 'first' : ''}}">
+            <text class="od-kv-label">{{item.label}}</text>
+            <text class="od-kv-value" style="{{item.color ? 'color: ' + item.color + '; font-weight: 600;' : ''}}">{{item.value}}</text>
+          </view>
+        </view>
+
+        <!-- 工单信息 -->
+        <view class="od-card mt-card">
+          <view class="od-h3">工单信息</view>
+          <view wx:for="{{orderRows}}" wx:key="key" class="od-kv {{index === 0 ? 'first' : ''}}">
+            <text class="od-kv-label">{{item.label}}</text>
+            <text class="od-kv-value">{{item.value}}</text>
+          </view>
+        </view>
+      </block>
+
+      <!-- 打卡记录（工程师） -->
+      <block wx:if="{{tab === 'punch'}}">
+        <view wx:if="{{order.serviceType !== 'Onsite'}}">
+          <empty text="{{order.serviceType === 'Remote' ? '远程' : '返厂'}}工单无需打卡" />
+        </view>
+        <view wx:elif="{{!days.length}}">
+          <empty text="暂无打卡记录" desc="到达客户现场后点「打卡」拍照打卡" />
+        </view>
+        <view wx:for="{{days}}" wx:for-item="day" wx:key="date" class="od-card od-day {{index > 0 ? 'mt-card' : ''}}">
+          <view class="od-day-head" data-date="{{day.date}}" bindtap="onToggleDay">
+            <view class="flex1">
+              <view class="od-day-title">{{day.title}}</view>
+              <view wx:if="{{!day.running && day.sub}}" class="od-day-sub num-font {{day.missing ? 'red' : ''}}">{{day.sub}}</view>
+            </view>
+            <text wx:if="{{day.running}}" class="od-day-running num-font">{{day.runningText}}</text>
+            <text wx:else class="od-day-dur num-font">{{day.dur}}</text>
+            <view class="od-day-arrow {{day.expanded ? 'open' : ''}}"><ui-icon name="down" color="#AEAEB2" size="16" stroke="2" /></view>
+          </view>
+          <view wx:if="{{day.expanded}}" class="od-day-body">
+            <view wx:for="{{day.entries}}" wx:key="key" class="od-entry">
+              <view class="od-rail">
+                <view class="od-entry-dot {{item.dot}}"></view>
+                <view wx:if="{{!item.last}}" class="od-entry-line"></view>
+              </view>
+              <view class="od-entry-body">
+                <view class="od-entry-kind">{{item.kind}} <text class="od-entry-time num-font {{item.dot === 'missing' ? 'red' : ''}}">{{item.time}}</text></view>
+                <view wx:if="{{item.note}}" class="od-entry-note {{item.noteClass}}">{{item.note}}</view>
+              </view>
+              <view class="od-entry-side">
+                <text wx:if="{{item.dur}}" class="od-entry-dur num-font {{item.durClass}}">{{item.dur}}</text>
+                <image wx:if="{{item.photo}}" class="od-thumb" src="{{item.photo}}" mode="aspectFill" lazy-load data-url="{{item.photo}}" catchtap="onPreviewPhoto" aria-label="打卡照片" />
+              </view>
+            </view>
+          </view>
+        </view>
+      </block>
+
+      <!-- 资料 -->
+      <block wx:if="{{tab === 'files'}}">
+        <view class="od-card od-files">
+          <view wx:for="{{files}}" wx:key="key" class="od-file" hover-class="od-file-hover" data-key="{{item.key}}" bindtap="onPreviewFiles">
+            <view class="flex1">
+              <view class="od-file-title">{{item.title}}</view>
+              <view class="od-file-desc">{{item.desc}}</view>
+            </view>
+            <text class="od-file-count {{item.warn ? 'amber' : ''}}">{{item.text}}</text>
+            <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+          </view>
+        </view>
+      </block>
+    </view>
+
+    <view wx:if="{{buttons.length}}" class="footer-space"></view>
+    <view wx:else class="safe-bottom"></view>
+  </block>
+</view>
+
+<!-- 底部操作 -->
+<view wx:if="{{order && buttons.length}}" class="footer-bar od-footer">
+  <view wx:for="{{buttons}}" wx:key="key" class="od-btn {{item.kind}} {{item.wide ? 'wide' : ''}}" hover-class="{{item.disabled ? 'none' : 'btn-hover'}}" data-key="{{item.key}}" bindtap="onAction" aria-role="button" aria-disabled="{{item.disabled}}">{{item.label}}</view>
+</view>
+
+<!-- 指派 / 改派 -->
+<assign-sheet show="{{sheetShow}}" order="{{order}}" bind:done="onAssigned" bind:close="onSheetClose" />
+
+<!-- 设置预约 -->
+<block wx:if="{{apptShow}}">
+  <view class="mask" bindtap="closeAppt" catchtouchmove="noop"></view>
+  <view class="sheet od-appt" catchtouchmove="noop">
+    <view class="sheet-handle"></view>
+    <view class="row-between od-appt-head">
+      <text class="od-appt-title">设置预约</text>
+      <text class="muted od-appt-cancel" bindtap="closeAppt">取消</text>
+    </view>
+    <view class="od-appt-sub muted">与客户约定的上门 / 处理时间</view>
+    <picker mode="date" value="{{apptDate}}" start="{{apptStart}}" bindchange="onApptDate">
+      <view class="form-item">
+        <text class="form-label">日期</text>
+        <text class="form-input num-font">{{apptDate || '请选择'}}</text>
+        <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+      </view>
+    </picker>
+    <picker mode="time" value="{{apptTime}}" bindchange="onApptTime">
+      <view class="form-item">
+        <text class="form-label">时间</text>
+        <text class="form-input num-font">{{apptTime || '请选择'}}</text>
+        <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+      </view>
+    </picker>
+    <view class="btn-primary od-appt-btn {{busy ? 'btn-disabled' : ''}}" hover-class="btn-hover" bindtap="saveAppt">确定</view>
+  </view>
+</block>

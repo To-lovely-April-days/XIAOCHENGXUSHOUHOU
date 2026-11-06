@@ -1,0 +1,18 @@
+<view wx:if="{{fixed && placeholder}}" style="height: {{totalHeight}}px;"></view>
+<view class="nav {{fixed ? 'nav-fixed' : ''}}" style="padding-top: {{statusBarHeight}}px; background: {{background}}; color: {{color}};">
+  <view class="nav-bar" style="height: {{navBarHeight}}px;">
+    <view class="nav-side nav-left" style="width: {{sideWidth}}px;">
+      <view wx:if="{{back}}" class="nav-back" hover-class="nav-hover" bindtap="onBack" aria-role="button" aria-label="{{isRoot ? '首页' : '返回'}}">
+        <image class="nav-back-icon" src="{{isRoot ? homeIcon : backIcon}}" />
+      </view>
+      <slot name="left"></slot>
+    </view>
+    <view class="nav-title">
+      <text wx:if="{{title}}" class="ellipsis">{{title}}</text>
+      <slot wx:else></slot>
+    </view>
+    <view class="nav-side nav-right" style="width: {{sideWidth}}px;">
+      <slot name="right"></slot>
+    </view>
+  </view>
+</view>

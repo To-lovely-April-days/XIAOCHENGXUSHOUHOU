@@ -1,0 +1,48 @@
+/* 主管首页（原型 14，1px = 2rpx） */
+:host { display: block; }
+
+.greet { padding: 12rpx 8rpx 16rpx; }
+.greet-title { font-size: 52rpx; line-height: 68rpx; font-weight: 700; }
+.greet-sub { font-size: 28rpx; color: #6E6E73; margin-top: 8rpx; }
+.greet-num { font-family: var(--font-num); font-variant-numeric: tabular-nums; color: #1D1D1F; font-weight: 600; }
+
+.state-box { padding: 80rpx 0; text-align: center; font-size: 28rpx; color: #6E6E73; }
+.main { display: flex; flex-direction: column; gap: 24rpx; }
+.row-hover { opacity: 0.7; }
+
+/* ---------- 时间轴 ---------- */
+.tl-card { background: #FFFFFF; border-radius: 32rpx; box-shadow: var(--shadow); padding: 28rpx 32rpx 24rpx; }
+.tl-head { display: flex; align-items: baseline; justify-content: space-between; }
+.tl-title { font-size: 32rpx; font-weight: 700; }
+.tl-now { font-size: 24rpx; color: #C81E2B; font-weight: 600; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.tl-empty { padding: 40rpx 0 16rpx; text-align: center; font-size: 26rpx; color: #6E6E73; }
+.tl-body { margin-top: 20rpx; }
+.tl-row { display: flex; align-items: center; gap: 20rpx; height: 80rpx; }
+.tl-name { width: 68rpx; flex-shrink: 0; font-size: 28rpx; font-weight: 600; }
+.tl-track { position: relative; flex: 1; min-width: 0; height: 44rpx; border-radius: 12rpx; background: #F6F6F4; }
+.tl-grid { position: absolute; top: 0; bottom: 0; width: 2rpx; background: #ECECEA; }
+.tl-bar { position: absolute; top: 6rpx; bottom: 6rpx; border-radius: 8rpx; background: #C81E2B; min-width: 6rpx; }
+.tl-note { position: absolute; left: 16rpx; right: 16rpx; top: 0; line-height: 44rpx; font-size: 22rpx; color: #6E6E73; }
+.tl-nowline { position: absolute; top: -8rpx; bottom: -8rpx; width: 4rpx; margin-left: -2rpx; background: #C81E2B; border-radius: 2rpx; }
+/* 刻度：左侧留出 头像 56 + 间距 20 + 姓名 68 + 间距 20 */
+.tl-axis { position: relative; height: 32rpx; margin: 8rpx 0 0 164rpx; }
+.tl-tick { position: absolute; top: 0; transform: translateX(-50%); font-size: 22rpx; line-height: 32rpx; color: #6E6E73; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.tl-foot { margin-top: 16rpx; font-size: 24rpx; color: #6E6E73; }
+
+/* ---------- 待处理事项 ---------- */
+.sec-head { display: flex; align-items: center; justify-content: space-between; padding: 0 8rpx; min-height: 80rpx; }
+.sec-title { font-size: 34rpx; font-weight: 700; }
+.sec-count { font-family: var(--font-num); font-variant-numeric: tabular-nums; color: #6E6E73; font-weight: 600; }
+.sec-tip { font-size: 24rpx; color: #6E6E73; }
+.list-card { background: #FFFFFF; border-radius: 32rpx; box-shadow: var(--shadow); padding: 0 32rpx; }
+.todo { padding: 24rpx 0; border-bottom: 2rpx solid #ECECEA; display: flex; align-items: center; gap: 24rpx; }
+.todo:last-child { border-bottom: none; }
+.todo-title { display: flex; align-items: center; gap: 16rpx; min-width: 0; }
+.todo-name { font-size: 32rpx; font-weight: 600; min-width: 0; }
+.todo-urgent { flex-shrink: 0; height: 40rpx; padding: 0 12rpx; border-radius: 10rpx; background: #9A5B00; color: #FFFFFF; font-size: 22rpx; font-weight: 700; display: inline-flex; align-items: center; }
+.todo-suffix { flex-shrink: 0; font-size: 26rpx; color: #1D1D1F; margin-left: -8rpx; }
+.todo-sub { font-size: 26rpx; color: #6E6E73; margin-top: 4rpx; line-height: 38rpx; }
+.todo-sub.amber { color: #9A5B00; }
+.todo-sub.gray { color: #6E6E73; }
+.todo-btn { height: 72rpx; padding: 0 28rpx; border-radius: 20rpx; background: #F0F0EE; color: #1D1D1F; font-size: 28rpx; font-weight: 600; display: inline-flex; align-items: center; flex-shrink: 0; }
+.todo-btn.primary { background: #1D1D1F; color: #FFFFFF; padding: 0 32rpx; }

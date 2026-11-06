@@ -1,0 +1,76 @@
+using Huotong.AfterSales.Api.Domain;
+using Microsoft.EntityFrameworkCore;
+
+namespace Huotong.AfterSales.Api.Data;
+
+public class AppDbContext : DbContext
+{
+    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
+    public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<WorkOrder> Orders => Set<WorkOrder>();
+    public DbSet<Punch> Punches => Set<Punch>();
+    public DbSet<StatusLog> StatusLogs => Set<StatusLog>();
+    public DbSet<StoredFile> Files => Set<StoredFile>();
+
+    protected override void OnModelCreating(ModelBuilder b)
+    {
+        b.Entity<Employee>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(50);
+            e.Property(x => x.Phone).HasMaxLength(20);
+            e.Property(x => x.Department).HasMaxLength(50);
+            e.Property(x => x.OpenId).HasMaxLength(64);
+            e.Property(x => x.Role).HasConversion<string>().HasMaxLength(20);
+            e.HasIndex(x => x.Phone).IsUnique();
+            e.HasIndex(x => x.OpenId);
+            e.HasOne(x => x.AvatarFile).WithMany().HasForeignKey(x => x.AvatarFileId).OnDelete(DeleteBehavior.SetNull);
+            e.Ignore(x => x.Surname);
+        });
+
+        b.Entity<WorkOrder>(e =>
+        {
+            e.ToTable("WorkOrders");
+            e.Property(x => x.OrderNo).HasMaxLength(20);
+            e.HasIndex(x => x.OrderNo).IsUnique();
+            e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.CreatedAt);
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Source).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.ProblemType).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Urgency).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.ServiceType).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.RunStatus).HasConversion<string>().HasMaxLength(20);
+            // SQLite 不支持 decimal 排序/聚合，用 double 存储
+            e.Property(x => x.Price).HasConversion<double>();
+            e.HasOne(x => x.Creator).WithMany().HasForeignKey(x => x.CreatorId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Assignee).WithMany().HasForeignKey(x => x.AssigneeId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<Punch>(e =>
+        {
+            e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(10);
+            e.HasIndex(x => new { x.EngineerId, x.Time });
+            e.HasOne(x => x.Order).WithMany(o => o.Punches).HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Engineer).WithMany().HasForeignKey(x => x.EngineerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.SupplementBy).WithMany().HasForeignKey(x => x.SupplementById).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.PhotoFile).WithMany().HasForeignKey(x => x.PhotoFileId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        b.Entity<StatusLog>(e =>
+        {
+            e.Property(x => x.ToStatus).HasConversion<string>().HasMaxLength(20);
+            e.HasOne(x => x.Order).WithMany(o => o.Logs).HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Actor).WithMany().HasForeignKey(x => x.ActorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<StoredFile>(e =>
+        {
+            e.ToTable("StoredFiles");
+            e.Property(x => x.Category).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Path).HasMaxLength(260);
+            e.Property(x => x.MimeType).HasMaxLength(100);
+            e.HasIndex(x => x.OrderId);
+        });
+    }
+}

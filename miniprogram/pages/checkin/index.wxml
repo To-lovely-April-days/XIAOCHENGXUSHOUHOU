@@ -1,0 +1,85 @@
+<view class="ck">
+  <nav-bar title="{{title}}" background="#000000" color="#FFFFFF" fixed="{{false}}" />
+
+  <!-- 加载中 / 出错 / 无工单 -->
+  <view wx:if="{{loading && !ctx}}" class="ck-state">
+    <view class="ck-state-text">加载中…</view>
+  </view>
+  <view wx:elif="{{loadError && !ctx}}" class="ck-state">
+    <view class="ck-state-text">{{loadError}}</view>
+    <button class="ck-state-btn" hover-class="btn-hover" bindtap="onRetry">重新加载</button>
+  </view>
+  <view wx:elif="{{empty}}" class="ck-state">
+    <ui-icon name="camera" color="#6E6E73" size="40" stroke="1.6" />
+    <view class="ck-state-text">当前没有需要打卡的现场工单</view>
+    <view class="ck-state-desc">认领或被指派现场工单后，到达客户现场即可拍照打卡</view>
+    <button class="ck-state-btn" hover-class="btn-hover" bindtap="goHall">去工单大厅</button>
+  </view>
+
+  <block wx:else>
+    <!-- 取景框 + 水印预览 -->
+    <view class="ck-view" aria-label="相机取景框，带水印预览">
+      <camera wx:if="{{showCamera}}" class="ck-camera" mode="normal" resolution="high"
+        device-position="{{devicePosition}}" flash="{{flash}}"
+        binderror="onCameraError" bindstop="onCameraStop"></camera>
+
+      <view wx:if="{{cameraDenied || cameraError}}" class="ck-perm">
+        <view class="ck-perm-text">{{cameraDenied ? '需要相机权限才能现场拍照打卡' : cameraError}}</view>
+        <button wx:if="{{cameraDenied}}" class="ck-state-btn" hover-class="btn-hover" bindtap="onOpenSetting">去设置开启</button>
+        <button wx:else class="ck-state-btn" hover-class="btn-hover" bindtap="remountCamera">重试</button>
+      </view>
+
+      <view class="ck-grid ck-grid-v1"></view>
+      <view class="ck-grid ck-grid-v2"></view>
+      <view class="ck-grid ck-grid-h1"></view>
+      <view class="ck-grid ck-grid-h2"></view>
+
+      <view class="ck-dist {{distanceFar ? 'far' : ''}}">
+        <view class="ck-dist-dot" style="background: {{distanceDot}};"></view>
+        <text>{{distanceText}}</text>
+      </view>
+
+      <view wx:if="{{ctx.blockedReason}}" class="ck-blocked">
+        <ui-icon name="warning" color="#FFFFFF" size="18" stroke="2" />
+        <text class="flex1">{{ctx.blockedReason}}</text>
+      </view>
+
+      <view class="ck-wm">
+        <view class="ck-wm-head">
+          <text class="ck-wm-tag">{{kindLabel}}</text>
+          <text class="ck-wm-time">{{timeText}}</text>
+        </view>
+        <view class="ck-wm-line ck-wm-date">{{dateText}}</view>
+        <view class="ck-wm-line">{{ctx.address}}</view>
+        <view class="ck-wm-sub">{{coordsText}}</view>
+        <view class="ck-wm-sub">{{ownerText}}</view>
+      </view>
+    </view>
+
+    <!-- 本次类型（系统判断，只展示） -->
+    <view class="ck-kind">
+      <view class="ck-seg" aria-label="本次打卡类型，由系统按上一次打卡自动判断" bindtap="onKindTap">
+        <view wx:for="{{kinds}}" wx:key="value" class="ck-seg-item {{item.active ? 'active' : ''}}"
+          aria-selected="{{item.active}}">{{item.label}}</view>
+      </view>
+      <view class="ck-hint {{ctx.blockedReason ? 'warn' : ''}}">{{ctx.blockedReason ? '已暂停本次打卡' : hint}}</view>
+    </view>
+
+    <!-- 操作 -->
+    <view class="ck-ctrl">
+      <view class="ck-round {{flash === 'on' ? 'on' : ''}}" hover-class="btn-hover" bindtap="onToggleFlash"
+        aria-role="button" aria-label="{{flash === 'on' ? '关闭闪光灯' : '打开闪光灯'}}">
+        <ui-icon name="flash" color="{{flash === 'on' ? '#000000' : '#FFFFFF'}}" size="20" stroke="2" />
+      </view>
+      <view class="ck-shutter {{(ctx.blockedReason || busy || !showCamera) ? 'disabled' : ''}}"
+        hover-class="{{(ctx.blockedReason || busy || !showCamera) ? 'none' : 'ck-shutter-hover'}}"
+        bindtap="onShutter" aria-role="button" aria-label="拍照并提交打卡">
+        <view class="ck-shutter-inner"></view>
+      </view>
+      <view class="ck-round" hover-class="btn-hover" bindtap="onSwitchCamera" aria-role="button" aria-label="切换前后摄像头">
+        <ui-icon name="switch" color="#FFFFFF" size="20" stroke="2" />
+      </view>
+    </view>
+    <view class="ck-foot">到场 / 离场由系统自动判断 · 仅支持现场拍摄 · 时间以服务器为准</view>
+  </block>
+</view>

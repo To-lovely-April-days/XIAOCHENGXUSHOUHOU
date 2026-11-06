@@ -1,0 +1,101 @@
+<nav-bar back="{{false}}" />
+<view class="page tabbar-space">
+
+  <!-- ============ 工程师：工单大厅 ============ -->
+  <block wx:if="{{role === 'Engineer'}}">
+    <view class="head">
+      <view class="flex1">
+        <view class="page-title">工单大厅</view>
+        <view class="page-subtitle">{{hallTotal}} 张待认领 · 认领后由本人负责跟进至闭环</view>
+      </view>
+      <view class="new-btn" hover-class="btn-hover" bindtap="goNew" aria-role="button" aria-label="新建工单">
+        <ui-icon name="plus" color="#FFFFFF" size="16" stroke="2.4" />
+        <text>新建</text>
+      </view>
+    </view>
+
+    <view class="chips" aria-role="tablist" aria-label="筛选">
+      <view wx:for="{{hallFilters}}" wx:key="key" class="chip {{hallFilter === item.key ? 'active' : ''}}"
+            data-key="{{item.key}}" bindtap="onHallFilter" aria-role="tab" aria-selected="{{hallFilter === item.key}}">
+        {{item.label}}<text class="chip-count">{{item.count}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{!ready}}" class="state">加载中…</view>
+    <empty wx:elif="{{error}}" text="{{error}}">
+      <view class="btn-secondary btn-sm" hover-class="btn-hover" bindtap="retry">重试</view>
+    </empty>
+    <empty wx:elif="{{!hallItems.length}}" text="{{hallFilter === 'all' ? '暂无待认领工单' : '该分类下暂无待认领工单'}}" desc="新工单发布后会出现在这里" />
+    <block wx:else>
+      <view wx:for="{{hallItems}}" wx:key="id" class="card order-card" hover-class="card-hover" hover-stay-time="80"
+            data-id="{{item.id}}" bindtap="goDetail">
+        <view class="row gap8">
+          <text class="customer flex1 ellipsis">{{item.customerName}}</text>
+          <text class="price num-bold {{item.priceFree ? 'free' : ''}}">{{item.priceText}}</text>
+        </view>
+        <view class="device ellipsis">{{item.device}}</view>
+        <view wx:if="{{item.fault}}" class="fault ellipsis2">{{item.fault}}</view>
+        <view class="row gap8 card-foot">
+          <urgency-tag urgency="{{item.urgency}}" show-normal="{{true}}" size="md" />
+          <text class="meta flex1 ellipsis">{{item.meta}}</text>
+          <view class="claim-btn" hover-class="btn-hover" catchtap="onClaim"
+                data-id="{{item.id}}" data-name="{{item.customerName}}" aria-role="button" aria-label="认领{{item.customerName}}">认领</view>
+        </view>
+      </view>
+    </block>
+  </block>
+
+  <!-- ============ 销售 / 主管：全部工单（只读） ============ -->
+  <block wx:elif="{{role}}">
+    <view class="head-plain">
+      <view class="page-title">全部工单</view>
+      <view class="page-subtitle">共 {{allCount}} 张<text wx:if="{{role === 'Sales'}}"> · 只能查看，认领在工程师端操作</text></view>
+    </view>
+
+    <view class="search">
+      <ui-icon name="search" color="#6E6E73" size="18" stroke="2" />
+      <input class="search-input" value="{{keyword}}" placeholder="搜索客户、设备型号或工单号" placeholder-class="placeholder"
+             confirm-type="search" bindinput="onSearchInput" bindconfirm="onSearchConfirm" aria-label="搜索工单" />
+      <view wx:if="{{keyword}}" class="search-clear" bindtap="onSearchClear" aria-role="button" aria-label="清空搜索">
+        <ui-icon name="close" color="#AEAEB2" size="16" stroke="2.2" />
+      </view>
+    </view>
+
+    <scroll-view scroll-x enhanced show-scrollbar="{{false}}" class="chips-bleed" aria-label="按状态筛选">
+      <view class="chips-track">
+        <view wx:for="{{statusFilters}}" wx:key="countKey" class="chip {{status === item.key ? 'active' : ''}}"
+              data-key="{{item.key}}" bindtap="onStatusFilter" aria-role="tab" aria-selected="{{status === item.key}}">
+          {{item.label}}<text class="chip-count">{{item.count}}</text>
+        </view>
+        <view class="chips-end"></view>
+      </view>
+    </scroll-view>
+
+    <view wx:if="{{!ready}}" class="state">加载中…</view>
+    <empty wx:elif="{{error}}" text="{{error}}">
+      <view class="btn-secondary btn-sm" hover-class="btn-hover" bindtap="retry">重试</view>
+    </empty>
+    <empty wx:elif="{{!items.length}}" text="{{keyword ? '没有找到相关工单' : '该状态下暂无工单'}}" desc="{{keyword ? '换个关键词试试' : ''}}" />
+    <block wx:else>
+      <view wx:for="{{items}}" wx:key="id" class="card order-card list-card" hover-class="card-hover" hover-stay-time="80"
+            data-id="{{item.id}}" bindtap="goDetail">
+        <view class="row gap8">
+          <text class="customer ellipsis">{{item.customerName}}</text>
+          <urgency-tag wx:if="{{item.urgency === 'Urgent'}}" urgency="Urgent" />
+          <text class="price price-sm num-bold {{item.priceFree ? 'free-green' : ''}}">{{item.priceText}}</text>
+        </view>
+        <view class="device ellipsis">{{item.device}}</view>
+        <view class="row gap8 list-foot">
+          <status-tag status="{{item.status}}" />
+          <text class="meta-body ellipsis">{{item.meta}}</text>
+        </view>
+      </view>
+      <view class="load-more">{{loadingMore ? '加载中…' : (hasMore ? '上拉加载更多' : '没有更多了')}}</view>
+    </block>
+  </block>
+
+  <empty wx:elif="{{loginError}}" text="{{loginError}}">
+    <view class="btn-secondary btn-sm" hover-class="btn-hover" bindtap="retry">重试</view>
+  </empty>
+  <view wx:else class="state">加载中…</view>
+</view>

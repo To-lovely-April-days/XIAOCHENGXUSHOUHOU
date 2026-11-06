@@ -1,0 +1,143 @@
+/* pages/checkin 拍照打卡（原型 07，全屏黑色） */
+page { background: #000000; }
+
+.ck {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #000000;
+  color: #FFFFFF;
+}
+
+/* 状态页 */
+.ck-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 64rpx 160rpx;
+  text-align: center;
+}
+.ck-state-text { margin-top: 24rpx; font-size: 32rpx; font-weight: 600; color: #FFFFFF; }
+.ck-state-desc { margin-top: 12rpx; font-size: 26rpx; line-height: 40rpx; color: #9A9EA6; }
+.ck-state-btn {
+  margin-top: 40rpx !important;
+  height: 80rpx;
+  padding: 0 48rpx !important;
+  border-radius: 40rpx;
+  background: #FFFFFF !important;
+  color: #000000 !important;
+  font-size: 28rpx;
+  font-weight: 600;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: auto !important;
+}
+
+/* 取景框 */
+.ck-view {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: #1C1C1E;
+  overflow: hidden;
+}
+.ck-camera { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+
+.ck-perm {
+  position: absolute; left: 0; right: 0; top: 0; bottom: 0; z-index: 3;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 0 64rpx 120rpx; text-align: center;
+}
+.ck-perm-text { font-size: 30rpx; color: #FFFFFF; }
+
+.ck-grid { position: absolute; z-index: 1; background: rgba(255, 255, 255, 0.12); }
+.ck-grid-v1, .ck-grid-v2 { top: 0; bottom: 0; width: 2rpx; }
+.ck-grid-v1 { left: 33.33%; }
+.ck-grid-v2 { left: 66.66%; }
+.ck-grid-h1, .ck-grid-h2 { left: 0; right: 0; height: 2rpx; }
+.ck-grid-h1 { top: 33.33%; }
+.ck-grid-h2 { top: 66.66%; }
+
+.ck-dist {
+  position: absolute; z-index: 2; top: 24rpx; left: 24rpx;
+  height: 56rpx; padding: 0 20rpx; border-radius: 12rpx;
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 26rpx; color: #FFFFFF;
+  display: flex; align-items: center; gap: 12rpx;
+}
+.ck-dist.far { color: #FFB340; }
+.ck-dist-dot { width: 14rpx; height: 14rpx; border-radius: 8rpx; }
+
+.ck-blocked {
+  position: absolute; z-index: 2; top: 100rpx; left: 24rpx; right: 24rpx;
+  padding: 18rpx 24rpx; border-radius: 16rpx;
+  background: rgba(200, 30, 43, 0.92);
+  font-size: 28rpx; line-height: 40rpx; font-weight: 600; color: #FFFFFF;
+  display: flex; align-items: flex-start; gap: 12rpx;
+}
+
+/* 水印预览（与 utils/watermark 输出一致的行） */
+.ck-wm {
+  position: absolute; z-index: 2; left: 32rpx; right: 32rpx; bottom: 36rpx;
+  text-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.7);
+}
+.ck-wm-head { display: flex; align-items: center; gap: 20rpx; }
+.ck-wm-tag {
+  height: 52rpx; padding: 0 16rpx; border-radius: 8rpx;
+  background: var(--red); font-size: 28rpx; font-weight: 700;
+  display: inline-flex; align-items: center; text-shadow: none;
+}
+.ck-wm-time {
+  font-family: var(--font-num); font-size: 96rpx; line-height: 104rpx; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ck-wm-line { font-size: 28rpx; line-height: 42rpx; }
+.ck-wm-date { margin-top: 8rpx; font-variant-numeric: tabular-nums; }
+.ck-wm-sub { font-size: 26rpx; line-height: 38rpx; color: #E5E6EA; font-variant-numeric: tabular-nums; }
+
+/* 类型分段（只展示） */
+.ck-kind {
+  flex-shrink: 0;
+  padding: 20rpx 40rpx 0;
+  display: flex; flex-direction: column; align-items: center; gap: 12rpx;
+}
+.ck-seg { display: flex; padding: 6rpx; border-radius: 20rpx; background: #2C2C2E; }
+.ck-seg-item {
+  min-width: 176rpx; height: 72rpx; padding: 0 24rpx; border-radius: 16rpx;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30rpx; font-weight: 500; color: #9A9EA6;
+}
+.ck-seg-item.active { background: #FFFFFF; color: #000000; font-weight: 700; }
+.ck-hint { font-size: 26rpx; line-height: 38rpx; color: #C9CCD2; text-align: center; }
+.ck-hint.warn { color: #FFB340; }
+
+/* 操作按钮 */
+.ck-ctrl {
+  flex-shrink: 0;
+  height: 216rpx;
+  padding: 0 80rpx;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.ck-round {
+  width: 96rpx; height: 96rpx; border-radius: 48rpx; background: #2C2C2E;
+  display: flex; align-items: center; justify-content: center;
+}
+.ck-round.on { background: #FFFFFF; }
+.ck-shutter {
+  width: 152rpx; height: 152rpx; border-radius: 76rpx; border: 8rpx solid #FFFFFF;
+  display: flex; align-items: center; justify-content: center;
+}
+.ck-shutter-inner { width: 120rpx; height: 120rpx; border-radius: 60rpx; background: #FFFFFF; }
+.ck-shutter-hover .ck-shutter-inner { transform: scale(0.92); opacity: 0.85; }
+.ck-shutter.disabled { opacity: 0.35; }
+
+.ck-foot {
+  flex-shrink: 0;
+  margin: 0 32rpx;
+  padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
+  text-align: center; font-size: 24rpx; color: #9A9EA6;
+}

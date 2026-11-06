@@ -1,0 +1,9 @@
+/* pages/home：页头（原型 header 56px，头像 36px） */
+.head { display: flex; align-items: center; box-sizing: border-box; }
+.head-user { display: flex; align-items: center; gap: 20rpx; min-height: 88rpx; min-width: 0; }
+.head-hover { opacity: 0.7; }
+.head-avatar { display: flex; border-radius: 50%; box-shadow: 0 0 0 4rpx #FFFFFF; flex-shrink: 0; }
+.head-text { min-width: 0; }
+.head-name { font-size: 30rpx; font-weight: 600; line-height: 40rpx; color: #1D1D1F; }
+.head-sub { font-size: 24rpx; color: #6E6E73; line-height: 34rpx; }
+.state { padding: 160rpx 0; text-align: center; font-size: 28rpx; color: #6E6E73; }

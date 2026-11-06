@@ -1,0 +1,33 @@
+<view class="page privacy {{authorize ? 'with-footer' : ''}}">
+  <view class="card card-lg">
+    <view class="h1">霍桐售后工单 用户隐私保护指引</view>
+    <view class="meta">更新日期：{{updated}}</view>
+    <view class="p">本小程序仅供霍桐公司员工（售后工程师、销售、售后主管）处理售后服务工单与现场打卡使用。我们只在完成工作所必需的范围内收集和使用你的信息，具体如下。</view>
+
+    <view class="h2">一、手机号</view>
+    <view class="p">首次使用时，通过微信「手机号快速验证」获取你的手机号，用于匹配售后主管在后台登记的员工账号并绑定当前微信，之后自动登录。手机号仅在本人「我的」页面完整展示，其他场景脱敏显示。</view>
+
+    <view class="h2">二、位置信息</view>
+    <view class="p">售后工程师在客户现场拍照打卡（到场 / 离场）时，获取你当时的位置（经纬度），用于记录打卡地点、计算与客户地址的距离（超过 1 公里标记「距离异常」供主管核对），并统计现场工时。建单时通过地图选点记录客户地址。我们不会在后台持续获取你的位置。</view>
+
+    <view class="h2">三、相机与照片</view>
+    <view class="p">打卡需现场拍照（仅允许相机拍摄），照片会叠加时间、日期、地址、经纬度、姓名与工单号水印后上传，作为到场、离场凭证。完工提交时上传处理照片与客户签字件；建单时可上传现场照片 / 视频。</view>
+
+    <view class="h2">四、微信头像</view>
+    <view class="p">你可选择使用微信头像或拍照上传头像，显示在工单与打卡记录中。不设置时显示姓氏。</view>
+
+    <view class="h2">五、信息的使用与保存</view>
+    <view class="p">以上信息仅用于售后工单流转、工时统计和内部管理，保存在公司自有服务器，不会出售或提供给无关第三方。账号由售后主管在后台维护；如需解绑微信、更正信息或停用账号，请联系售后主管。</view>
+
+    <view class="h2">六、你的权利</view>
+    <view class="p">你可以在微信「设置 - 隐私 - 授权管理」中随时关闭位置、相机等授权，关闭后相应功能（如现场打卡）将无法使用。如对本指引有疑问，请联系售后主管。</view>
+
+    <view class="link" bindtap="openOfficial">查看微信官方隐私保护指引</view>
+  </view>
+
+  <view wx:if="{{authorize}}" class="footer-bar">
+    <view class="btn-secondary flex1" hover-class="btn-hover" bindtap="onDisagree">不同意</view>
+    <button id="agree-privacy-btn" class="btn-primary flex1" hover-class="btn-hover"
+            open-type="agreePrivacyAuthorization" bindagreeprivacyauthorization="onAgree">同意并继续</button>
+  </view>
+</view>

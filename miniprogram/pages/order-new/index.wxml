@@ -1,0 +1,165 @@
+<nav-bar title="新建工单" />
+
+<view class="form">
+  <view class="intro">按售后 SOP 的记录要素填写，带 <text class="star">*</text> 为必填。提交后发布到工单大厅。</view>
+
+  <!-- ========== 类型 ========== -->
+  <view class="grp-title">类型</view>
+  <view class="grp">
+    <picker range="{{sourceOptions}}" range-key="label" value="{{sourceIndex}}" bindchange="onPickSource">
+      <view class="cell" hover-class="cell-hover">
+        <view class="lbl flex1">工单来源 <text class="star">*</text></view>
+        <text class="val">{{sourceOptions[sourceIndex].label}}</text>
+        <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+      </view>
+    </picker>
+    <picker range="{{problemOptions}}" range-key="label" value="{{problemIndex}}" bindchange="onPickProblem">
+      <view class="cell" hover-class="cell-hover">
+        <view class="lbl flex1">问题类型 <text class="star">*</text></view>
+        <text class="val">{{problemOptions[problemIndex].label}}</text>
+        <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+      </view>
+    </picker>
+    <picker range="{{urgencyOptions}}" range-key="label" value="{{urgencyIndex}}" bindchange="onPickUrgency">
+      <view class="cell" hover-class="cell-hover">
+        <view class="lbl flex1">紧急程度 <text class="star">*</text></view>
+        <text class="val {{form.urgency === 'Urgent' ? 'red' : ''}}">{{urgencyOptions[urgencyIndex].label}}</text>
+        <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+      </view>
+    </picker>
+    <picker range="{{serviceOptions}}" range-key="label" value="{{serviceIndex}}" bindchange="onPickService">
+      <view class="cell cell-tall no-line" hover-class="cell-hover">
+        <view class="lbl flex1">
+          <view>维修类型 <text class="star">*</text></view>
+          <view class="hint">只有现场工单需要拍照打卡</view>
+        </view>
+        <text class="val">{{serviceOptions[serviceIndex].label}}</text>
+        <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+      </view>
+    </picker>
+  </view>
+
+  <!-- ========== 客户 ========== -->
+  <view class="grp-title">客户</view>
+  <view class="grp">
+    <view class="cell" id="f-customerName">
+      <view class="lbl {{errKey === 'customerName' ? 'err' : ''}}">客户单位 <text class="star">*</text></view>
+      <input class="ipt" value="{{form.customerName}}" data-key="customerName" bindinput="onInput" placeholder="客户全称" placeholder-class="placeholder" maxlength="100" />
+    </view>
+    <view class="cell" id="f-contactName">
+      <view class="lbl {{errKey === 'contactName' ? 'err' : ''}}">联系人 <text class="star">*</text></view>
+      <input class="ipt" value="{{form.contactName}}" data-key="contactName" bindinput="onInput" placeholder="报修人姓名" placeholder-class="placeholder" maxlength="50" />
+    </view>
+    <view class="cell" id="f-contactPhone">
+      <view class="lbl {{errKey === 'contactPhone' ? 'err' : ''}}">联系电话 <text class="star">*</text></view>
+      <input class="ipt num-font" type="text" value="{{form.contactPhone}}" data-key="contactPhone" bindinput="onInput" placeholder="手机或座机" placeholder-class="placeholder" maxlength="24" />
+    </view>
+    <view class="cell cell-addr no-line" id="f-address" hover-class="cell-hover" bindtap="onChooseAddress" aria-role="button">
+      <view class="lbl {{errKey === 'address' ? 'err' : ''}}">客户地址 <text class="star">*</text></view>
+      <view class="addr">
+        <block wx:if="{{form.address}}">
+          <view wx:if="{{loc.name}}" class="addr-name">{{loc.name}}</view>
+          <view class="{{loc.name ? 'addr-sub' : 'addr-name'}}">{{loc.name ? loc.address : form.address}}</view>
+          <view class="addr-tag {{loc.picked ? '' : 'amber'}}">{{loc.picked ? '已在地图上选点' : '未选点，现场工单请重新选择'}}</view>
+        </block>
+        <text wx:else class="placeholder">在地图上选点</text>
+      </view>
+      <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+    </view>
+  </view>
+
+  <!-- ========== 设备 ========== -->
+  <view class="grp-title">设备</view>
+  <view class="grp">
+    <view class="cell" id="f-deviceModel">
+      <view class="lbl {{errKey === 'deviceModel' ? 'err' : ''}}">设备型号 <text class="star">*</text></view>
+      <input class="ipt" value="{{form.deviceModel}}" data-key="deviceModel" bindinput="onInput" placeholder="如 高压反应釜 HTR-500" placeholder-class="placeholder" maxlength="100" />
+    </view>
+    <view class="cell" id="f-deviceSn">
+      <view class="lbl {{errKey === 'deviceSn' ? 'err' : ''}}">设备编号 <text class="star">*</text></view>
+      <input class="ipt num-font" value="{{form.deviceSn}}" data-key="deviceSn" bindinput="onInput" placeholder="铭牌上的序列号" placeholder-class="placeholder" maxlength="64" />
+    </view>
+    <picker mode="date" fields="month" value="{{form.satDate || monthEnd}}" end="{{monthEnd}}" bindchange="onPickSat">
+      <view class="cell" id="f-satDate" hover-class="cell-hover">
+        <view class="lbl flex1 {{errKey === 'satDate' ? 'err' : ''}}">购买 / SAT 时间 <text class="star">*</text></view>
+        <text class="val num-font {{form.satDate ? '' : 'placeholder'}}">{{form.satDate || '请选择'}}</text>
+        <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+      </view>
+    </picker>
+    <view class="cell">
+      <view class="lbl flex1">
+        <view>SAT 已签字</view>
+        <view class="hint">{{form.satSigned ? '已签字 · 老产品' : '未签字 · 新产品'}}</view>
+      </view>
+      <switch checked="{{form.satSigned}}" color="#1D1D1F" bindchange="onSatSigned" />
+    </view>
+    <view class="cell no-line">
+      <view class="lbl">项目编号</view>
+      <input class="ipt" value="{{form.projectNo}}" data-key="projectNo" bindinput="onInput" placeholder="选填" placeholder-class="placeholder" maxlength="64" />
+    </view>
+  </view>
+
+  <!-- ========== 故障 ========== -->
+  <view class="grp-title">故障</view>
+  <view class="grp">
+    <view class="cell" id="f-faultTime">
+      <view class="lbl flex1 {{errKey === 'faultTime' ? 'err' : ''}}">发生时间 <text class="star">*</text></view>
+      <picker mode="date" value="{{faultDate || dayEnd}}" end="{{dayEnd}}" bindchange="onPickFaultDate">
+        <view class="pick-chip {{faultDate ? '' : 'placeholder'}}" hover-class="cell-hover">{{faultDate ? faultDateText : '选择日期'}}</view>
+      </picker>
+      <picker range="{{periods}}" value="{{periodIndex < 0 ? 1 : periodIndex}}" bindchange="onPickPeriod">
+        <view class="pick-chip {{periodIndex >= 0 ? '' : 'placeholder'}}" hover-class="cell-hover">{{periodIndex >= 0 ? periods[periodIndex] : '时段'}}</view>
+      </picker>
+    </view>
+    <view class="block" id="f-symptom">
+      <view class="lbl {{errKey === 'symptom' ? 'err' : ''}}">故障现象 / 报错 <text class="star">*</text> <text class="hint-inline">按客户原话记录</text></view>
+      <textarea class="ta" value="{{form.symptom}}" data-key="symptom" bindinput="onInput" placeholder="如：升温到 180℃ 左右就不再加热，面板报 E03" placeholder-class="placeholder" maxlength="1000" disable-default-padding auto-height />
+    </view>
+    <view class="block" id="f-customerTried">
+      <view class="lbl {{errKey === 'customerTried' ? 'err' : ''}}">客户已尝试的操作 <text class="star">*</text></view>
+      <input class="ipt-block" value="{{form.customerTried}}" data-key="customerTried" bindinput="onInput" placeholder="如：断电重启、检查电源线" placeholder-class="placeholder" maxlength="500" />
+    </view>
+    <view class="block" id="f-siteEnvironment">
+      <view class="lbl {{errKey === 'siteEnvironment' ? 'err' : ''}}">现场环境条件 <text class="star">*</text></view>
+      <input class="ipt-block" value="{{form.siteEnvironment}}" data-key="siteEnvironment" bindinput="onInput" placeholder="如：通风橱内，220V 单相电" placeholder-class="placeholder" maxlength="500" />
+    </view>
+    <view class="block no-line">
+      <view class="lbl">客户诉求与限制</view>
+      <input class="ipt-block" value="{{form.customerRequest}}" data-key="customerRequest" bindinput="onInput" placeholder="选填，如：需提前一天预约入场" placeholder-class="placeholder" maxlength="500" />
+    </view>
+  </view>
+
+  <!-- ========== 价格与照片 ========== -->
+  <view class="grp-title">价格与照片</view>
+  <view class="grp grp-pb">
+    <view class="cell cell-price" id="f-price">
+      <view class="lbl {{errKey === 'price' ? 'err' : ''}}">服务价格 <text class="star">*</text></view>
+      <view class="flex1"></view>
+      <text class="yen">¥</text>
+      <input class="ipt-price" type="digit" value="{{form.price}}" bindinput="onPriceInput" placeholder="0" placeholder-class="placeholder" maxlength="12" />
+    </view>
+    <view class="price-tip">质保期内填 0。价格对销售、工程师和主管可见。</view>
+
+    <view class="media-title" id="f-media">现场照片 / 视频 <text class="hint-inline">选填，最多 {{maxMedia}} 个</text></view>
+    <view class="media-grid">
+      <view wx:for="{{media}}" wx:key="key" class="media-item" data-index="{{index}}" bindtap="onMediaTap">
+        <image wx:if="{{item.thumb}}" class="media-img" src="{{item.thumb}}" mode="aspectFill" />
+        <view wx:if="{{item.type === 'video'}}" class="media-video">▶<text wx:if="{{item.duration}}"> {{item.duration}}″</text></view>
+        <view wx:if="{{item.status === 'uploading'}}" class="media-mask">上传中</view>
+        <view wx:elif="{{item.status === 'fail'}}" class="media-mask media-fail">点击重试</view>
+        <view class="media-del" data-index="{{index}}" catchtap="onMediaRemove" aria-role="button" aria-label="删除">
+          <ui-icon name="close" color="#FFFFFF" size="10" stroke="3" />
+        </view>
+      </view>
+      <view wx:if="{{media.length < maxMedia}}" class="media-add" hover-class="cell-hover" bindtap="onAddMedia" aria-role="button" aria-label="添加照片或视频">
+        <ui-icon name="plus" color="#6E6E73" size="24" stroke="2" />
+      </view>
+    </view>
+  </view>
+
+  <view class="footer-space"></view>
+</view>
+
+<view class="footer-bar">
+  <view class="btn-primary submit {{submitting ? 'btn-disabled' : ''}}" hover-class="{{submitting ? 'none' : 'btn-hover'}}" bindtap="onSubmit" aria-role="button" aria-disabled="{{submitting}}">{{submitting ? '提交中…' : '提交到工单大厅'}}</view>
+</view>

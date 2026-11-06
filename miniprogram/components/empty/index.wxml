@@ -1,0 +1,5 @@
+<view class="empty {{card ? 'empty-card' : ''}}">
+  <view class="empty-text">{{text}}</view>
+  <view wx:if="{{desc}}" class="empty-desc">{{desc}}</view>
+  <view class="empty-slot"><slot></slot></view>
+</view>

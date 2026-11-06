@@ -1,0 +1,83 @@
+/* pages/complete 完工提交（原型 08） */
+.cp-state { padding: 200rpx 0; text-align: center; font-size: 28rpx; }
+
+.cp-notice {
+  margin: 8rpx 0 24rpx; padding: 20rpx 28rpx; border-radius: 24rpx;
+  background: var(--card); box-shadow: inset 0 0 0 2rpx var(--border);
+  color: var(--text-body); font-size: 28rpx;
+}
+
+.cp-order { display: flex; align-items: center; gap: 16rpx; margin: 0 4rpx 20rpx; font-size: 26rpx; color: var(--text-2); }
+.cp-order-name { font-weight: 600; color: var(--text); }
+.cp-order-no { flex-shrink: 0; font-weight: 500; }
+
+.cp-warn {
+  display: flex; align-items: center; gap: 12rpx;
+  margin-bottom: 24rpx; padding: 20rpx 28rpx; border-radius: 24rpx;
+  background: var(--soft); color: var(--amber); font-size: 26rpx; line-height: 38rpx; font-weight: 600;
+}
+.cp-warn-link { flex-shrink: 0; color: var(--text); text-decoration: underline; }
+
+.cp-card {
+  background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 0 32rpx 8rpx;
+}
+.cp-mt { margin-top: 24rpx; }
+
+.cp-label { font-size: 26rpx; font-weight: 600; color: var(--text-2); }
+
+.cp-field { padding-top: 24rpx; border-bottom: 2rpx solid var(--divider); }
+.cp-field-last { border-bottom: none; }
+.cp-textarea {
+  display: block; width: 100%; min-height: 48rpx;
+  margin: 12rpx 0 20rpx; padding: 0;
+  font-size: 32rpx; line-height: 48rpx; color: var(--text);
+}
+.cp-input { display: block; width: 100%; height: 88rpx; font-size: 32rpx; color: var(--text); }
+
+.cp-radio-title { display: block; padding: 24rpx 0 4rpx; }
+.cp-radio {
+  height: 92rpx; display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 2rpx solid var(--divider); font-size: 32rpx; color: var(--text);
+}
+.cp-radio.last { border-bottom: none; }
+.cp-ring {
+  width: 44rpx; height: 44rpx; border-radius: 22rpx; border: 4rpx solid var(--disabled);
+  display: flex; align-items: center; justify-content: center;
+}
+.cp-ring.on { border-color: var(--text); }
+.cp-ring-dot { width: 20rpx; height: 20rpx; border-radius: 10rpx; background: transparent; }
+.cp-ring.on .cp-ring-dot { background: var(--text); }
+
+.cp-photo-head { display: flex; align-items: baseline; justify-content: space-between; padding: 24rpx 0 16rpx; }
+.cp-photo-tip { font-size: 24rpx; color: var(--text-2); }
+
+.cp-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16rpx; }
+.cp-grid-sign { padding-bottom: 24rpx; }
+.cp-thumb { position: relative; height: 144rpx; border-radius: 20rpx; overflow: hidden; background: var(--soft); }
+.cp-thumb-img { width: 100%; height: 100%; display: block; }
+.cp-thumb-mask {
+  position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  background: rgba(0, 0, 0, 0.45); color: #FFFFFF; font-size: 22rpx; line-height: 32rpx;
+}
+.cp-thumb-mask.fail { background: rgba(200, 30, 43, 0.7); }
+.cp-thumb-del {
+  position: absolute; top: 6rpx; right: 6rpx; width: 40rpx; height: 40rpx; border-radius: 20rpx;
+  background: rgba(0, 0, 0, 0.55); display: flex; align-items: center; justify-content: center;
+}
+.cp-add {
+  height: 144rpx; border-radius: 20rpx; border: 3rpx dashed var(--disabled); background: #FAFAF9;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.cp-sign {
+  margin-top: 24rpx; min-height: 116rpx; border-top: 2rpx solid var(--divider);
+  display: flex; align-items: center; gap: 24rpx; padding: 12rpx 0;
+}
+.cp-sign-title { font-size: 32rpx; font-weight: 600; color: var(--text); }
+.cp-sign-opt { margin-left: 8rpx; font-size: 24rpx; font-weight: 500; color: var(--text-3); }
+.cp-sign-desc { margin-top: 4rpx; font-size: 26rpx; color: var(--text-2); }
+.cp-sign-status { flex-shrink: 0; font-size: 28rpx; font-weight: 600; }
+
+.cp-submit { height: 100rpx; border-radius: 24rpx; font-size: 32rpx; }

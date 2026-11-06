@@ -1,0 +1,54 @@
+{
+  "pages": [
+    "pages/home/index",
+    "pages/orders/index",
+    "pages/hours/index",
+    "pages/me/index",
+    "pages/login/index",
+    "pages/privacy/index",
+    "pages/my-orders/index",
+    "pages/order-detail/index",
+    "pages/checkin/index",
+    "pages/complete/index",
+    "pages/order-new/index"
+  ],
+  "window": {
+    "backgroundColor": "#F6F6F4",
+    "backgroundTextStyle": "dark",
+    "navigationBarBackgroundColor": "#F6F6F4",
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "霍桐售后工单"
+  },
+  "tabBar": {
+    "custom": true,
+    "color": "#AEAEB2",
+    "selectedColor": "#1D1D1F",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      { "pagePath": "pages/home/index", "text": "首页" },
+      { "pagePath": "pages/orders/index", "text": "工单" },
+      { "pagePath": "pages/hours/index", "text": "工时" },
+      { "pagePath": "pages/me/index", "text": "我的" }
+    ]
+  },
+  "requiredPrivateInfos": ["getLocation", "chooseLocation"],
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于现场打卡时记录位置，并计算与客户地址的距离"
+    }
+  },
+  "__usePrivacyCheck__": true,
+  "lazyCodeLoading": "requiredComponents",
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "usingComponents": {
+    "nav-bar": "/components/nav-bar/index",
+    "avatar": "/components/avatar/index",
+    "status-tag": "/components/status-tag/index",
+    "urgency-tag": "/components/urgency-tag/index",
+    "empty": "/components/empty/index",
+    "assign-sheet": "/components/assign-sheet/index",
+    "ui-icon": "/components/ui-icon/index"
+  }
+}

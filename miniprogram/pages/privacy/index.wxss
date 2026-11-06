@@ -1,0 +1,8 @@
+.privacy { padding-top: 24rpx; padding-bottom: calc(48rpx + env(safe-area-inset-bottom)); }
+.privacy.with-footer { padding-bottom: calc(200rpx + env(safe-area-inset-bottom)); }
+.h1 { font-size: 38rpx; font-weight: 700; line-height: 54rpx; }
+.meta { margin-top: 8rpx; font-size: 24rpx; color: #AEAEB2; }
+.h2 { margin-top: 36rpx; font-size: 30rpx; font-weight: 600; }
+.p { margin-top: 12rpx; font-size: 28rpx; line-height: 46rpx; color: #3A3A3C; }
+.link { margin-top: 40rpx; font-size: 26rpx; color: #6E6E73; text-decoration: underline; }
+.footer-bar .btn-primary, .footer-bar .btn-secondary { height: 96rpx; }

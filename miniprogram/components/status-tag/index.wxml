@@ -1,0 +1,1 @@
+<text wx:if="{{label}}" class="status-tag {{size === 'sm' ? 'sm' : ''}}" style="background: {{bg}}; color: {{fg}};">{{label}}</text>

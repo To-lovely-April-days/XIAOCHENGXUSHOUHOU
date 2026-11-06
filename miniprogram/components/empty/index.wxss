@@ -1,0 +1,6 @@
+.empty { padding: 80rpx 40rpx; text-align: center; }
+.empty-card { background: #FFFFFF; border-radius: 32rpx; box-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.04), 0 8rpx 28rpx rgba(0, 0, 0, 0.04); }
+.empty-text { font-size: 30rpx; color: #6E6E73; }
+.empty-desc { margin-top: 8rpx; font-size: 26rpx; color: #AEAEB2; line-height: 40rpx; }
+.empty-slot:empty { display: none; }
+.empty-slot { margin-top: 32rpx; display: flex; justify-content: center; }

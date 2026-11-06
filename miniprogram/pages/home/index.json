@@ -1,0 +1,11 @@
+{
+  "navigationStyle": "custom",
+  "navigationBarTitleText": "首页",
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "dark",
+  "usingComponents": {
+    "home-engineer": "/components/home-engineer/index",
+    "home-sales": "/components/home-sales/index",
+    "home-supervisor": "/components/home-supervisor/index"
+  }
+}
