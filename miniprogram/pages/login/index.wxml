@@ -1,7 +1,7 @@
 <nav-bar back="{{false}}" background="#F6F6F4" />
 <view class="login">
   <view class="brand">
-    <view class="logo">霍桐</view>
+    <image class="logo" src="/assets/logo.png" mode="aspectFit" />
     <view class="brand-title">霍桐售后工单</view>
     <view class="brand-sub">售后服务工单与现场打卡 · 仅限公司员工使用</view>
   </view>

@@ -108,7 +108,7 @@ const AppShell = {
   template: `<div class="app">
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true">HT</span>
+        <img class="brand-mark" src="img/logo-mark.png" alt="HTLAB">
         <div class="brand-text"><div class="brand-name">霍桐售后</div><div class="brand-sub">主管后台</div></div>
       </div>
       <nav class="nav" aria-label="后台菜单">

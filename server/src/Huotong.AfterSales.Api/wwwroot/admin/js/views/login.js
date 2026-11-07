@@ -43,7 +43,7 @@ export default {
   template: `<div class="login-page">
     <form class="login-card" @submit.prevent="submit" novalidate>
       <div class="login-brand">
-        <span class="brand-mark brand-mark-lg" aria-hidden="true">HT</span>
+        <img class="brand-logo-lg" src="img/logo.png" alt="霍桐仪器 HTLAB">
         <div><div class="login-title">霍桐售后</div><div class="login-sub">主管后台</div></div>
       </div>
       <label class="field"><span class="field-label">手机号</span>
