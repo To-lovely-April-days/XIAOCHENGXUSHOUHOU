@@ -11,12 +11,20 @@ namespace Huotong.AfterSales.Api.Controllers;
 public class MeController : ApiControllerBase
 {
     private readonly HomeService _home;
+    private readonly PasswordService _password;
 
-    public MeController(HomeService home) => _home = home;
+    public MeController(HomeService home, PasswordService password)
+    {
+        _home = home;
+        _password = password;
+    }
 
     [HttpGet]
     public async Task<ApiResponse<MeDto>> Get() => Ok(await _home.Me(Me));
 
     [HttpPut("avatar")]
     public async Task<ApiResponse<UserDto>> Avatar([FromBody] AvatarRequest req) => Ok(await _home.SetAvatar(Me, req.FileId));
+
+    [HttpPut("password")]
+    public async Task<ApiResponse<UserDto>> Password([FromBody] ChangePasswordRequest req) => Ok(await _password.ChangeMine(Me, req));
 }

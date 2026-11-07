@@ -21,6 +21,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.Phone).HasMaxLength(20);
             e.Property(x => x.Department).HasMaxLength(50);
             e.Property(x => x.OpenId).HasMaxLength(64);
+            e.Property(x => x.PasswordHash).HasMaxLength(256);
             e.Property(x => x.Role).HasConversion<string>().HasMaxLength(20);
             e.HasIndex(x => x.Phone).IsUnique();
             e.HasIndex(x => x.OpenId);

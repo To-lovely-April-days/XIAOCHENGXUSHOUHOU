@@ -207,10 +207,11 @@ public class AdminService
 
     private static readonly Regex MobileRe = new(@"^1\d{10}$", RegexOptions.Compiled);
 
-    private EmployeeDto ToDto(Employee e) => new()
+    public EmployeeDto ToDto(Employee e) => new()
     {
         Id = e.Id, Name = e.Name, Phone = e.Phone, Role = e.Role, RoleName = EnumText.RoleName(e.Role), Department = e.Department,
-        Enabled = e.Enabled, Bound = !string.IsNullOrEmpty(e.OpenId), AvatarUrl = e.AvatarFile == null ? null : _files.Url(e.AvatarFile)
+        Enabled = e.Enabled, Bound = !string.IsNullOrEmpty(e.OpenId), AvatarUrl = e.AvatarFile == null ? null : _files.Url(e.AvatarFile),
+        HasPassword = !string.IsNullOrEmpty(e.PasswordHash)
     };
 
     public async Task<List<EmployeeDto>> Employees() =>

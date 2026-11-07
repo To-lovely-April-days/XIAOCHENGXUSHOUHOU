@@ -187,4 +187,50 @@ public class EmployeeDto
     public bool Enabled { get; set; }
     public bool Bound { get; set; }
     public string? AvatarUrl { get; set; }
+    public bool HasPassword { get; set; }
+}
+
+// ---------- PC 主管后台（API.md §9） ----------
+
+public class AdminPunchItemDto : PunchDto
+{
+    public string OrderNo { get; set; } = "";
+    public string CustomerName { get; set; } = "";
+    /// <summary>缺卡：没有配对离场且早于今天的到场卡</summary>
+    public bool Missing { get; set; }
+}
+
+public class AdminPunchPageDto
+{
+    public List<AdminPunchItemDto> Items { get; set; } = new();
+    public int Total { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public Dictionary<string, int> Counts { get; set; } = new();
+}
+
+public class AdminHoursDayDto
+{
+    public DateOnly Date { get; set; }
+    public int Minutes { get; set; }
+}
+
+public class AdminHoursEngineerDto
+{
+    public UserBrief Engineer { get; set; } = new();
+    public int TotalMinutes { get; set; }
+    public int TripDays { get; set; }
+    public int OrderCount { get; set; }
+    public int SupplementCount { get; set; }
+    public int MissingCount { get; set; }
+    public bool RunningNow { get; set; }
+    public List<AdminHoursDayDto> Days { get; set; } = new();
+}
+
+public class AdminHoursDto
+{
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public int TotalMinutes { get; set; }
+    public List<AdminHoursEngineerDto> Engineers { get; set; } = new();
 }

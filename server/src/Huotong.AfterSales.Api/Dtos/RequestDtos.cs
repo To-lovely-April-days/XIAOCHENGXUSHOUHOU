@@ -7,6 +7,9 @@ namespace Huotong.AfterSales.Api.Dtos;
 public class LoginRequest { public string? Code { get; set; } }
 public class BindRequest { public string? BindTicket { get; set; } public string? PhoneCode { get; set; } }
 public class DevLoginRequest { public string? Phone { get; set; } }
+public class PasswordLoginRequest { public string? Phone { get; set; } public string? Password { get; set; } }
+public class ChangePasswordRequest { public string? OldPassword { get; set; } public string? NewPassword { get; set; } }
+public class SetPasswordRequest { public string? Password { get; set; } }
 
 public class LoginResult
 {

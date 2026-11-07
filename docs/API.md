@@ -389,3 +389,57 @@ xlsx：工程师、日期、工单号、客户、到场、离场、工时(小时
 - PUT /api/admin/employees/{id} `{ "name","phone","role","department","enabled" }`
 - POST /api/admin/employees/{id}/unbind → 清空 openid，并使该员工旧 token 失效
 - 停用、修改角色或手机号同样会使该员工旧 token 失效（下次请求返回 40100）
+
+---
+
+## 9. PC 主管后台补充（网页端 `/admin`）
+
+PC 后台为纯静态网页，由后端托管在 `GET /admin/`（`wwwroot/admin/`），与 API 同源，无需 CORS。只有 `Supervisor` 角色能登录 PC 后台。
+
+### 账号密码
+员工表新增 `PasswordHash`（PBKDF2，ASP.NET Core `PasswordHasher<T>`），可为空（未设置密码不能在 PC 登录）。
+种子数据中赵主管的初始密码由配置 `Seed:SupervisorPassword` 提供（Development 默认 `Huotong@2026`）。
+
+#### POST /api/auth/password-login
+`{ "phone": "13900000001", "password": "..." }`
+→ `{ "token": "...", "user": { User }, "needBind": false }`
+错误：40000「手机号或密码错误」（账号不存在/密码错误/未设置密码一律同一文案）；40300「仅售后主管可登录电脑后台」；已停用 → 40300「账号已停用」。
+同一手机号连续 5 次失败锁定 10 分钟（内存计数即可）→ 40000「尝试次数过多，请 10 分钟后再试」。
+
+#### PUT /api/me/password
+`{ "oldPassword": "...", "newPassword": "..." }`（未设置过密码时 oldPassword 可为空）。新密码 ≥ 8 位且同时含字母和数字，否则 40000。→ `{ User }`
+
+#### POST /api/admin/employees/{id}/password（Supervisor）
+`{ "password": "..." }` 为该员工设置/重置密码（同样的强度规则）。→ `EmployeeDto`
+`GET /api/admin/employees` 的每项新增 `"hasPassword": true`。
+
+### GET /api/admin/punches?from=&to=&engineerId=&abnormal=&page=1&pageSize=50
+打卡记录（Supervisor）。`from`/`to` 为日期 yyyy-MM-dd（含两端，默认最近 7 天）；`abnormal` 可选 `distance`（outOfRange）| `supplement`（补录）| `missing`（缺卡：返回没有配对离场且早于今天的到场卡）。时间倒序。
+→
+```json
+{ "items": [ { PunchDto 全部字段, "orderNo": "SH-...", "customerName": "...", "missing": false } ],
+  "total": 30, "page": 1, "pageSize": 50,
+  "counts": { "all": 30, "distance": 1, "supplement": 2, "missing": 1 } }
+```
+（counts 受 from/to/engineerId 影响，不受 abnormal 影响）
+
+### GET /api/admin/hours?year=2026&month=11
+工时统计（Supervisor），每个 Engineer 一行（含无打卡的工程师，按 totalMinutes 倒序）。
+→
+```json
+{ "year": 2026, "month": 11,
+  "totalMinutes": 5388,
+  "engineers": [ {
+    "engineer": { UserBrief }, "totalMinutes": 940, "tripDays": 4, "orderCount": 2,
+    "supplementCount": 1, "missingCount": 0, "runningNow": true,
+    "days": [ { "date": "2026-11-06", "minutes": 217 } ]   // 有工时或有打卡的天，日期正序
+  } ] }
+```
+单个工程师的每日明细用已有的 `GET /api/hours/month?year=&month=&engineerId=`。
+`running` 的时长不计入 totalMinutes（与导出一致）。
+
+### 已有接口在后台的用法（无需新增）
+- 工单列表：`GET /api/orders`（status/keyword/issue/assigneeId/from/to/page/pageSize），`issue=MissingPunch|DistanceAbnormal`；「本周」= from 本周一 to 今天。
+- 概况：`GET /api/admin/overview`；详情抽屉：`GET /api/orders/{id}`；操作：assign/void/hold/resume/reject/close、`POST /api/admin/punches/supplement`。
+- 新建工单：`POST /api/orders`（PC 端没有地图选点，手工填写地址与经纬度，现场单经纬度必填）。
+- 工程师列表：`GET /api/engineers`；账号：`/api/admin/employees*`；导出：`/api/admin/export/orders|hours`（需带 Authorization，前端用 fetch → blob 下载）。

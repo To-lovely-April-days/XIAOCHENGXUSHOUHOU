@@ -223,5 +223,58 @@ else
   expect "$(echo "$D" | py 'd["status"]')" "Closed" "补录后闭环成功"
 fi
 
+echo "== PC 主管后台：账号密码"
+req POST /api/auth/password-login "" '{"phone":"13900000001","password":"Wrong1234"}'
+expect "$(cat "$TMP/status")/$(py 'd["code"]' < "$TMP/body")" "400/40000" "密码错误 → 40000"
+expect "$(py 'd["message"]' < "$TMP/body")" "手机号或密码错误" "密码错误文案"
+req POST /api/auth/password-login "" '{"phone":"13900000000","password":"Huotong@2026"}'
+expect "$(py 'd["message"]' < "$TMP/body")" "手机号或密码错误" "未设置密码的账号 → 同一文案"
+PL=$(call POST /api/auth/password-login "" '{"phone":"13900000001","password":"Huotong@2026"}')
+expect "$(echo "$PL" | py 'd["user"]["role"]')" "Supervisor" "赵主管密码登录"
+PCTOKEN=$(echo "$PL" | py 'd["token"]')
+expect "$(call GET /api/me "$PCTOKEN" | py 'd["user"]["name"]')" "赵主管" "密码登录 token 可用"
+expect "$(call GET /api/admin/employees "$PCTOKEN" | py '[e["hasPassword"] for e in d if e["phone"]=="13900000001"][0]')" "True" "employees.hasPassword"
+req PUT /api/me/password "$PCTOKEN" '{"oldPassword":"Huotong@2026","newPassword":"abcdefgh"}'
+expect "$(py 'd["code"]' < "$TMP/body")" "40000" "新密码强度不足 → 40000"
+req PUT /api/me/password "$PCTOKEN" '{"oldPassword":"Wrong1234","newPassword":"Smoke2026x"}'
+expect "$(py 'd["message"]' < "$TMP/body")" "原密码错误" "原密码错误 → 40000"
+EP=$(call POST "/api/admin/employees/$EID/password" "$SUP" '{"password":"Smoke2026x"}')
+expect "$(echo "$EP" | py 'd["hasPassword"]')" "True" "主管为员工设置密码"
+req POST "/api/admin/employees/$EID/password" "$SUP" '{"password":"short1"}'
+expect "$(py 'd["code"]' < "$TMP/body")" "40000" "设置弱密码 → 40000"
+req POST /api/auth/password-login "" "{\"phone\":\"$PH\",\"password\":\"Smoke2026x\"}"
+expect "$(py 'd["code"]' < "$TMP/body")" "40300" "非主管/已停用账号密码登录 → 40300"
+
+echo "== PC 主管后台：打卡记录 / 工时统计"
+PU=$(call GET "/api/admin/punches" "$PCTOKEN")
+expect "$(echo "$PU" | py 'sorted(d["counts"].keys())')" '["all", "distance", "missing", "supplement"]' "punches counts 键"
+expect "$(echo "$PU" | py 'd["total"] == d["counts"]["all"] and d["counts"]["all"] > 0')" "True" "punches total = counts.all > 0"
+expect "$(echo "$PU" | py '[i["time"] for i in d["items"]] == sorted([i["time"] for i in d["items"]], reverse=True)')" "True" "punches 时间倒序"
+expect "$(echo "$PU" | py 'all(k in d["items"][0] for k in ("orderNo","customerName","missing","engineer","pairMinutes","photo"))')" "True" "punches 项字段"
+DI=$(call GET "/api/admin/punches?abnormal=distance" "$PCTOKEN")
+expect "$(echo "$DI" | py 'd["total"] == d["counts"]["distance"] and all(i["outOfRange"] for i in d["items"])')" "True" "abnormal=distance 过滤"
+expect "$(echo "$DI" | py 'd["counts"]')" "$(echo "$PU" | py 'd["counts"]')" "counts 不受 abnormal 影响"
+SU=$(call GET "/api/admin/punches?abnormal=supplement" "$PCTOKEN")
+expect "$(echo "$SU" | py 'd["total"] >= 1 and all(i["isSupplement"] for i in d["items"])')" "True" "abnormal=supplement 过滤"
+MI=$(call GET "/api/admin/punches?abnormal=missing" "$PCTOKEN")
+expect "$(echo "$MI" | py 'all(i["missing"] and i["kind"]=="Arrive" for i in d["items"])')" "True" "abnormal=missing 过滤"
+req GET "/api/admin/punches?abnormal=foo" "$PCTOKEN"; expect "$(py 'd["code"]' < "$TMP/body")" "40000" "abnormal 非法 → 40000"
+req GET /api/admin/punches "$ENG"; expect "$(cat "$TMP/status")" "403" "工程师查打卡记录 → 403"
+HO=$(call GET "/api/admin/hours" "$PCTOKEN")
+expect "$(echo "$HO" | py 'd["totalMinutes"] == sum(e["totalMinutes"] for e in d["engineers"])')" "True" "hours totalMinutes = 各工程师合计"
+expect "$(echo "$HO" | py 'len(d["engineers"]) >= 4')" "True" "hours 含无打卡的工程师"
+expect "$(echo "$HO" | py '[e["totalMinutes"] for e in d["engineers"]] == sorted([e["totalMinutes"] for e in d["engineers"]], reverse=True)')" "True" "hours 按 totalMinutes 倒序"
+expect "$(echo "$HO" | py 'all(set(("engineer","totalMinutes","tripDays","orderCount","supplementCount","missingCount","runningNow","days")) <= set(e) for e in d["engineers"])')" "True" "hours 行字段"
+req GET "/api/admin/hours?year=2026&month=13" "$PCTOKEN"; expect "$(py 'd["code"]' < "$TMP/body")" "40000" "非法月份 → 40000"
+
+echo "== PC 主管后台：静态页面"
+ST=$(curl -s -o "$TMP/admin.html" -w "%{http_code} %{content_type}" "$BASE/admin/")
+expect "$(echo "$ST" | cut -d' ' -f1)" "200" "GET /admin/ → 200"
+expect "$(echo "$ST" | grep -c 'text/html')" "1" "GET /admin/ 返回 html"
+expect "$(grep -ci '<html' "$TMP/admin.html" | tr -d ' ' | sed 's/^[1-9][0-9]*$/1/')" "1" "/admin/ 内容为 HTML 页面"
+RD=$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" "$BASE/admin")
+expect "$(echo "$RD" | cut -d' ' -f1 | cut -c1)" "3" "GET /admin → 重定向"
+expect "$(echo "$RD" | cut -d' ' -f2 | sed 's#^.*://[^/]*##')" "/admin/" "重定向到 /admin/"
+
 echo
 echo "全部通过：$PASS 项"

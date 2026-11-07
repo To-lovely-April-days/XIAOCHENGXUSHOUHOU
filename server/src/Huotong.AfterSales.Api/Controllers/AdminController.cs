@@ -12,11 +12,15 @@ public class AdminController : ApiControllerBase
 {
     private const string Xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private readonly AdminService _admin;
+    private readonly AdminReportService _reports;
+    private readonly PasswordService _password;
     private readonly IClock _clock;
 
-    public AdminController(AdminService admin, IClock clock)
+    public AdminController(AdminService admin, AdminReportService reports, PasswordService password, IClock clock)
     {
         _admin = admin;
+        _reports = reports;
+        _password = password;
         _clock = clock;
     }
 
@@ -25,6 +29,18 @@ public class AdminController : ApiControllerBase
 
     [HttpPost("punches/supplement")]
     public async Task<ApiResponse<OrderDetail>> Supplement([FromBody] SupplementRequest req) => Ok(await _admin.Supplement(req, Me));
+
+    /// <summary>打卡记录（abnormal = distance | supplement | missing）</summary>
+    [HttpGet("punches")]
+    public async Task<ApiResponse<AdminPunchPageDto>> Punches([FromQuery] AdminPunchQuery q) => Ok(await _reports.Punches(q));
+
+    /// <summary>工时统计：每个工程师一行</summary>
+    [HttpGet("hours")]
+    public async Task<ApiResponse<AdminHoursDto>> Hours([FromQuery] int? year, [FromQuery] int? month)
+    {
+        var now = _clock.Now;
+        return Ok(await _reports.Hours(year ?? now.Year, month ?? now.Month));
+    }
 
     [HttpGet("export/orders")]
     [Produces(Xlsx, "application/json")]
@@ -57,4 +73,8 @@ public class AdminController : ApiControllerBase
 
     [HttpPost("employees/{id:int}/unbind")]
     public async Task<ApiResponse<EmployeeDto>> Unbind(int id) => Ok(await _admin.Unbind(id));
+
+    [HttpPost("employees/{id:int}/password")]
+    public async Task<ApiResponse<EmployeeDto>> SetPassword(int id, [FromBody] SetPasswordRequest req) =>
+        Ok(_admin.ToDto(await _password.SetFor(id, req)));
 }

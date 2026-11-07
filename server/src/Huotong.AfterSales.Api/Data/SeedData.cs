@@ -18,21 +18,24 @@ public class SeedData
     private readonly AppDbContext _db;
     private readonly string _uploadRoot;
     private readonly int _offset;
+    private readonly string? _supervisorPassword;
 
-    public SeedData(AppDbContext db, string uploadRoot, DateTime today)
+    public SeedData(AppDbContext db, string uploadRoot, DateTime today, string? supervisorPassword = null)
     {
         _db = db;
         _uploadRoot = uploadRoot;
         _offset = (today.Date - ProtoToday).Days;
+        _supervisorPassword = supervisorPassword;
     }
 
     private DateTime D(int month, int day, int h = 0, int m = 0) => new DateTime(2026, month, day, h, m, 0).AddDays(_offset);
     private string No(int month, int day, string seq) => $"SH-{D(month, day):yyyyMMdd}-{seq}";
 
-    public static async Task RunAsync(AppDbContext db, string uploadRoot, DateTime today)
+    /// <param name="supervisorPassword">赵主管的 PC 后台初始密码（配置 Seed:SupervisorPassword），为空则不设密码</param>
+    public static async Task RunAsync(AppDbContext db, string uploadRoot, DateTime today, string? supervisorPassword = null)
     {
         if (await db.Employees.AnyAsync()) return;
-        await new SeedData(db, uploadRoot, today).Run();
+        await new SeedData(db, uploadRoot, today, supervisorPassword).Run();
     }
 
     private Employee E(string name, Role role, string phone, string dept) => new()
@@ -49,6 +52,7 @@ public class SeedData
         var wang = E("王工", Role.Engineer, "13900000004", "售后部");
         var wm = E("王敏", Role.Sales, "13900000010", "销售部");
         var sl = E("孙磊", Role.Sales, "13900000011", "销售部");
+        if (!string.IsNullOrEmpty(_supervisorPassword)) zhao.PasswordHash = PasswordPolicy.Hash(zhao, _supervisorPassword);
         _db.Employees.AddRange(zhao, li, chen, liu, wang, wm, sl);
         await _db.SaveChangesAsync();
 

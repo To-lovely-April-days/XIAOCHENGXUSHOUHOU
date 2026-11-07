@@ -16,4 +16,6 @@
    - 销售 王敏 13900000010（孙磊 …11）
    - 主管 赵主管 13900000001
 
+4. 主管电脑后台：浏览器打开 http://localhost:5080/admin/ ，用 赵主管 13900000001 / 密码 `Huotong@2026`（仅开发环境种子密码）登录。
+
 上线前：`config.js` 改 `devLogin=false`、`baseUrl` 换 https 域名；`project.config.json` 换真实 appid；后端配 `WeChat:AppId/AppSecret`、`WeChat:MockMode=false`、新的 `Jwt` 密钥。

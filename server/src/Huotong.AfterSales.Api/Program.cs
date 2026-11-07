@@ -57,6 +57,9 @@ builder.Services.AddScoped<PunchService>();
 builder.Services.AddScoped<HoursService>();
 builder.Services.AddScoped<HomeService>();
 builder.Services.AddScoped<AdminService>();
+builder.Services.AddScoped<AdminReportService>();
+builder.Services.AddScoped<PasswordService>();
+builder.Services.AddSingleton<LoginThrottle>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(o => JsonSetup.Configure(o.JsonSerializerOptions))
@@ -160,8 +163,15 @@ using (var scope = app.Services.CreateScope())
     if (config.GetValue<bool>("Seed:Enabled"))
     {
         var clock = scope.ServiceProvider.GetRequiredService<IClock>();
-        await SeedData.RunAsync(db, uploadRoot, clock.Now);
+        await SeedData.RunAsync(db, uploadRoot, clock.Now, config["Seed:SupervisorPassword"]);
     }
+    // 已有数据库首次开通 PC 后台：给未设密码的主管设上 Bootstrap:SupervisorPassword
+    var bootstrap = await PasswordService.BootstrapSupervisors(db, config["Bootstrap:SupervisorPassword"]);
+    var startupLog = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+    if (bootstrap.Error != null)
+        startupLog.LogWarning("Bootstrap:SupervisorPassword 未生效：{Error}", bootstrap.Error);
+    else if (bootstrap.Count > 0)
+        startupLog.LogInformation("已按 Bootstrap:SupervisorPassword 为 {Count} 个未设密码的主管设置初始密码", bootstrap.Count);
 }
 
 app.UseMiddleware<ExceptionMiddleware>();
@@ -175,6 +185,33 @@ app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(uploadRoot),
     RequestPath = "/uploads"
+});
+
+// PC 主管后台静态页面：wwwroot/admin/ → /admin/（匿名访问，位于认证中间件之前；页面内的 /api 调用自带 token）
+var adminRoot = Path.Combine(app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot"), "admin");
+Directory.CreateDirectory(adminRoot);
+var adminFiles = new PhysicalFileProvider(adminRoot);
+app.Use(async (ctx, next) =>
+{
+    // /admin → /admin/（保留查询串），保证页面里的相对路径正确
+    if (ctx.Request.Path.Value == "/admin" && (HttpMethods.IsGet(ctx.Request.Method) || HttpMethods.IsHead(ctx.Request.Method)))
+    {
+        ctx.Response.Redirect("/admin/" + ctx.Request.QueryString);
+        return;
+    }
+    await next();
+});
+app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = adminFiles, RequestPath = "/admin" });
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = adminFiles,
+    RequestPath = "/admin",
+    OnPrepareResponse = c =>
+    {
+        // 页面入口不缓存，发布新版本后立即生效
+        if (c.File.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
+            c.Context.Response.Headers.CacheControl = "no-cache";
+    }
 });
 app.UseAuthentication();
 app.UseAuthorization();

@@ -13,6 +13,8 @@ public class Employee
     public string? OpenId { get; set; }
     /// <summary>令牌版本：停用/解绑/改角色/换手机号时递增，旧 JWT 随即失效</summary>
     public int TokenVersion { get; set; }
+    /// <summary>PC 后台登录密码哈希（PasswordHasher&lt;Employee&gt;，PBKDF2）；为空 = 未设置密码，不能在 PC 登录</summary>
+    public string? PasswordHash { get; set; }
     public int? AvatarFileId { get; set; }
     public StoredFile? AvatarFile { get; set; }
     public DateTime CreatedAt { get; set; }

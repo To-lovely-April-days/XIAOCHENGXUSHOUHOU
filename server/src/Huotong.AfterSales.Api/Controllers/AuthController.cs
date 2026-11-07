@@ -13,13 +13,19 @@ namespace Huotong.AfterSales.Api.Controllers;
 public class AuthController : ApiControllerBase
 {
     private readonly AuthService _auth;
+    private readonly PasswordService _password;
     private readonly WeChatOptions _wx;
 
-    public AuthController(AuthService auth, IOptions<WeChatOptions> wx)
+    public AuthController(AuthService auth, PasswordService password, IOptions<WeChatOptions> wx)
     {
         _auth = auth;
+        _password = password;
         _wx = wx.Value;
     }
+
+    /// <summary>PC 后台账号密码登录（仅 Supervisor）</summary>
+    [HttpPost("password-login")]
+    public async Task<ApiResponse<LoginResult>> PasswordLogin([FromBody] PasswordLoginRequest req) => Ok(await _password.Login(req));
 
     [HttpPost("login")]
     public async Task<ApiResponse<LoginResult>> Login([FromBody] LoginRequest req) => Ok(await _auth.Login(req));
