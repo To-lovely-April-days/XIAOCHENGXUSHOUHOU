@@ -11,7 +11,8 @@
       "disablePlugins": [],
       "outputPath": ""
     },
-    "useCompilerPlugins": false
+    "useCompilerPlugins": false,
+    "urlCheck": false
   },
   "compileType": "miniprogram",
   "miniprogramRoot": "miniprogram/",

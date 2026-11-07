@@ -56,6 +56,20 @@ function redirectToLogin() {
   });
 }
 
+/** 根据 wx.request/uploadFile 的 fail errMsg 给出可排查的提示 */
+function netErrorMessage(err, fallback) {
+  const msg = String((err && err.errMsg) || '');
+  console.error('[request fail]', config.baseUrl, msg);
+  if (/domain list|合法域名|not in domain/i.test(msg)) {
+    return '请求域名未通过校验：开发者工具「详情 → 本地设置」勾选「不校验合法域名」';
+  }
+  if (/timeout|超时/i.test(msg)) return '请求超时，请确认后端 ' + config.baseUrl + ' 可访问';
+  if (/refused|ECONNREFUSED|connect|ERR_/i.test(msg)) {
+    return '连不上后端 ' + config.baseUrl + '，请确认 server 已启动、端口一致';
+  }
+  return fallback;
+}
+
 function makeError(code, message, httpStatus, data) {
   return { code: code, message: message || '请求失败', httpStatus: httpStatus || 0, data: data === undefined ? null : data };
 }
@@ -130,7 +144,7 @@ function request(options) {
       },
       fail(err) {
         if (loading) wx.hideLoading();
-        const e = makeError(-1, '网络异常，请检查网络后重试', 0, err);
+        const e = makeError(-1, netErrorMessage(err, '网络异常，请检查网络后重试'), 0, err);
         if (!options.silent) toast(e.message);
         reject(e);
       }
@@ -183,7 +197,7 @@ function uploadFile(filePath, category, opts) {
       },
       fail(err) {
         if (opts.loading) wx.hideLoading();
-        const e = makeError(-1, '上传失败，请检查网络后重试', 0, err);
+        const e = makeError(-1, netErrorMessage(err, '上传失败，请检查网络后重试'), 0, err);
         if (!opts.silent) toast(e.message);
         reject(e);
       }
@@ -214,7 +228,7 @@ function download(url, query) {
         reject(e);
       },
       fail(err) {
-        const e = makeError(-1, '下载失败，请检查网络后重试', 0, err);
+        const e = makeError(-1, netErrorMessage(err, '下载失败，请检查网络后重试'), 0, err);
         toast(e.message);
         reject(e);
       }
