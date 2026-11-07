@@ -9,3 +9,9 @@ server/src/*/uploads/
 .idea/
 project.private.config.json
 node_modules/
+
+# 内部资料，仅保留在本地
+*.pptx
+售后工单小程序 原型.html
+docs/prototype/
+docs/prototype-text/
