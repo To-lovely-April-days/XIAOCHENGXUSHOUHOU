@@ -3,6 +3,7 @@
  */
 const api = require('../../api/index.js');
 const auth = require('../../utils/auth.js');
+const avatar = require('../../utils/avatar.js');
 const tabbar = require('../../utils/tabbar.js');
 const format = require('../../utils/format.js');
 const enums = require('../../utils/enums.js');
@@ -137,17 +138,19 @@ Page({
   },
 
   onChooseAvatar(e) {
-    const path = e.detail && e.detail.avatarUrl;
-    if (!path || this.data.uploading) return;
+    this.runAvatar(() => avatar.fromChooseAvatar(e));
+  },
+
+  onPickAvatar() {
+    this.runAvatar(() => avatar.pickFromAlbumOrCamera());
+  },
+
+  runAvatar(fn) {
+    if (this.data.uploading) return;
     this.setData({ uploading: true });
-    api.files.upload(path, 'Avatar', { loading: '上传中' })
-      .then((file) => api.me.setAvatar(file.id))
-      .then((user) => {
-        auth.setUser(user);
-        this.applyUser(user);
-        wx.showToast({ title: '头像已更新', icon: 'none' });
-      })
-      .catch(() => {})
+    fn()
+      .then((user) => { if (user) this.applyUser(user); })
+      .catch((err) => console.warn('[avatar] 设置失败', err))
       .then(() => this.setData({ uploading: false }));
   },
 

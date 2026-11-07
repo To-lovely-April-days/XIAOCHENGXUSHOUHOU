@@ -38,11 +38,11 @@
         <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
       </view>
     </block>
-    <button class="menu-item menu-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar" hover-class="menu-hover">
+    <view class="menu-item" hover-class="menu-hover" bindtap="onPickAvatar">
       <text class="menu-text">更换头像</text>
-      <text wx:if="{{uploading}}" class="menu-extra">上传中</text>
+      <text class="menu-extra">{{uploading ? '上传中' : '相册 / 拍照'}}</text>
       <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
-    </button>
+    </view>
   </view>
 
   <view class="menu card">

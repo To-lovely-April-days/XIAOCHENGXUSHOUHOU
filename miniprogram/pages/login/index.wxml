@@ -77,6 +77,7 @@
         </button>
         <view class="avatar-title">{{avatarUrl ? '已设置头像' : '设置头像'}}</view>
         <view class="avatar-desc">可使用微信头像或拍照上传；头像会显示在工单和打卡记录中，不设置则显示姓氏</view>
+        <view class="avatar-alt" hover-class="btn-hover" bindtap="onPickAvatar">从相册选择或拍照</view>
       </view>
 
       <view class="name-row">

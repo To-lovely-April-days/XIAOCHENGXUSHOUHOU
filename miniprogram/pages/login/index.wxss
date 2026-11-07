@@ -47,3 +47,4 @@ page { background: #F6F6F4; }
 
 .actions { margin-top: 64rpx; display: flex; flex-direction: column; gap: 8rpx; }
 .enter-btn { border-radius: 24rpx; }
+.avatar-alt { margin-top: 16rpx; padding: 12rpx 24rpx; font-size: 28rpx; color: #1D1D1F; font-weight: 600; text-decoration: underline; }

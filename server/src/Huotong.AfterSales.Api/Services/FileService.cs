@@ -51,6 +51,32 @@ public class FileService
         Id = f.Id, Url = Url(f), Category = f.Category, MimeType = f.MimeType, CreatedAt = f.CreatedAt
     };
 
+    /// <summary>按文件头识别常见图片/视频格式，识别不了返回 null。</summary>
+    public static string? SniffMime(IFormFile file)
+    {
+        var head = new byte[16];
+        int n;
+        using (var st = file.OpenReadStream()) n = st.Read(head, 0, head.Length);
+        return SniffMime(head[..n]);
+    }
+
+    public static string? SniffMime(byte[] h)
+    {
+        bool At(int i, params byte[] b) => h.Length >= i + b.Length && h.AsSpan(i, b.Length).SequenceEqual(b);
+        if (At(0, 0xFF, 0xD8, 0xFF)) return "image/jpeg";
+        if (At(0, 0x89, 0x50, 0x4E, 0x47)) return "image/png";
+        if (At(0, 0x47, 0x49, 0x46, 0x38)) return "image/gif";
+        if (At(0, 0x42, 0x4D)) return "image/bmp";
+        if (At(0, 0x52, 0x49, 0x46, 0x46) && At(8, 0x57, 0x45, 0x42, 0x50)) return "image/webp";
+        if (At(4, 0x66, 0x74, 0x79, 0x70)) // ftyp：HEIC / MP4 / MOV
+        {
+            if (At(8, 0x68, 0x65, 0x69, 0x63) || At(8, 0x68, 0x65, 0x69, 0x78) || At(8, 0x6D, 0x69, 0x66, 0x31)) return "image/heic";
+            if (At(8, 0x71, 0x74, 0x20, 0x20)) return "video/quicktime";
+            return "video/mp4";
+        }
+        return null;
+    }
+
     public async Task<FileDto> Upload(IFormFile? file, string? category, CurrentUser user)
     {
         if (file == null || file.Length == 0) throw BizException.BadRequest("请选择要上传的文件");
@@ -62,9 +88,16 @@ public class FileService
         var mime = (file.ContentType ?? "").ToLowerInvariant();
         if (!mime.StartsWith("image/") && !mime.StartsWith("video/"))
         {
-            // 小程序上传可能是 application/octet-stream，按扩展名推断
-            if (!ExtMime.TryGetValue(ext, out var guessed)) throw BizException.BadRequest("只能上传图片或视频");
-            mime = guessed;
+            // 小程序上传可能是 application/octet-stream（chooseAvatar 等临时文件还可能没有扩展名）：
+            // 先按扩展名推断，再按文件头字节识别
+            if (ExtMime.TryGetValue(ext, out var guessed)) mime = guessed;
+            else
+            {
+                var sniffed = SniffMime(file);
+                if (sniffed == null) throw BizException.BadRequest("只能上传图片或视频");
+                mime = sniffed;
+                ext = "";
+            }
         }
         if (string.IsNullOrEmpty(ext) || ext.Length > 10)
             ext = ExtMime.FirstOrDefault(kv => kv.Value == mime).Key ?? (mime.StartsWith("video/") ? ".mp4" : ".jpg");
