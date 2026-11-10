@@ -40,12 +40,28 @@ tar -xzf /tmp/huotong-aftersales-linux-x64.tar.gz -C /tmp && bash /tmp/huotong-a
 ## 3. 宝塔建站 + HTTPS
 
 1. 宝塔 → 网站 → 添加站点：域名 `shouhou.sh-htlab.com`，PHP 选「纯静态」，不建数据库。
-2. 站点设置 → SSL → Let's Encrypt → 勾选 `shouhou.sh-htlab.com` → 申请；开启「强制 HTTPS」。
-3. 站点设置 → 反向代理 → 添加：目标 URL `http://127.0.0.1:5080`，发送域名 `$host`。
-4. 站点设置 → 配置文件，在 `server { ... }` 里加一行（允许上传 30MB 视频/照片）：
+2. （解析生效后）站点设置 → SSL → Let's Encrypt → 勾选 `shouhou.sh-htlab.com` → 申请；开启「强制 HTTPS」。
+3. **不要用宝塔「反向代理」菜单**：宝塔站点默认带 `location ~ .*\.(js|css)?$` 这类正则规则（`?` 使它匹配所有地址），会抢在普通 `location /` 前面，导致后台的 js、上传的照片 404。
+   改为新建文件 `/www/server/panel/vhost/nginx/extension/shouhou.sh-htlab.com/huotong-proxy.conf`（站点主配置已 include 该目录，宝塔改主配置也不会覆盖它）：
    ```nginx
    client_max_body_size 30m;
+
+   location ^~ /.well-known/ {
+       root /www/wwwroot/shouhou.sh-htlab.com;
+       allow all;
+   }
+
+   location ^~ / {
+       proxy_pass http://127.0.0.1:5080;
+       proxy_http_version 1.1;
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+       proxy_set_header X-Forwarded-Proto $scheme;
+       proxy_read_timeout 120s;
+   }
    ```
+   然后 `nginx -t && nginx -s reload`。
 
 ## 4. 验证
 
