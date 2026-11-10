@@ -20,6 +20,8 @@ builder.Services.Configure<AppSettings>(config);
 var jwt = config.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
 if (string.IsNullOrWhiteSpace(jwt.Key) || jwt.Key.Length < 32)
     throw new InvalidOperationException("Jwt:Key 未配置或长度不足 32 位");
+if (!builder.Environment.IsDevelopment() && jwt.Key.StartsWith("CHANGE-ME"))
+    throw new InvalidOperationException("正式环境必须设置自己的 Jwt:Key（环境变量 Jwt__Key，≥32 位随机字符串）");
 var wxOpt = config.GetSection("WeChat").Get<WeChatOptions>() ?? new WeChatOptions();
 if (!wxOpt.MockMode && (string.IsNullOrWhiteSpace(wxOpt.AppId) || string.IsNullOrWhiteSpace(wxOpt.AppSecret)))
     Console.Error.WriteLine("警告：WeChat:AppId / WeChat:AppSecret 未配置，小程序微信登录与手机号验证将失败。" +
@@ -169,9 +171,15 @@ using (var scope = app.Services.CreateScope())
         var clock = scope.ServiceProvider.GetRequiredService<IClock>();
         await SeedData.RunAsync(db, uploadRoot, clock.Now, config["Seed:SupervisorPassword"]);
     }
+    var startupLog = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+    // 正式环境首次启动：没有任何主管时，按 Bootstrap:SupervisorName/SupervisorPhone 建第一个主管
+    var first = await PasswordService.BootstrapFirstSupervisor(db, config["Bootstrap:SupervisorName"],
+        config["Bootstrap:SupervisorPhone"], config["Bootstrap:SupervisorPassword"],
+        scope.ServiceProvider.GetRequiredService<IClock>().Now);
+    if (first.Error != null) startupLog.LogWarning("初始主管未创建：{Error}", first.Error);
+    else if (first.Created) startupLog.LogInformation("已创建初始主管 {Name}", config["Bootstrap:SupervisorName"]);
     // 已有数据库首次开通 PC 后台：给未设密码的主管设上 Bootstrap:SupervisorPassword
     var bootstrap = await PasswordService.BootstrapSupervisors(db, config["Bootstrap:SupervisorPassword"]);
-    var startupLog = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
     if (bootstrap.Error != null)
         startupLog.LogWarning("Bootstrap:SupervisorPassword 未生效：{Error}", bootstrap.Error);
     else if (bootstrap.Count > 0)

@@ -188,6 +188,28 @@ public sealed class AdminPcTests : IDisposable
         Assert.NotNull((await _pwd.Login(new PasswordLoginRequest { Phone = ZhaoPhone, Password = "Boot2026x" })).Token);
     }
 
+    [Fact]
+    public async Task BootstrapFirstSupervisorOnlyWhenNoneExists()
+    {
+        var now = new DateTime(2026, 11, 10, 9, 0, 0);
+        // 已有主管（赵主管）→ 不新建
+        Assert.Equal((false, (string?)null), await PasswordService.BootstrapFirstSupervisor(_db, "张辉", "13811112222", "Boot2026x", now));
+
+        foreach (var s in _db.Employees.Where(e => e.Role == Role.Supervisor)) s.Role = Role.Engineer;
+        await _db.SaveChangesAsync();
+
+        Assert.Equal((false, (string?)null), await PasswordService.BootstrapFirstSupervisor(_db, "", "13811112222", "Boot2026x", now));
+        Assert.NotNull((await PasswordService.BootstrapFirstSupervisor(_db, "张辉", "13811112222", "weak", now)).Error);
+        Assert.NotNull((await PasswordService.BootstrapFirstSupervisor(_db, "张辉", "123", "Boot2026x", now)).Error);
+        Assert.NotNull((await PasswordService.BootstrapFirstSupervisor(_db, "张辉", ZhaoPhone, "Boot2026x", now)).Error); // 号码已占用
+        Assert.True((await PasswordService.BootstrapFirstSupervisor(_db, "张辉", "+86 138-1111-2222", "Boot2026x", now)).Created);
+        Assert.Equal((false, (string?)null), await PasswordService.BootstrapFirstSupervisor(_db, "李四", "13833334444", "Boot2026x", now)); // 只建一次
+
+        var created = _db.Employees.Single(e => e.Phone == "13811112222");
+        Assert.Equal(Role.Supervisor, created.Role);
+        Assert.NotNull((await _pwd.Login(new PasswordLoginRequest { Phone = "13811112222", Password = "Boot2026x" })).Token);
+    }
+
     // ---------- 打卡记录 ----------
 
     [Fact]

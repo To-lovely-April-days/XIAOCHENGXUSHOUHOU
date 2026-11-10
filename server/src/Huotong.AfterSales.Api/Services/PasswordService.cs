@@ -158,6 +158,32 @@ public class PasswordService
     /// 启动时开通：配置了 Bootstrap:SupervisorPassword 时，给 PasswordHash 为空的主管设上该密码。
     /// 返回设置的人数；密码不符合强度规则时不设置并返回错误信息。
     /// </summary>
+    /// <summary>
+    /// 正式环境首次启动：库里还没有任何主管时，按 Bootstrap:SupervisorName / SupervisorPhone 建第一个主管（密码同 Bootstrap:SupervisorPassword）。
+    /// 已有主管则什么都不做。
+    /// </summary>
+    public static async Task<(bool Created, string? Error)> BootstrapFirstSupervisor(
+        AppDbContext db, string? name, string? phone, string? password, DateTime now)
+    {
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(phone)) return (false, null);
+        if (await db.Employees.AnyAsync(e => e.Role == Role.Supervisor)) return (false, null);
+        if (string.IsNullOrEmpty(password)) return (false, "未配置 Bootstrap:SupervisorPassword");
+        var err = PasswordPolicy.Validate(password);
+        if (err != null) return (false, err);
+        var normalized = AuthService.NormalizePhone(phone);
+        if (normalized.Length != 11) return (false, "Bootstrap:SupervisorPhone 不是 11 位手机号");
+        if (await db.Employees.AnyAsync(e => e.Phone == normalized)) return (false, "该手机号已被其他员工使用");
+        var emp = new Employee
+        {
+            Name = name.Trim(), Phone = normalized, Role = Role.Supervisor, Department = "售后部",
+            Enabled = true, CreatedAt = now
+        };
+        emp.PasswordHash = PasswordPolicy.Hash(emp, password);
+        db.Employees.Add(emp);
+        await db.SaveChangesAsync();
+        return (true, null);
+    }
+
     public static async Task<(int Count, string? Error)> BootstrapSupervisors(AppDbContext db, string? password)
     {
         if (string.IsNullOrEmpty(password)) return (0, null);

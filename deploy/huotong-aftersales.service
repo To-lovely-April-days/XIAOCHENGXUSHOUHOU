@@ -1,0 +1,18 @@
+[Unit]
+Description=Huotong AfterSales API (.NET 8)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/www/wwwroot/huotong-aftersales
+ExecStart=/www/wwwroot/huotong-aftersales/Huotong.AfterSales.Api
+EnvironmentFile=/etc/huotong-aftersales.env
+Restart=always
+RestartSec=5
+# 只监听本机，由 nginx(宝塔站点) 反向代理到外网
+Environment=Urls=http://127.0.0.1:5080
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOTNET_PRINT_TELEMETRY_MESSAGE=false
+
+[Install]
+WantedBy=multi-user.target
