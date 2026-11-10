@@ -20,6 +20,10 @@ builder.Services.Configure<AppSettings>(config);
 var jwt = config.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
 if (string.IsNullOrWhiteSpace(jwt.Key) || jwt.Key.Length < 32)
     throw new InvalidOperationException("Jwt:Key 未配置或长度不足 32 位");
+var wxOpt = config.GetSection("WeChat").Get<WeChatOptions>() ?? new WeChatOptions();
+if (!wxOpt.MockMode && (string.IsNullOrWhiteSpace(wxOpt.AppId) || string.IsNullOrWhiteSpace(wxOpt.AppSecret)))
+    Console.Error.WriteLine("警告：WeChat:AppId / WeChat:AppSecret 未配置，小程序微信登录与手机号验证将失败。" +
+        "本地开发：dotnet user-secrets set \"WeChat:AppSecret\" \"<密钥>\"；服务器：环境变量 WeChat__AppSecret。");
 
 // ---------- 数据库 ----------
 var provider = config["Database:Provider"] ?? "Sqlite";

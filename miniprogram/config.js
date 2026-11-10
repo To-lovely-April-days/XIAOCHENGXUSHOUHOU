@@ -8,6 +8,6 @@
  */
 module.exports = {
   baseUrl: 'http://localhost:5080',
-  devLogin: true,
+  devLogin: false,
   version: '1.0.0'
 };

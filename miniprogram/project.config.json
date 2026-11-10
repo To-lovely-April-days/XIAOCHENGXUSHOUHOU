@@ -1,6 +1,6 @@
 {
-  "description": "霍桐售后工单小程序。appid 暂用 touristappid（游客模式，仅能在开发者工具中预览）；正式开发、真机预览、获取手机号前请替换为公司小程序的 AppID。",
-  "appid": "touristappid",
+  "description": "霍桐售后工单小程序（公司主体小程序 wx83d09abacc984098）。",
+  "appid": "wx83d09abacc984098",
   "projectname": "huotong-aftersales",
   "compileType": "miniprogram",
   "libVersion": "3.3.4",
