@@ -17,6 +17,7 @@
      cd server/src/Huotong.AfterSales.Api && dotnet user-secrets set "WeChat:AppSecret" "<小程序后台生成的 AppSecret>"
      ```
    - 先用主管账号登录电脑后台，在「账号管理」里把自己（真实姓名 + 真实手机号 + 角色）加进去，再在小程序里点「手机号快速验证」登录。
+   - 开发版（开发者工具/真机调试）连 `miniprogram/config.js` 的 `devBaseUrl`；体验版/正式版自动连 `https://shouhou.sh-htlab.com`（已配置为小程序合法域名）。
    - 演示数据里的 139 号段账号只能在电脑后台使用；如需恢复「开发调试：输入手机号直接登录」，把 `appsettings.Development.json` 的 `WeChat:MockMode` 和 `miniprogram/config.js` 的 `devLogin` 都改回 `true`。
 4. 主管电脑后台：浏览器打开 http://localhost:5080/admin/ ，用 赵主管 13900000001 / 密码 `Huotong@2026`（仅开发环境种子密码）登录。
 
