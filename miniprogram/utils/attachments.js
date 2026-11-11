@@ -178,7 +178,20 @@ function pickChatFiles(left) {
         })));
       },
       fail(err) {
-        if (!isCancel(err)) wx.showToast({ title: '无法选择文件', icon: 'none' });
+        if (!isCancel(err)) {
+          const msg = String((err && err.errMsg) || '');
+          console.error('[chooseMessageFile fail]', msg);
+          if (/privacy|scope is not declared|112/i.test(msg)) {
+            // 隐私指引里「选中的文件」尚未审核通过 / 未声明
+            wx.showModal({
+              title: '暂时不能选择文件',
+              content: '小程序的《用户隐私保护指引》正在审核「选中的文件」权限，审核通过后即可使用。照片和视频不受影响。',
+              showCancel: false, confirmColor: '#1D1D1F'
+            });
+          } else {
+            wx.showModal({ title: '无法选择文件', content: msg || '请稍后重试', showCancel: false, confirmColor: '#1D1D1F' });
+          }
+        }
         resolve([]);
       }
     });
