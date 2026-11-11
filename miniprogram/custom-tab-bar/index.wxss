@@ -11,6 +11,7 @@
 .icon { width: 48rpx; height: 48rpx; }
 .label { font-size: 22rpx; line-height: 28rpx; font-weight: 500; color: #AEAEB2; }
 .label.on { color: #1D1D1F; font-weight: 600; }
+.tab-wide { flex: 2; }
 .tab-center { justify-content: flex-start; gap: 8rpx; }
 .center-btn {
   width: 112rpx; height: 112rpx; margin-top: -44rpx;

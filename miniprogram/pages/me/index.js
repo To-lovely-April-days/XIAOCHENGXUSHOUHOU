@@ -13,9 +13,9 @@ const config = require('../../config.js');
 function appVersion() {
   try {
     const info = wx.getAccountInfoSync();
-    return (info && info.miniProgram && info.miniProgram.version) || '1.0.0';
+    return (info && info.miniProgram && info.miniProgram.version) || config.version;
   } catch (e) {
-    return '1.0.0';
+    return config.version;
   }
 }
 
@@ -34,8 +34,7 @@ Page({
     monthText: '—',
     activeText: '—',
     uploading: false,
-    version: '1.0.0',
-    showDev: !!config.devLogin
+    version: '1.0.0'
   },
 
   onLoad() {
@@ -167,10 +166,10 @@ Page({
     this.load();
   },
 
-  onDevLogout() {
+  onLogout() {
     wx.showModal({
       title: '退出登录',
-      content: '仅用于开发调试。退出后需要重新登录。',
+      content: '退出后不会自动登录，需要在登录页点「微信登录」重新进入。',
       confirmText: '退出',
       confirmColor: '#C81E2B',
       success: (r) => { if (r.confirm) auth.logout(); }

@@ -60,13 +60,9 @@ function redirectToLogin() {
 function netErrorMessage(err, fallback) {
   const msg = String((err && err.errMsg) || '');
   console.error('[request fail]', config.baseUrl, msg);
-  if (/domain list|合法域名|not in domain/i.test(msg)) {
-    return '请求域名未通过校验：开发者工具「详情 → 本地设置」勾选「不校验合法域名」';
-  }
-  if (/timeout|超时/i.test(msg)) return '请求超时，请确认后端 ' + config.baseUrl + ' 可访问';
-  if (/refused|ECONNREFUSED|connect|ERR_/i.test(msg)) {
-    return '连不上后端 ' + config.baseUrl + '，请确认 server 已启动、端口一致';
-  }
+  if (/domain list|合法域名|not in domain/i.test(msg)) return '请求域名未通过校验，请联系管理员';
+  if (/timeout|超时/i.test(msg)) return '请求超时，请检查网络后重试';
+  if (/refused|ECONNREFUSED|connect|ERR_/i.test(msg)) return '无法连接服务器，请检查网络后重试';
   return fallback;
 }
 

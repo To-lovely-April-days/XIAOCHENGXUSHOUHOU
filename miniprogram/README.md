@@ -5,19 +5,17 @@
 
 ## 导入与运行
 
-1. 先启动后端（`server/`，默认 `http://localhost:5080`，开发时建议 `WeChat:MockMode=true`）。
+1. 后端已部署在 `https://shouhou.sh-htlab.com`（`config.js` 的 `baseUrl`）；本地联调时可临时改成本机地址。
 2. 微信开发者工具 → 导入项目 → 目录选 **`miniprogram/`**（`project.config.json` 就在这里）。
 3. AppID 默认 `touristappid`（游客模式）。要真机预览、获取手机号，请在 `project.config.json` 里换成公司小程序的 AppID。
 4. 右上角「详情 → 本地设置」勾选 **「不校验合法域名、web-view（业务域名）、TLS 版本以及 HTTPS 证书」**（`urlCheck` 已设为 false）。
-5. 游客模式拿不到真实手机号：登录页点「开发调试：输入手机号直接登录」，输入后台登记的手机号（走 `/api/auth/dev-login`，需后端 MockMode）。
-6. 真机调试：把 `config.js` 的 `baseUrl` 改成电脑的局域网 IP（如 `http://192.168.1.20:5080`）；上线必须是已在小程序后台配置的 https 域名，并把 `devLogin` 改为 `false`。
 
 ## 目录结构
 
 ```
 miniprogram/
 ├── app.js / app.json / app.wxss     入口、页面与全局组件注册、设计令牌与通用类
-├── config.js                        baseUrl、devLogin
+├── config.js                        baseUrl、version
 ├── project.config.json, sitemap.json
 ├── api/index.js                     每个接口一个函数（与 API.md 一一对应）
 ├── utils/
@@ -69,7 +67,7 @@ miniprogram/
 ```js
 const api = require('../../api/index.js');
 // 每个函数最后一个参数 opts 可选：{ silent: true 不弹错误 toast, loading: true|'文案' }
-api.auth.login(code) / api.auth.bind(bindTicket, phoneCode) / api.auth.devLogin(phone)
+api.auth.login(code) / api.auth.bind(bindTicket, phoneCode)
 api.me.get() → {user, monthMinutes, activeOrderCount, monthTripDays}
 api.me.setAvatar(fileId) → User
 api.files.upload(filePath, category) → FileDto

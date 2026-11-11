@@ -30,7 +30,8 @@ function buildItems(role) {
   if (!role) return [];
   const list = role === 'Engineer'
     ? [TABS.home, TABS.orders, CENTER.checkin, TABS.hours, TABS.me]
-    : [TABS.home, TABS.orders, CENTER.create, TABS.me];
+    // 4 项时「我的」占两格，让中间的新建按钮正好落在屏幕正中
+    : [TABS.home, TABS.orders, CENTER.create, Object.assign({ wide: true }, TABS.me)];
   return list.map(decorate);
 }
 

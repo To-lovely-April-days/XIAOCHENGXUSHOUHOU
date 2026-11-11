@@ -2,10 +2,9 @@
  * 登录绑定（原型 03）。
  * 第 1 步：勾选隐私指引 → 手机号快速验证（getPhoneNumber）→ POST /api/auth/bind
  * 第 2 步：设置头像（chooseAvatar → 上传 Avatar → PUT /api/me/avatar），可跳过
- * config.devLogin 为 true 时提供手机号直登（POST /api/auth/dev-login，需后端 MockMode）。
+ * 用户主动退出后进入时停在「已退出」状态，点「微信登录」才重新登录（不自动登录）。
  * query.ticket：ensureLogin 发现未绑定时带过来的 bindTicket（10 分钟有效）。
  */
-const config = require('../../config.js');
 const api = require('../../api/index.js');
 const auth = require('../../utils/auth.js');
 const avatar = require('../../utils/avatar.js');
@@ -22,9 +21,6 @@ Page({
     busy: false,
     error: '',
     loginHint: '',
-    showDev: config.devLogin,
-    devOpen: false,
-    devPhone: '',
     user: null,
     roleName: '',
     phoneMasked: '',
@@ -36,7 +32,30 @@ Page({
   onLoad(query) {
     this.ticket = query && query.ticket ? decodeURIComponent(query.ticket) : '';
     this.ticketAt = this.ticket ? Date.now() : 0;
-    if (!this.ticket) this.prepareTicket(true);
+    if (this.ticket) return;
+    if (auth.isSignedOut()) {
+      this.setData({ step: 'signedOut' });
+      return;
+    }
+    this.prepareTicket(true);
+  },
+
+  /** 已退出状态下点「微信登录」：已绑定则直接进首页，未绑定则进入手机号验证 */
+  onWechatLogin() {
+    if (this.data.busy) return;
+    this.setData({ busy: true, error: '' });
+    wx.showLoading({ title: '登录中', mask: true });
+    auth.setSignedOut(false);
+    this.prepareTicket(true)
+      .then((ticket) => { if (ticket !== null) this.setData({ step: 'verify' }); })
+      .catch((err) => {
+        auth.setSignedOut(true);
+        this.setData({ error: (err && err.message) || '微信登录失败，请检查网络后重试' });
+      })
+      .then(() => {
+        wx.hideLoading();
+        this.setData({ busy: false });
+      });
   },
 
   /** 取 bindTicket；已绑定则直接登录 */
@@ -115,33 +134,6 @@ Page({
     }
     if (code === 40000 || code === 40100) this.ticket = ''; // 票据可能失效，下次重新获取
     this.setData({ error: err.message || '验证失败，请重试' });
-  },
-
-  /* ---------- 开发调试直登 ---------- */
-  toggleDev() {
-    this.setData({ devOpen: !this.data.devOpen });
-  },
-  onDevPhone(e) {
-    this.setData({ devPhone: e.detail.value });
-  },
-  onDevLogin() {
-    const phone = String(this.data.devPhone || '').replace(/\s/g, '');
-    if (!/^\d{5,20}$/.test(phone)) {
-      wx.showToast({ title: '请输入手机号', icon: 'none' });
-      return;
-    }
-    if (this.data.busy) return;
-    this.setData({ busy: true, error: '' });
-    api.auth.devLogin(phone, { silent: true, loading: '登录中' })
-      .then((res) => this.onLoggedIn(res))
-      .catch((err) => {
-        if (err && err.code === 40400) {
-          this.setData({ error: '后端未开启 MockMode，无法使用调试登录' });
-        } else {
-          this.onBindError(err);
-        }
-      })
-      .then(() => this.setData({ busy: false }));
   },
 
   /* ---------- 绑定成功 → 第 2 步 ---------- */

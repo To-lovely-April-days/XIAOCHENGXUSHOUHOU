@@ -11,6 +11,8 @@ const http = require('./request.js');
 
 const LOGIN_PAGE = '/pages/login/index';
 const HOME_PAGE = '/pages/home/index';
+/** 用户主动退出后置位：此后不再静默自动登录，直到用户在登录页点「微信登录」 */
+const SIGNED_OUT_KEY = 'signedOut';
 
 let pending = null; // 进行中的 ensureLogin，避免并发重复登录
 
@@ -54,6 +56,7 @@ function setSession(token, user) {
   if (token) {
     wx.setStorageSync(http.TOKEN_KEY, token);
     a.globalData.token = token;
+    setSignedOut(false);
   }
   a.globalData.user = user || null;
   notifyUserChange();
@@ -65,10 +68,26 @@ function setUser(user) {
   notifyUserChange();
 }
 
-/** 退出登录：清 token/user，reLaunch 登录页 */
+/** 是否处于「用户主动退出」状态 */
+function isSignedOut() {
+  try { return !!wx.getStorageSync(SIGNED_OUT_KEY); } catch (e) { return false; }
+}
+
+function setSignedOut(flag) {
+  try {
+    if (flag) wx.setStorageSync(SIGNED_OUT_KEY, 1);
+    else wx.removeStorageSync(SIGNED_OUT_KEY);
+  } catch (e) { /* ignore */ }
+}
+
+/** 退出登录：清 token/user 并记住已退出（不再自动登录），reLaunch 登录页 */
 function logout() {
   http.clearToken();
+  const a = app();
+  if (a && a.globalData) { a.globalData.user = null; a.globalData.token = ''; }
+  setSignedOut(true);
   pending = null;
+  notifyUserChange();
   wx.reLaunch({ url: LOGIN_PAGE });
 }
 
@@ -116,6 +135,7 @@ function toLogin(ticket) {
  * 确保已登录。
  * - 已有 token 且 globalData.user → 直接返回
  * - 有 token 无 user → GET /api/me
+ * - 无 token 且用户主动退出过 → reLaunch 登录页，reject（{code:'SIGNED_OUT'}），不自动登录
  * - 无 token → wx.login + POST /api/auth/login；needBind → reLaunch 登录页（带 ticket）
  * 需要绑定或登录失败时 reject（{code:'NEED_BIND'|'LOGIN_FAILED'}），并已跳转登录页；页面 catch 后忽略即可。
  * 有 token 但 GET /api/me 因网络/服务端异常失败（非 401）时 reject（{code:'LOAD_FAILED', message}），不跳转；
@@ -138,6 +158,10 @@ function ensureLogin() {
       if (err && err.code === 40100) return Promise.reject({ code: 'AUTH_EXPIRED', message: err.message, data: err });
       return Promise.reject({ code: 'LOAD_FAILED', message: (err && err.message) || '网络异常，请重试', data: err });
     });
+  } else if (isSignedOut()) {
+    // 用户主动退出过：不静默登录，停在登录页等用户点「微信登录」
+    toLogin();
+    return Promise.reject({ code: 'SIGNED_OUT', message: '已退出登录' });
   } else {
     pending = silentLogin().then((res) => {
       if (res && !res.needBind && res.user) return res.user;
@@ -168,6 +192,8 @@ module.exports = {
   setSession,
   setUser,
   logout,
+  isSignedOut,
+  setSignedOut,
   refreshUser,
   silentLogin,
   LOGIN_PAGE,

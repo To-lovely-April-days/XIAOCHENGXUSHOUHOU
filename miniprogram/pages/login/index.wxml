@@ -7,7 +7,7 @@
   </view>
 
   <view class="panel">
-    <view class="steps" aria-label="绑定步骤">
+    <view wx:if="{{step !== 'signedOut'}}" class="steps" aria-label="绑定步骤">
       <view class="step">
         <view class="step-no" style="background: {{step === 'verify' ? '#1D1D1F' : '#2F7A4B'}};">
           <ui-icon wx:if="{{step !== 'verify'}}" name="check" color="#FFFFFF" size="12" stroke="3" />
@@ -22,8 +22,18 @@
       </view>
     </view>
 
+    <!-- 已退出登录：点按钮才重新登录 -->
+    <block wx:if="{{step === 'signedOut'}}">
+      <view class="notice">你已退出登录。点击下方按钮，使用当前微信重新登录。</view>
+      <view class="btn-primary verify-btn {{busy ? 'btn-disabled' : ''}}" hover-class="btn-hover" bindtap="onWechatLogin" aria-role="button">
+        <ui-icon name="wechat" color="#FFFFFF" size="20" stroke="2" />
+        <text>微信登录</text>
+      </view>
+      <view wx:if="{{error}}" class="alert error-box" aria-role="alert">{{error}}</view>
+    </block>
+
     <!-- 第 1 步：验证手机号 -->
-    <block wx:if="{{step === 'verify'}}">
+    <block wx:elif="{{step === 'verify'}}">
       <view class="notice mt-18">首次使用需验证手机号。系统将匹配售后主管在后台登记的员工账号，绑定当前微信后自动登录，之后无需重复验证。</view>
 
       <button wx:if="{{agreed}}" class="btn-primary verify-btn" hover-class="btn-hover"
@@ -50,14 +60,6 @@
       <view class="tip">提示“未找到账号”时，请联系售后主管在后台添加，并核对登记的手机号是否与本机微信绑定的手机号一致。</view>
       <view wx:if="{{loginHint}}" class="tip">{{loginHint}}</view>
 
-      <view wx:if="{{showDev}}" class="dev">
-        <view class="dev-toggle" bindtap="toggleDev">开发调试：输入手机号直接登录</view>
-        <view wx:if="{{devOpen}}" class="dev-form">
-          <input class="dev-input" type="number" maxlength="20" placeholder="员工登记的手机号" placeholder-class="placeholder"
-                 value="{{devPhone}}" bindinput="onDevPhone" confirm-type="done" bindconfirm="onDevLogin" />
-          <view class="dev-btn {{busy ? 'disabled' : ''}}" hover-class="btn-hover" bindtap="onDevLogin">登录</view>
-        </view>
-      </view>
     </block>
 
     <!-- 第 2 步：设置头像 -->

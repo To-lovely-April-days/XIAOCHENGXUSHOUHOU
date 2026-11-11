@@ -24,12 +24,6 @@ page { background: #F6F6F4; }
 .tip { margin-top: 72rpx; font-size: 26rpx; line-height: 40rpx; color: #6E6E73; }
 .tip + .tip { margin-top: 16rpx; }
 
-.dev { margin-top: 48rpx; border-top: 2rpx dashed #E3E3E1; padding-top: 24rpx; }
-.dev-toggle { font-size: 26rpx; color: #9A5B00; text-align: center; padding: 12rpx 0; }
-.dev-form { margin-top: 16rpx; display: flex; gap: 16rpx; }
-.dev-input { flex: 1; height: 88rpx; padding: 0 24rpx; border-radius: 20rpx; background: #F6F6F4; font-size: 30rpx; }
-.dev-btn { width: 160rpx; height: 88rpx; border-radius: 20rpx; background: #1D1D1F; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 30rpx; font-weight: 600; }
-.dev-btn.disabled { background: #C7C7C5; }
 
 .matched { margin-top: 40rpx; display: flex; align-items: center; gap: 20rpx; border-radius: 24rpx; background: #F0F0EE; padding: 24rpx 28rpx; }
 .matched-text { font-size: 28rpx; line-height: 40rpx; color: #1D1D1F; }

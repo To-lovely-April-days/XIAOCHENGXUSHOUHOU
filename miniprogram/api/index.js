@@ -51,14 +51,6 @@ const auth = {
    */
   bind(bindTicket, phoneCode, opts) {
     return post('/api/auth/bind', { bindTicket: bindTicket, phoneCode: phoneCode }, Object.assign({ auth: false }, opts));
-  },
-  /**
-   * POST /api/auth/dev-login（仅后端 MockMode）
-   * @param {string} phone 员工手机号
-   * @returns {Promise<LoginResult>}
-   */
-  devLogin(phone, opts) {
-    return post('/api/auth/dev-login', { phone: phone }, Object.assign({ auth: false }, opts));
   }
 };
 
