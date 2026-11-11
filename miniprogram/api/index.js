@@ -8,12 +8,21 @@
  * @typedef {UserBrief & {roleName:string,department:string,phoneMasked:string,phone:string}} User
  * @typedef {{id:number,url:string,category:string,mimeType:string,createdAt:string}} FileDto
  * @typedef {Object} OrderListItem  id, orderNo, status, urgency, serviceType, problemType, customerName, city, region,
- *   deviceModel, deviceSn, symptom, price, assignee:?UserBrief, creator:UserBrief, createdAt, claimedAt, appointmentTime,
- *   submittedAt, closedAt, totalMinutes, onSiteSince, lastArriveTime, issues:string[]
+ *   deviceModel, deviceSn, symptom, price:?number, priceSet:?boolean（工程师恒为 null）, assignee:?UserBrief（负责人）,
+ *   assistants:UserBrief[], myRole:?('Lead'|'Assistant'), myMinutes:?number, myOnSiteSince:?string, creator:UserBrief,
+ *   createdAt, claimedAt, appointmentTime, submittedAt, closedAt, totalMinutes（所有人合计）, onSiteSince, lastArriveTime,
+ *   issues:string[], progressStep:number(0-5), holdReasonType, holdText, holdFromStatus, pendingRequestCount, factoryText
  * @typedef {Object} OrderDetail  OrderListItem + source, contactName, contactPhone, address, latitude, longitude, satDate,
- *   satSigned, productStage, projectNo, faultTime, customerTried, siteEnvironment, customerRequest, holdReason,
- *   completion, files{orderPhotos,punchPhotos,processPhotos,signatures}, punches:PunchDto[], logs:StatusLogDto[],
- *   issueDetails[], actions:string[]
+ *   satSigned, productStage, projectNo, faultTime, customerTried, siteEnvironment, customerRequest, holdReason(=holdText),
+ *   priceSetAt, priceSuggestion:?{id,amount,note,by:UserBrief,createdAt,pending}, hold:?{reasonType,reasonText,note,text,fromStatus,at,by},
+ *   requests:RequestDto[], participants:ParticipantDto[], factory:?{nodes:FactoryNodeDto[]}, closeBlockedReason:?string,
+ *   closeHints:string[], completion, files{orderPhotos,punchPhotos,processPhotos,signatures,factoryPhotos},
+ *   punches:PunchDto[], logs:StatusLogDto[]（含 kind）, issueDetails[]（含 engineer）, actions:string[]
+ * @typedef {Object} RequestDto  id, orderId, type:'Hold'|'AddAssistant', status, requester:UserBrief, createdAt, reasonType,
+ *   reasonText, note, text, engineer:?UserBrief, decider, decidedAt, reply, canDecide:boolean, canCancel:boolean
+ * @typedef {{user:UserBrief,role:'Lead'|'Assistant'|'Former',totalMinutes:number,onSiteSince:?string,missingPunch:boolean}} ParticipantDto
+ * @typedef {Object} FactoryNodeDto  node, label, state:'done'|'current'|'todo'|'skipped', recorded, time, operator:?UserBrief,
+ *   courier, trackingNo, note, photos:FileDto[], canRecord:boolean, canEdit:boolean
  * @typedef {Object} PunchDto  id, orderId, engineer, kind, time, latitude, longitude, address, distanceMeters, outOfRange,
  *   photo:?FileDto, isSupplement, supplementBy, supplementReason, supplementAt, pairMinutes
  * @typedef {{token:?string,user:?User,needBind:boolean,bindTicket?:string}} LoginResult
@@ -77,7 +86,7 @@ const files = {
   /**
    * POST /api/files（multipart）
    * @param {string} filePath 本地临时文件
-   * @param {'OrderPhoto'|'PunchPhoto'|'ProcessPhoto'|'Signature'|'Avatar'} category
+   * @param {'OrderPhoto'|'PunchPhoto'|'ProcessPhoto'|'Signature'|'Avatar'|'FactoryReceivePhoto'|'FactoryShipPhoto'|'FactorySignPhoto'} category
    * @returns {Promise<FileDto>}
    */
   upload(filePath, category, opts) {
@@ -96,7 +105,7 @@ const orders = {
     return get('/api/orders/hall', { filter: filter || 'all' }, opts);
   },
   /**
-   * GET /api/orders/mine 工程师本人负责的工单
+   * GET /api/orders/mine 工程师本人负责或协助的工单（每项带 myRole）
    * @param {'doing'|'check'|'closed'|'all'} [group='doing']
    * @returns {Promise<{items:OrderListItem[],counts:{doing:number,check:number,closed:number,all:number}}>}
    */
@@ -113,8 +122,9 @@ const orders = {
   },
   /**
    * GET /api/orders 全部工单（Sales/Supervisor）
-   * @param {{status?:string,keyword?:string,issue?:string,assigneeId?:number,serviceType?:string,from?:string,to?:string,page?:number,pageSize?:number}} [params]
-   *   status 为空 = 全部（不含 Voided）；from/to 为 yyyy-MM-dd
+   * @param {{status?:string,keyword?:string,issue?:string,assigneeId?:number,serviceType?:string,from?:string,to?:string,
+   *   priceSet?:boolean,pendingRequest?:boolean,page?:number,pageSize?:number}} [params]
+   *   status 为空 = 全部（不含 Voided）；from/to 为 yyyy-MM-dd；priceSet 按是否已定价过滤；pendingRequest=true 只看有待审批申请的
    * @returns {Promise<{items:OrderListItem[],total:number,page:number,pageSize:number,counts:Object<string,number>}>}
    *   counts 键：all, Pending, Accepted, InProgress, OnHold, Submitted, Closed（只受 keyword 影响）
    */
@@ -140,7 +150,7 @@ const orders = {
    * POST /api/orders 新建工单
    * @param {Object} body 字段见 API.md：source, problemType, urgency, serviceType, customerName, contactName, contactPhone,
    *   address, latitude, longitude, deviceModel, deviceSn, satDate('yyyy-MM'), satSigned, projectNo, faultTime, symptom,
-   *   customerTried, siteEnvironment, customerRequest, price, photoFileIds:number[]
+   *   customerTried, siteEnvironment, customerRequest, photoFileIds:number[]（v1.1 起不含 price，定价由主管在详情操作）
    * @returns {Promise<OrderDetail>}
    */
   create(body, opts) {
@@ -163,7 +173,7 @@ const orders = {
     return post('/api/orders/' + id + '/appointment', { appointmentTime: appointmentTime }, opts);
   },
   /**
-   * POST /api/orders/{id}/start 开始处理（非现场单，Accepted → InProgress）
+   * POST /api/orders/{id}/start 开始处理（远程单，Accepted → InProgress；返厂单改为记录「工厂收货」）
    * @returns {Promise<OrderDetail>}
    */
   start(id, opts) {
@@ -181,11 +191,38 @@ const orders = {
   /**
    * POST /api/orders/{id}/assign 指派 / 改派（Supervisor）
    * @param {number} id
-   * @param {number} engineerId
+   * @param {number} engineerId 负责人
+   * @param {?number[]} [assistantIds] 协助人最终全集；省略 / null = 不调整协助人；[] = 清空
    * @returns {Promise<OrderDetail>}
    */
-  assign(id, engineerId, opts) {
-    return post('/api/orders/' + id + '/assign', { engineerId: engineerId }, opts);
+  assign(id, engineerId, assistantIds, opts) {
+    // 兼容旧调用 assign(id, engineerId, opts)
+    if (assistantIds && !Array.isArray(assistantIds) && opts === undefined) {
+      opts = assistantIds;
+      assistantIds = null;
+    }
+    const body = { engineerId: engineerId };
+    if (Array.isArray(assistantIds)) body.assistantIds = assistantIds;
+    return post('/api/orders/' + id + '/assign', body, opts);
+  },
+  /**
+   * POST /api/orders/{id}/assistants 调整协助人（Supervisor；Accepted / InProgress / OnHold）
+   * @param {number} id
+   * @param {number[]} engineerIds 协助人最终全集，[] = 清空，最多 5 人
+   * @returns {Promise<OrderDetail>}
+   */
+  setAssistants(id, engineerIds, opts) {
+    return post('/api/orders/' + id + '/assistants', { engineerIds: engineerIds || [] }, opts);
+  },
+  /**
+   * POST /api/orders/{id}/assistant-requests 负责人申请添加协助人（Engineer）
+   * @param {number} id
+   * @param {number} engineerId 目标工程师
+   * @param {string} [note] 说明，≤ 200 字
+   * @returns {Promise<OrderDetail>}
+   */
+  requestAssistant(id, engineerId, note, opts) {
+    return post('/api/orders/' + id + '/assistant-requests', { engineerId: engineerId, note: note || null }, opts);
   },
   /**
    * POST /api/orders/{id}/void 作废（Supervisor，Pending/Accepted）
@@ -197,16 +234,80 @@ const orders = {
     return post('/api/orders/' + id + '/void', { reason: reason || '' }, opts);
   },
   /**
-   * POST /api/orders/{id}/hold 暂停搁置（Supervisor，InProgress）
+   * POST /api/orders/{id}/hold 暂停搁置（Supervisor，Accepted / InProgress）
    * @param {number} id
-   * @param {string} reason 如「等待备件」
+   * @param {'WaitCustomer'|'WaitParts'|'WaitThirdParty'|'Other'} reasonType
+   * @param {string} [note] 说明，Other 时必填，≤ 200 字
    * @returns {Promise<OrderDetail>}
    */
-  hold(id, reason, opts) {
-    return post('/api/orders/' + id + '/hold', { reason: reason || '' }, opts);
+  hold(id, reasonType, note, opts) {
+    return post('/api/orders/' + id + '/hold', { reasonType: reasonType, note: note || null }, opts);
   },
   /**
-   * POST /api/orders/{id}/resume 恢复处理（Supervisor，OnHold → InProgress）
+   * POST /api/orders/{id}/hold-requests 负责人申请暂停（Engineer）；已有待审批申请 → 40900
+   * @param {number} id
+   * @param {'WaitCustomer'|'WaitParts'|'WaitThirdParty'|'Other'} reasonType
+   * @param {string} [note]
+   * @returns {Promise<OrderDetail>}
+   */
+  requestHold(id, reasonType, note, opts) {
+    return post('/api/orders/' + id + '/hold-requests', { reasonType: reasonType, note: note || null }, opts);
+  },
+  /**
+   * POST /api/orders/{id}/requests/{requestId}/approve 同意申请（Supervisor；暂停 / 协助人共用）
+   * @returns {Promise<OrderDetail>}
+   */
+  approveRequest(id, requestId, opts) {
+    return post('/api/orders/' + id + '/requests/' + requestId + '/approve', {}, opts);
+  },
+  /**
+   * POST /api/orders/{id}/requests/{requestId}/reject 驳回申请（Supervisor）
+   * @param {number} id
+   * @param {number} requestId
+   * @param {string} [reply] 回复，选填，≤ 200 字
+   * @returns {Promise<OrderDetail>}
+   */
+  rejectRequest(id, requestId, reply, opts) {
+    return post('/api/orders/' + id + '/requests/' + requestId + '/reject', { reply: reply || null }, opts);
+  },
+  /**
+   * POST /api/orders/{id}/requests/{requestId}/cancel 申请人撤回（Engineer）
+   * @returns {Promise<OrderDetail>}
+   */
+  cancelRequest(id, requestId, opts) {
+    return post('/api/orders/' + id + '/requests/' + requestId + '/cancel', {}, opts);
+  },
+  /**
+   * POST /api/orders/{id}/price 定价 / 改价（Supervisor）
+   * @param {number} id
+   * @param {number} price 0 = 保内免费
+   * @returns {Promise<OrderDetail>}
+   */
+  setPrice(id, price, opts) {
+    return post('/api/orders/' + id + '/price', { price: price }, opts);
+  },
+  /**
+   * POST /api/orders/{id}/price-suggestions 价格建议（Sales）
+   * @param {number} id
+   * @param {number} amount
+   * @param {string} [note] 备注，≤ 200 字
+   * @returns {Promise<OrderDetail>}
+   */
+  suggestPrice(id, amount, note, opts) {
+    return post('/api/orders/' + id + '/price-suggestions', { amount: amount, note: note || null }, opts);
+  },
+  /**
+   * POST /api/orders/{id}/factory-nodes 记录 / 更正返厂节点（服务端按角色判权）
+   * @param {number} id
+   * @param {{node:'CustomerShipped'|'FactoryReceived'|'ShippedBack'|'CustomerSigned',courier?:string,trackingNo?:string,note?:string,photoIds?:number[]}} body
+   *   photoIds 为该节点照片的最终全集
+   * @returns {Promise<OrderDetail>}
+   */
+  factoryNode(id, body, opts) {
+    return post('/api/orders/' + id + '/factory-nodes', body, opts);
+  },
+  /**
+   * POST /api/orders/{id}/resume 恢复处理（Supervisor，OnHold → 暂停前的状态）
    * @returns {Promise<OrderDetail>}
    */
   resume(id, opts) {
@@ -222,7 +323,7 @@ const orders = {
     return post('/api/orders/' + id + '/reject', { reason: reason || '' }, opts);
   },
   /**
-   * POST /api/orders/{id}/close 确认闭环（Supervisor）；有缺卡 → 40900「请先补录缺卡」
+   * POST /api/orders/{id}/close 确认闭环（Supervisor）；有缺卡 → 40900「请先补录缺卡」；未定价 → 40900「请先设置服务价格（保内填 0）」
    * @returns {Promise<OrderDetail>}
    */
   close(id, opts) {
@@ -238,7 +339,8 @@ const punches = {
    * GET /api/punches/context 打卡上下文
    * @param {number} [orderId] 省略时服务端自动选择工单
    * @returns {Promise<null|{orderId:number,orderNo:string,customerName:string,address:string,latitude:number,longitude:number,
-   *   nextKind:'Arrive'|'Leave',openArriveTime:?string,blockedReason:?string,rangeMeters:number,serverTime:string,engineerName:string}>}
+   *   nextKind:'Arrive'|'Leave',openArriveTime:?string,blockedReason:?string,rangeMeters:number,serverTime:string,engineerName:string,
+   *   myRole:'Lead'|'Assistant'}>}
    *   无可打卡工单时为 null
    */
   context(orderId, opts) {
@@ -260,7 +362,7 @@ const hours = {
    * GET /api/hours/today
    * @param {number} [engineerId] 仅 Supervisor 查看他人时传
    * @returns {Promise<{date:string,closedMinutes:number,running:boolean,runningSince:?string,serverTime:string,
-   *   firstArriveTime:?string,tripDay:number,entries:Array<{orderId,orderNo,customerName,arrive:PunchDto,leave:?PunchDto,minutes:number,isSupplement:boolean}>}>}
+   *   firstArriveTime:?string,tripDay:number,entries:Array<{orderId,orderNo,customerName,arrive:PunchDto,leave:?PunchDto,minutes:number,isSupplement:boolean,role:'Lead'|'Assistant'|'Former'}>}>}
    */
   today(engineerId, opts) {
     return get('/api/hours/today', engineerId ? { engineerId: engineerId } : null, opts);
@@ -272,7 +374,7 @@ const hours = {
    * @param {number} [engineerId]
    * @returns {Promise<{year:number,month:number,totalMinutes:number,tripDays:number,
    *   days:Array<{date:string,minutes:number,running:boolean,hasSupplement:boolean,
-   *   entries:Array<{orderId,orderNo,customerName,arriveTime,leaveTime,minutes,isSupplement,supplementReason,missing}>}>}>}
+   *   entries:Array<{orderId,orderNo,customerName,arriveTime,leaveTime,minutes,isSupplement,supplementReason,missing,role}>}>}>}
    */
   month(year, month, engineerId, opts) {
     const q = { year: year, month: month };
@@ -287,7 +389,7 @@ const home = {
    * GET /api/home/engineer
    * @returns {Promise<{user:User,today:Object,state:'working'|'next'|'idle',current:?OrderListItem,
    *   next:?(OrderListItem & {address,contactName,contactPhone,latitude,longitude}),upcoming:OrderListItem[],
-   *   hall:{count:number,urgentCount:number,items:OrderListItem[]},recentDone:OrderListItem[],monthMinutes:number}>}
+   *   hall:{count:number,urgentCount:number,items:OrderListItem[]},recentDone:OrderListItem[],onHold:OrderListItem[],monthMinutes:number}>}
    *   today 结构同 hours.today()
    */
   engineer(opts) {
@@ -297,7 +399,8 @@ const home = {
    * GET /api/home/supervisor
    * @returns {Promise<{user:User,now:string,onSiteCount:number,
    *   timeline:Array<{engineer:UserBrief,segments:Array<{start:string,end:?string,customerName:string,orderId:number}>,note:string}>,
-   *   todos:Array<{type:'Unassigned'|'Submitted'|'MissingPunch'|'DistanceAbnormal',orderId:number,title:string,subtitle:string,urgent?:boolean}>}>}
+   *   todos:Array<{type:'HoldRequest'|'AssistantRequest'|'Unassigned'|'Submitted'|'PriceSuggestion'|'MissingPunch'|'DistanceAbnormal',
+   *   orderId:number,requestId:?number,title:string,subtitle:string,urgent?:boolean}>}>}
    */
   supervisor(opts) {
     return get('/api/home/supervisor', null, opts);
@@ -307,8 +410,8 @@ const home = {
 /* ---------------- 指派面板 ---------------- */
 const engineers = {
   /**
-   * GET /api/engineers（Supervisor）
-   * @returns {Promise<Array<{user:UserBrief,doingCount:number,acceptedCount:number,submittedCount:number,onSiteNow:boolean,loadText:string}>>}
+   * GET /api/engineers（Supervisor + Engineer：负责人申请协助人时选人）
+   * @returns {Promise<Array<{user:UserBrief,doingCount:number,acceptedCount:number,submittedCount:number,assistCount:number,onSiteNow:boolean,loadText:string}>>}
    */
   list(opts) {
     return get('/api/engineers', null, opts);
@@ -319,7 +422,8 @@ const engineers = {
 const admin = {
   /**
    * GET /api/admin/overview
-   * @returns {Promise<{pending,urgentPending,inProgress,onSiteEngineers,submitted,closedThisWeek,weekMinutes,updatedAt}>}
+   * @returns {Promise<{pending,urgentPending,inProgress,onSiteEngineers,submitted,closedThisWeek,weekMinutes,updatedAt,
+   *   onHold,pendingRequests,unpriced,priceSuggestions}>}
    */
   overview(opts) {
     return get('/api/admin/overview', null, opts);

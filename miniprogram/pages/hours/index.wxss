@@ -71,3 +71,7 @@
 .day-note.red { color: var(--red); }
 .day-note.amber { color: var(--amber); }
 .day-dur { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 34rpx; font-weight: 700; color: var(--text); flex-shrink: 0; }
+
+/* v1.1：协助标签 */
+.assist-tag { background: var(--soft); color: var(--gray); align-self: center; }
+.day-assist { font-size: 24rpx; font-weight: 500; color: var(--text-2); }

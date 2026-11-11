@@ -25,7 +25,8 @@ const COLORS = {
 };
 
 /**
- * 工单状态。step：销售首页 5 段进度（0 = 不显示）；group：created/mine 接口的分组键。
+ * 工单状态。group：created/mine 接口的分组键。
+ * step 仅作旧数据兜底（服务端未返回 progressStep 时）；v1.1 起进度一律用 order.progressStep。
  */
 const STATUS = {
   Pending:    { label: '待认领',   bg: '#F0F0EE', fg: '#9A5B00', step: 1, group: 'wait' },
@@ -99,7 +100,51 @@ const FILE_CATEGORY = {
   PunchPhoto:   { label: '打卡照片' },
   ProcessPhoto: { label: '处理照片' },
   Signature:    { label: '客户签字件' },
-  Avatar:       { label: '头像' }
+  Avatar:       { label: '头像' },
+  FactoryReceivePhoto: { label: '收货照片' },
+  FactoryShipPhoto:    { label: '寄回照片' },
+  FactorySignPhoto:    { label: '签收凭证' }
+};
+
+/** 暂停原因（v1.1） */
+const HOLD_REASON = {
+  WaitCustomer:   { label: '等客户' },
+  WaitParts:      { label: '等备件' },
+  WaitThirdParty: { label: '等第三方' },
+  Other:          { label: '其他' }
+};
+
+/** 申请类型（工程师发起、主管审批） */
+const REQUEST_TYPE = {
+  Hold:         { label: '暂停申请' },
+  AddAssistant: { label: '协助人申请' }
+};
+
+/** 申请状态 */
+const REQUEST_STATUS = {
+  Pending:   { label: '待审批' },
+  Approved:  { label: '已同意' },
+  Rejected:  { label: '已驳回' },
+  Cancelled: { label: '已撤销' }
+};
+
+/**
+ * 返厂节点。action：按钮文案；category：该节点照片的上传分类；
+ * courier：需要快递公司 + 单号；photo：'required' | 'optional' | ''（不收照片）。
+ */
+const FACTORY_NODE = {
+  CustomerShipped: { label: '客户寄出',  action: '记录客户寄出', category: '',                    courier: true,  photo: '' },
+  FactoryReceived: { label: '工厂收货',  action: '确认工厂收货', category: 'FactoryReceivePhoto', courier: false, photo: 'required' },
+  Repairing:       { label: '检测/维修', action: '',             category: '',                    courier: false, photo: '' },
+  ShippedBack:     { label: '寄回客户',  action: '寄回客户',     category: 'FactoryShipPhoto',    courier: true,  photo: 'required' },
+  CustomerSigned:  { label: '客户签收',  action: '记录客户签收', category: 'FactorySignPhoto',    courier: false, photo: 'optional' }
+};
+
+/** 参与人角色 */
+const PARTICIPANT_ROLE = {
+  Lead:      { label: '负责人' },
+  Assistant: { label: '协助人', short: '协助' },
+  Former:    { label: '已退出' }
 };
 
 /** OrderDetail.actions 的按钮文案 */
@@ -116,7 +161,13 @@ const ACTION = {
   resume:     { label: '恢复处理' },
   reject:     { label: '退回' },
   close:      { label: '确认闭环' },
-  supplement: { label: '补录打卡' }
+  supplement: { label: '补录打卡' },
+  factory:          { label: '返厂流程' },
+  requestHold:      { label: '申请暂停' },
+  requestAssistant: { label: '申请协助人' },
+  assistants:       { label: '调整协助人' },
+  setPrice:         { label: '定价' },
+  suggestPrice:     { label: '价格建议' }
 };
 
 /** 主管首页待办类型 */
@@ -124,7 +175,10 @@ const TODO_TYPE = {
   Unassigned:       { label: '待指派' },
   Submitted:        { label: '待验收' },
   MissingPunch:     { label: '缺卡' },
-  DistanceAbnormal: { label: '距离异常' }
+  DistanceAbnormal: { label: '距离异常' },
+  HoldRequest:      { label: '暂停申请' },
+  AssistantRequest: { label: '协助人申请' },
+  PriceSuggestion:  { label: '价格建议' }
 };
 
 function toOptions(map) {
@@ -142,10 +196,35 @@ function label(map, value, fallback) {
   return v ? v.label : (fallback !== undefined ? fallback : (value || ''));
 }
 
-/** 进度条 5 段：[{on:boolean}]，Voided 返回全 false */
-function progressSegments(status) {
-  const step = (STATUS[status] && STATUS[status].step) || 0;
-  return [1, 2, 3, 4, 5].map((i) => ({ on: i <= step }));
+/** 5 段进度的名称（与 progressStep 1-5 对应） */
+const PROGRESS_LABELS = ['待认领', '待启动', '处理中', '待验收', '已闭环'];
+
+/** 工单的进度段（1-5，Voided = 0）：用服务端 progressStep；旧服务端未返回时按状态兜底 */
+function progressStepOf(order) {
+  if (!order) return 0;
+  if (typeof order.progressStep === 'number') return order.progressStep;
+  if (order.status === 'OnHold') return order.holdFromStatus === 'Accepted' ? 2 : 3;
+  return (STATUS[order.status] && STATUS[order.status].step) || 0;
+}
+
+/**
+ * 进度条 5 段：[{on:boolean, paused:boolean}]。
+ * OnHold 时第 progressStep 段为 paused（灰色暂停样式，on=false），之前的段正常点亮；Voided 全 false。
+ * @param {Object} order 工单对象（用 progressStep、status）
+ */
+function progressSegments(order) {
+  const step = progressStepOf(order);
+  const hold = !!order && order.status === 'OnHold';
+  return [1, 2, 3, 4, 5].map((i) => {
+    const paused = hold && i === step;
+    return { on: i <= step && !paused, paused: paused };
+  });
+}
+
+/** 暂停文字：优先用服务端 holdText / hold.text；兜底用旧字段 holdReason */
+function holdTextOf(order) {
+  if (!order || order.status !== 'OnHold') return '';
+  return order.holdText || (order.hold && order.hold.text) || order.holdReason || '';
 }
 
 module.exports = {
@@ -162,6 +241,13 @@ module.exports = {
   FILE_CATEGORY,
   ACTION,
   TODO_TYPE,
+  HOLD_REASON,
+  REQUEST_TYPE,
+  REQUEST_STATUS,
+  FACTORY_NODE,
+  PARTICIPANT_ROLE,
+  PROGRESS_LABELS,
+  HOLD_REASON_OPTIONS: toOptions(HOLD_REASON),
   STATUS_OPTIONS: toOptions(STATUS),
   URGENCY_OPTIONS: toOptions(URGENCY),
   SERVICE_TYPE_OPTIONS: toOptions(SERVICE_TYPE),
@@ -172,5 +258,7 @@ module.exports = {
   ISSUE_OPTIONS: toOptions(ISSUE),
   label,
   progressSegments,
+  progressStepOf,
+  holdTextOf,
   toOptions
 };

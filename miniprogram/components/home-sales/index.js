@@ -29,10 +29,18 @@ function dayHm(t) {
   return (format.isToday(t) ? '今日 ' : format.formatMonthDay(t) + ' ') + format.formatHm(t);
 }
 
-/** 按状态生成备注 */
+/** 按状态生成备注；返厂单追加 factoryText（如「陈工 · 检测/维修中」） */
 function noteOf(o) {
   const who = (o.assignee && o.assignee.name) || '';
   const join = (s) => (who ? who + ' · ' + s : s);
+  const holdText = enums.holdTextOf(o);
+  if (o.status === 'OnHold') return join('暂停' + (holdText ? ' · ' + holdText : '搁置中'));
+  if (o.serviceType === 'Factory' && o.factoryText && ['Accepted', 'InProgress'].indexOf(o.status) >= 0) return join(o.factoryText);
+  const base = baseNoteOf(o, who, join);
+  return o.serviceType === 'Factory' && o.factoryText && o.status !== 'Pending' ? base + ' · ' + o.factoryText : base;
+}
+
+function baseNoteOf(o, who, join) {
   switch (o.status) {
     case 'Pending':
       return publishedAgo(o.createdAt) + '，暂无人认领';
@@ -43,8 +51,6 @@ function noteOf(o) {
       if (o.serviceType !== 'Onsite') return join(enums.label(enums.SERVICE_TYPE, o.serviceType) + '处理中');
       if (o.lastArriveTime) return join(dayHm(o.lastArriveTime) + ' 到场');
       return join('处理中');
-    case 'OnHold':
-      return join('暂停搁置中');
     case 'Submitted':
       return join(format.formatMonthDay(o.submittedAt) + '提交完工');
     case 'Closed':
@@ -55,13 +61,14 @@ function noteOf(o) {
 }
 
 function decorate(o) {
-  const s = enums.STATUS[o.status] || {};
+  const unpriced = o.priceSet === false || o.price === null || o.price === undefined;
+  const assistCount = (o.assistants || []).length;
   return Object.assign({}, o, {
-    priceText: format.formatPrice(o.price),
-    free: Number(o.price) === 0,
+    priceText: format.formatPrice(o.price, false, o.priceSet),
+    unpriced: unpriced,
+    free: !unpriced && Number(o.price) === 0,
     note: noteOf(o),
-    segs: enums.progressSegments(o.status).map((x, i) => ({ i: i, on: x.on })),
-    progressLabel: '进度：' + (s.label || '') + '，5 个阶段中的第 ' + (s.step || 0) + ' 个'
+    assistText: assistCount ? '+' + assistCount + ' 协助' : ''
   });
 }
 

@@ -11,6 +11,21 @@
 <body>
   <div id="app"><div class="boot">加载中…</div></div>
   <noscript>请启用 JavaScript 后使用主管后台。</noscript>
-  <script type="module" src="js/main.js"></script>
+  <script>
+    // 脚本加载/解析失败（多为浏览器缓存了旧版本的部分文件）时给出提示，而不是一直停在「加载中…」
+    (function () {
+      function hint(e) {
+        var app = document.getElementById('app');
+        if (!app || app.__vue_app__) return; // 应用已挂载：之后的错误与启动无关
+        var t = e && e.target;
+        if (t && t !== window && t.tagName !== 'SCRIPT') return; // 忽略图片等资源加载失败
+        var boot = app.querySelector('.boot');
+        if (boot) boot.textContent = '页面加载失败，可能是浏览器缓存了旧版本。请按 Ctrl+Shift+R（Mac：⌘+Shift+R）强制刷新后重试。';
+      }
+      window.addEventListener('error', hint, true);
+      window.__bootHint = hint;
+    })();
+  </script>
+  <script type="module" src="js/main.js" onerror="window.__bootHint && window.__bootHint()"></script>
 </body>
 </html>

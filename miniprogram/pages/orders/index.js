@@ -35,24 +35,40 @@ function toHallItem(o) {
     id: o.id,
     customerName: o.customerName,
     urgency: o.urgency,
-    priceText: format.formatPrice(o.price),
-    priceFree: Number(o.price) === 0,
     device: [o.deviceModel, o.deviceSn].filter(Boolean).join(' · '),
     fault: o.symptom ? '“' + o.symptom + '”' : '',
     meta: [typeLabel(o), o.region || o.city, format.timeAgo(o.createdAt)].filter(Boolean).join(' · ')
   };
 }
 
-function toListItem(o) {
+/** 状态行说明：负责人 · 暂停原因 / 返厂进度 / 维修类型 */
+function metaOf(o) {
+  const who = o.assignee ? o.assignee.name : '暂无处理人';
+  if (o.status === 'OnHold') {
+    const holdText = enums.holdTextOf(o);
+    return who + ' · 暂停' + (holdText ? ' · ' + holdText : '');
+  }
+  if (o.serviceType === 'Factory' && o.factoryText) return who + ' · ' + typeLabel(o) + ' · ' + o.factoryText;
+  return who + ' · ' + typeLabel(o);
+}
+
+/** 全部工单（销售 / 主管）；role 用于「待审批」小标（仅主管） */
+function toListItem(o, role) {
+  const unpriced = o.priceSet === false || o.price === null || o.price === undefined;
+  const assistCount = (o.assistants || []).length;
   return {
     id: o.id,
     customerName: o.customerName,
     urgency: o.urgency,
     status: o.status,
-    priceText: format.formatPrice(o.price, true),
-    priceFree: Number(o.price) === 0,
+    priceText: format.formatPrice(o.price, true, o.priceSet),
+    unpriced: unpriced,
+    priceFree: !unpriced && Number(o.price) === 0,
     device: [o.orderNo, o.deviceModel, o.symptom].filter(Boolean).join(' · '),
-    meta: (o.assignee ? o.assignee.name : '暂无处理人') + ' · ' + typeLabel(o)
+    meta: metaOf(o),
+    hold: o.status === 'OnHold',
+    assistText: assistCount ? '+' + assistCount + ' 协助' : '',
+    pending: role === 'Supervisor' && (o.pendingRequestCount || 0) > 0
   };
 }
 
@@ -218,7 +234,8 @@ Page({
     }, { silent: true }).then((res) => {
       if (seq !== this._seq) return;
       const counts = (res && res.counts) || {};
-      const items = ((res && res.items) || []).map(toListItem);
+      const role = this.data.role;
+      const items = ((res && res.items) || []).map((o) => toListItem(o, role));
       const total = (res && res.total) || 0;
       this.setData({
         ready: true,
@@ -254,7 +271,8 @@ Page({
       if (seq !== this._seq) return; // 期间筛选条件已变化
       const exist = {};
       this.data.items.forEach((x) => { exist[x.id] = true; });
-      const more = ((res && res.items) || []).filter((o) => !exist[o.id]).map(toListItem);
+      const role = this.data.role;
+      const more = ((res && res.items) || []).filter((o) => !exist[o.id]).map((o) => toListItem(o, role));
       const items = this.data.items.concat(more);
       const total = (res && res.total) || 0;
       this.setData({

@@ -76,7 +76,7 @@ Page({
         loadError: '',
         empty: false,
         ctx: ctx,
-        title: kindLabel + '打卡',
+        title: kindLabel + '打卡' + (ctx.myRole === 'Assistant' ? '（协助）' : ''),
         kindLabel: kindLabel,
         kinds: enums.toOptions(enums.PUNCH_KIND).map((k) => ({
           value: k.value,

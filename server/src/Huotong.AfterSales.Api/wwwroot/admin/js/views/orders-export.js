@@ -79,7 +79,8 @@ export default {
           <option v-for="o in statusOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
         </select>
       </label>
-      <div class="field-hint">列与 SOP 进度台账一致：工单号、客户、设备、故障描述、处理人、进度状态、服务价格、现场工时（小时，1 位小数）等。</div>
+      <div class="field-hint">列与 SOP 进度台账一致：工单号、客户、设备、故障描述、处理人、进度状态、服务价格（未定价的工单显示「未定价」）、现场工时（小时，1 位小数）等；
+        末尾新增 5 列：协助人、人员工时（每人各自的小时数）、暂停原因、返厂进度、寄回单号。</div>
       <div v-if="error" class="field-error">{{ error }}</div>
       <button type="submit" hidden></button>
     </form>

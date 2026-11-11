@@ -18,7 +18,23 @@ public enum RunStatus { Normal, Observe, NotRecovered }
 
 public enum IssueType { MissingPunch, DistanceAbnormal }
 
-public enum FileCategory { OrderPhoto, PunchPhoto, ProcessPhoto, Signature, Avatar }
+public enum FileCategory { OrderPhoto, PunchPhoto, ProcessPhoto, Signature, Avatar, FactoryReceivePhoto, FactoryShipPhoto, FactorySignPhoto }
+
+/// <summary>暂停原因类型（v1.1）</summary>
+public enum HoldReasonType { WaitCustomer, WaitParts, WaitThirdParty, Other }
+
+/// <summary>工程师发起、需主管审批的申请类型</summary>
+public enum OrderRequestType { Hold, AddAssistant }
+
+public enum RequestStatus { Pending, Approved, Rejected, Cancelled }
+
+/// <summary>返厂节点；Repairing 为隐含节点，不落库</summary>
+public enum FactoryNode { CustomerShipped, FactoryReceived, Repairing, ShippedBack, CustomerSigned }
+
+public enum ParticipantRole { Lead, Assistant, Former }
+
+/// <summary>状态记录类别；库中 null = Status</summary>
+public enum LogKind { Status, Price, Hold, Assist, Factory }
 
 /// <summary>工单动作（状态机输入）</summary>
 public enum OrderAction { Claim, Assign, Reassign, Start, FirstArrive, Complete, Void, Hold, Resume, Reject, Close }
@@ -88,4 +104,67 @@ public static class EnumText
     };
 
     public static string Kind(PunchKind k) => k == PunchKind.Arrive ? "到场" : "离场";
+
+    public static string HoldReason(HoldReasonType t) => t switch
+    {
+        HoldReasonType.WaitCustomer => "等客户",
+        HoldReasonType.WaitParts => "等备件",
+        HoldReasonType.WaitThirdParty => "等第三方",
+        HoldReasonType.Other => "其他",
+        _ => t.ToString()
+    };
+
+    public static string Factory(FactoryNode n) => n switch
+    {
+        FactoryNode.CustomerShipped => "客户寄出",
+        FactoryNode.FactoryReceived => "工厂收货",
+        FactoryNode.Repairing => "检测/维修",
+        FactoryNode.ShippedBack => "寄回客户",
+        FactoryNode.CustomerSigned => "客户签收",
+        _ => n.ToString()
+    };
+
+    public static string Participant(ParticipantRole r) => r switch
+    {
+        ParticipantRole.Lead => "负责人",
+        ParticipantRole.Assistant => "协助人",
+        ParticipantRole.Former => "已退出",
+        _ => r.ToString()
+    };
+
+    public static string RequestStatusName(RequestStatus s) => s switch
+    {
+        RequestStatus.Pending => "待审批",
+        RequestStatus.Approved => "已同意",
+        RequestStatus.Rejected => "已驳回",
+        RequestStatus.Cancelled => "已撤销",
+        _ => s.ToString()
+    };
+
+    /// <summary>暂停原因文字（全系统唯一规则）：Other / 无类型 → 只用说明（空则「其他」）；其余 → 类型中文[：说明]</summary>
+    public static string HoldText(HoldReasonType? type, string? note)
+    {
+        var n = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (type == null || type == HoldReasonType.Other) return n ?? "其他";
+        return n == null ? HoldReason(type.Value) : $"{HoldReason(type.Value)}：{n}";
+    }
+
+    /// <summary>金额文字：0 → 保内免费；整数 → ¥1,800；非整数 → ¥1,800.50</summary>
+    public static string Money(decimal x)
+    {
+        if (x == 0) return "保内免费";
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        return x == decimal.Truncate(x) ? "¥" + x.ToString("#,##0", inv) : "¥" + x.ToString("#,##0.00", inv);
+    }
+
+    /// <summary>返厂进度文字：取最靠后的已记录节点</summary>
+    public static string FactoryText(IEnumerable<FactoryNode> recorded)
+    {
+        var set = recorded.ToHashSet();
+        if (set.Contains(FactoryNode.CustomerSigned)) return "客户已签收";
+        if (set.Contains(FactoryNode.ShippedBack)) return "已寄回客户";
+        if (set.Contains(FactoryNode.FactoryReceived)) return "检测/维修中";
+        if (set.Contains(FactoryNode.CustomerShipped)) return "客户已寄出";
+        return "待客户寄出";
+    }
 }

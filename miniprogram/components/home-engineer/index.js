@@ -18,13 +18,25 @@ function deviceLine(o) {
   return [o.deviceModel, o.symptom].filter(Boolean).join(' · ');
 }
 
+/** v1.1：工程师端不展示价格；assist = 本人是协助人（只能打卡 / 查看详情） */
 function decorate(o) {
   return Object.assign({}, o, {
     badge: badgeOf(o),
     deviceLine: deviceLine(o),
-    priceText: format.formatPrice(o.price),
-    free: Number(o.price) === 0
+    assist: o.myRole === 'Assistant',
+    onsite: o.serviceType === 'Onsite',
+    factory: o.serviceType === 'Factory'
   });
+}
+
+/** 本人今天在本单未离场的到场时间（旧服务端兜底 onSiteSince） */
+function mySince(o) {
+  return o.myOnSiteSince !== undefined ? o.myOnSiteSince : o.onSiteSince;
+}
+
+function holdItem(o) {
+  const holdText = enums.holdTextOf(o);
+  return Object.assign(decorate(o), { holdLine: '暂停' + (holdText ? ' · ' + holdText : '搁置') });
 }
 
 /** 当前工单 4 段进度 */
@@ -36,7 +48,7 @@ function buildSteps(o) {
     { key: 'claim', label: '已认领', sub: format.formatMonthDay(o.claimedAt), state: 'done' },
     {
       key: 'arrive',
-      label: onsite ? '已到场' : '已开始',
+      label: onsite ? '已到场' : (o.serviceType === 'Factory' ? '已到厂' : '已开始'),
       sub: onsite ? (o.lastArriveTime ? (format.isToday(o.lastArriveTime) ? format.formatHm(o.lastArriveTime) : format.formatMonthDay(o.lastArriveTime)) : '待打卡') : '',
       state: arrived ? 'done' : 'todo'
     },
@@ -67,7 +79,8 @@ function doneItem(o) {
   const closed = o.status === 'Closed';
   const when = closed ? format.formatMonthDay(o.closedAt) + '闭环' : format.formatMonthDay(o.submittedAt) + '提交';
   const parts = [when];
-  if (o.serviceType === 'Onsite') parts.push('现场 ' + format.formatDuration(o.totalMinutes || 0));
+  // v1.1：显示本人工时（myMinutes）；旧服务端兜底 totalMinutes
+  if (o.serviceType === 'Onsite') parts.push('现场 ' + format.formatDuration((o.myMinutes !== null && o.myMinutes !== undefined ? o.myMinutes : o.totalMinutes) || 0));
   else parts.push(enums.label(enums.SERVICE_TYPE, o.serviceType));
   return Object.assign({}, o, { meta: parts.join(' · ') });
 }
@@ -92,6 +105,7 @@ Component({
     upcoming: [],
     hall: { count: 0, urgentCount: 0, items: [] },
     idleDesc: '',
+    onHold: [],
     recentDone: [],
     monthText: '0:00'
   },
@@ -130,8 +144,7 @@ Component({
       const next = d.next ? Object.assign(decorate(d.next), {
         apptText: d.next.appointmentTime ? format.formatDateTimeShort(d.next.appointmentTime) : '未预约',
         phoneText: format.formatPhone(d.next.contactPhone),
-        hasLocation: d.next.latitude !== null && d.next.latitude !== undefined && d.next.longitude !== null && d.next.longitude !== undefined && !(d.next.latitude === 0 && d.next.longitude === 0),
-        onsite: d.next.serviceType === 'Onsite'
+        hasLocation: d.next.latitude !== null && d.next.latitude !== undefined && d.next.longitude !== null && d.next.longitude !== undefined && !(d.next.latitude === 0 && d.next.longitude === 0)
       }) : null;
 
       // 后续安排：working 时含 next；再加 upcoming
@@ -153,11 +166,12 @@ Component({
         current: current,
         steps: current ? buildSteps(current) : [],
         currentOnsite: !!current && current.serviceType === 'Onsite',
-        currentOnSite: !!current && !!current.onSiteSince,
+        currentOnSite: !!current && !!mySince(current),
         next: next,
         upcoming: upcoming,
         hall: { count: hall.count || 0, urgentCount: hall.urgentCount || 0, items: (hall.items || []).map(hallItem) },
         idleDesc: idleDesc,
+        onHold: (d.onHold || []).map(holdItem),
         recentDone: (d.recentDone || []).map(doneItem),
         monthText: format.formatDuration(d.monthMinutes || 0)
       });

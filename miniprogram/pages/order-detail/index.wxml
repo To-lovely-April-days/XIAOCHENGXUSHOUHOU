@@ -20,10 +20,18 @@
       <view class="od-customer">{{order.customerName}}</view>
       <view class="od-device">{{order.deviceModel}}<text wx:if="{{order.deviceSn}}"> · {{order.deviceSn}}</text></view>
 
+      <!-- 5 段进度（暂停时显示灰色暂停标记与原因） -->
+      <view class="od-pb"><progress-bar order="{{order}}" labels="{{true}}" /></view>
+
       <view class="od-grid">
-        <view class="od-cell">
-          <view class="od-cell-label">服务价格</view>
-          <view class="od-cell-num {{order.price === 0 ? 'green' : ''}}">{{priceText}}</view>
+        <!-- 工程师不显示价格：第 1 格为维修类型 -->
+        <view class="od-cell" wx:if="{{isEngineerView}}">
+          <view class="od-cell-label">维修类型</view>
+          <view class="od-cell-text">{{typeText || '—'}}</view>
+        </view>
+        <view class="od-cell" wx:else bindtap="onPriceLink">
+          <view class="od-cell-label">服务价格<text wx:if="{{priceLink}}" class="od-cell-link">{{priceLink}}</text></view>
+          <view class="od-cell-num {{priceClass}}">{{priceText}}</view>
         </view>
         <view class="od-cell" wx:if="{{isEngineerView}}">
           <view class="od-cell-label">产品阶段</view>
@@ -52,6 +60,13 @@
           </view>
         </block>
         <view wx:else class="od-assignee-none muted">暂无处理人<text wx:if="{{order.status === 'Pending'}}">，等待认领或主管指派</text></view>
+      </view>
+
+      <!-- 价格建议（销售：我方建议；主管：待处理的建议，点击去定价） -->
+      <view wx:if="{{!isEngineerView && suggestion}}" class="od-suggest {{suggestion.tone}}" bindtap="onSuggestionTap">
+        <text class="flex1 od-suggest-text">{{suggestion.text}}<text wx:if="{{suggestion.note}}" class="od-suggest-note"> · {{suggestion.note}}</text></text>
+        <text wx:if="{{suggestion.tag}}" class="tag tag-sm tag-amber od-suggest-tag">{{suggestion.tag}}</text>
+        <text wx:if="{{suggestion.tappable}}" class="od-suggest-go">去定价</text>
       </view>
     </view>
 
@@ -84,22 +99,86 @@
       </block>
     </view>
 
+    <!-- 待审批的申请（暂停 / 协助人） -->
+    <view wx:for="{{requests}}" wx:key="id" class="od-req">
+      <view class="row-between">
+        <text class="od-req-title">{{item.title}}</text>
+        <text class="od-req-time num-font">{{item.time}}</text>
+      </view>
+      <view class="od-req-text">{{item.text}}</view>
+      <view wx:if="{{item.canDecide}}" class="row od-req-actions">
+        <view class="od-req-btn primary {{busy ? 'disabled' : ''}}" hover-class="btn-hover" data-id="{{item.id}}" bindtap="onApproveRequest" aria-role="button">同意</view>
+        <view class="od-req-btn" hover-class="btn-hover" data-id="{{item.id}}" bindtap="onRejectRequest" aria-role="button">驳回</view>
+      </view>
+      <view wx:elif="{{item.canCancel}}" class="row od-req-actions">
+        <text class="flex1 od-req-wait">等待主管审批</text>
+        <view class="od-req-btn small" hover-class="btn-hover" data-id="{{item.id}}" bindtap="onCancelRequest" aria-role="button">撤回</view>
+      </view>
+      <view wx:else class="od-req-wait od-req-wait-top">等待主管审批</view>
+    </view>
+    <view wx:if="{{requestRejected}}" class="od-req-rejected">{{requestRejected}}</view>
+
     <!-- tabs -->
     <view class="segmented od-tabs" aria-role="tablist">
       <view wx:for="{{tabs}}" wx:key="key" class="segmented-item {{tab === item.key ? 'active' : ''}}" data-key="{{item.key}}" bindtap="onTab" aria-role="tab" aria-selected="{{tab === item.key}}">{{item.label}}</view>
     </view>
 
     <view class="od-main">
+      <!-- 暂停提示：工程师在「信息」顶部（返厂单默认停在「返厂流程」，那里也显示），销售 / 主管在「进度」顶部 -->
+      <view wx:if="{{holdBar && (isEngineerView ? (tab === 'info' || tab === 'factory') : tab === 'progress')}}" class="od-holdbar">
+        <view class="od-holdbar-mark"><view class="od-holdbar-bar"></view><view class="od-holdbar-bar"></view></view>
+        <view class="flex1">
+          <view class="od-holdbar-text">{{holdBar.text}}</view>
+          <view class="od-holdbar-sub num-font">{{holdBar.sub}}</view>
+        </view>
+      </view>
+
+      <!-- 返厂流程（仅返厂单）：工程师在「返厂流程」tab，销售 / 主管在「进度」tab 顶部 -->
+      <block wx:if="{{factoryNodes.length && (tab === 'factory' || tab === 'progress')}}">
+        <view class="od-card od-factory">
+          <view class="od-h3">返厂流程</view>
+          <view wx:for="{{factoryNodes}}" wx:key="node" class="od-step od-fnode">
+            <view class="od-rail">
+              <view class="od-step-dot f-{{item.state}}"></view>
+              <view wx:if="{{!item.last}}" class="od-step-line {{item.lineOn ? 'on' : ''}}"></view>
+            </view>
+            <view class="od-step-body od-fnode-body">
+              <view class="row od-fnode-head">
+                <text class="od-step-title {{item.state === 'current' ? 'red' : ''}} {{item.state === 'todo' || item.skipped ? 'muted' : ''}}">{{item.label}}</text>
+                <text wx:if="{{item.skipped}}" class="tag tag-sm od-fnode-skip">已跳过</text>
+                <view class="flex1"></view>
+                <text wx:if="{{item.canEdit}}" class="od-link" data-node="{{item.node}}" bindtap="onFactoryNode" aria-role="button">更正</text>
+              </view>
+              <view wx:if="{{item.sub}}" class="od-step-sub num-font {{item.subClass}}">{{item.sub}}</view>
+              <view wx:if="{{item.trackingNo}}" class="od-track" hover-class="btn-hover" data-no="{{item.trackingNo}}" bindtap="onCopyTracking"
+                    aria-role="button" aria-label="复制快递单号 {{item.trackingNo}}">
+                <text class="od-track-courier">{{item.courier}}</text>
+                <text class="od-track-no num-font">{{item.trackingNo}}</text>
+                <text class="od-track-copy">复制</text>
+              </view>
+              <view wx:if="{{item.note}}" class="od-fnode-note">备注：{{item.note}}</view>
+              <view wx:if="{{item.photos.length}}" class="od-fnode-photos">
+                <image wx:for="{{item.photos}}" wx:for-item="ph" wx:key="id" class="od-thumb" src="{{ph.url}}" mode="aspectFill" lazy-load
+                       data-node="{{item.node}}" data-url="{{ph.url}}" bindtap="onPreviewFactoryPhoto" aria-label="{{item.label}}照片" />
+              </view>
+              <view wx:if="{{item.canRecord}}" class="od-fnode-btn" hover-class="btn-hover" data-node="{{item.node}}" bindtap="onFactoryNode" aria-role="button">{{item.actionLabel}}</view>
+            </view>
+          </view>
+        </view>
+        <view wx:if="{{tab === 'factory'}}" class="od-note">返厂工单无需打卡。工厂收货后自动进入「处理中」，寄回客户后才能提交完工；点击快递单号可复制。</view>
+      </block>
+
       <!-- 进度（销售 / 主管） -->
       <block wx:if="{{tab === 'progress'}}">
-        <view class="od-card od-progress">
+        <view wx:if="{{closeHintText}}" class="od-hint-line {{factoryNodes.length ? 'mt-card' : ''}}">{{closeHintText}}</view>
+        <view class="od-card od-progress {{factoryNodes.length && !closeHintText ? 'mt-card' : ''}}">
           <view wx:for="{{steps}}" wx:key="key" class="od-step" data-url="{{item.photo}}" bindtap="onPreviewPhoto">
             <view class="od-rail">
               <view class="od-step-dot {{item.state}}"></view>
               <view wx:if="{{!item.last}}" class="od-step-line {{item.lineOn ? 'on' : ''}}"></view>
             </view>
             <view class="od-step-body">
-              <view class="od-step-title {{item.state === 'current' ? 'red' : ''}} {{item.state === 'future' ? 'muted' : ''}}">{{item.title}}</view>
+              <view class="od-step-title {{item.state === 'current' ? 'red' : ''}} {{item.state === 'future' ? 'muted' : ''}} {{item.state === 'paused' ? 'paused' : ''}}">{{item.title}}</view>
               <view class="od-step-sub num-font {{item.subClass}}">{{item.sub}}</view>
             </view>
             <text class="od-step-tag" style="color: {{item.tagColor}};">{{item.tag}}</text>
@@ -111,8 +190,6 @@
 
       <!-- 信息 -->
       <block wx:if="{{tab === 'info'}}">
-        <view wx:if="{{order.status === 'OnHold' && order.holdReason}}" class="notice od-hold">暂停原因：{{order.holdReason}}</view>
-
         <view class="od-card">
           <view class="od-h3">故障情况</view>
           <view class="od-quote">“{{order.symptom}}”</view>
@@ -149,6 +226,25 @@
             <view wx:if="{{canNav}}" class="od-circle" hover-class="btn-hover" bindtap="onNav" aria-role="button" aria-label="导航到客户地址">
               <ui-icon name="location" size="20" stroke="2" />
             </view>
+          </view>
+        </view>
+
+        <!-- 处理人员（负责人 + 协助人，每人工时） -->
+        <view wx:if="{{participants.length}}" class="od-card mt-card">
+          <view class="row-between od-h3">
+            <text>处理人员</text>
+            <text wx:if="{{canAssistants}}" class="od-link" bindtap="onEditAssistants" aria-role="button">调整协助人</text>
+            <text wx:elif="{{canRequestAssistant}}" class="od-link" bindtap="onRequestAssistant" aria-role="button">申请协助人</text>
+          </view>
+          <view wx:for="{{participants}}" wx:key="key" class="od-person {{index === 0 ? 'first' : ''}}">
+            <avatar user="{{item.user}}" size="32" />
+            <view class="flex1 row od-person-main">
+              <text class="od-person-name ellipsis">{{item.name}}</text>
+              <text class="tag tag-sm od-role {{item.roleClass}}">{{item.roleLabel}}</text>
+              <text wx:if="{{item.onSite}}" class="od-person-flag">现场中</text>
+              <text wx:if="{{item.missing}}" class="od-person-flag">缺卡</text>
+            </view>
+            <text wx:if="{{item.hours}}" class="od-person-hours num-font">{{item.hours}}</text>
           </view>
         </view>
 
@@ -233,8 +329,59 @@
   <view wx:for="{{buttons}}" wx:key="key" class="od-btn {{item.kind}} {{item.wide ? 'wide' : ''}}" hover-class="{{item.disabled ? 'none' : 'btn-hover'}}" data-key="{{item.key}}" bindtap="onAction" aria-role="button" aria-disabled="{{item.disabled}}">{{item.label}}</view>
 </view>
 
-<!-- 指派 / 改派 -->
-<assign-sheet show="{{sheetShow}}" order="{{order}}" bind:done="onAssigned" bind:close="onSheetClose" />
+<!-- 指派 / 改派 / 调整协助人 / 申请协助人 -->
+<assign-sheet show="{{sheetShow}}" order="{{order}}" mode="{{sheetMode}}" bind:done="onAssigned" bind:close="onSheetClose" />
+
+<!-- 暂停搁置（主管）/ 申请暂停（负责工程师） -->
+<block wx:if="{{holdSheet.show}}">
+  <view class="mask" bindtap="closeHoldSheet" catchtouchmove="noop"></view>
+  <view class="sheet od-appt" catchtouchmove="noop">
+    <view class="sheet-handle"></view>
+    <view class="row-between od-appt-head">
+      <text class="od-appt-title">{{holdSheet.title}}</text>
+      <text class="muted od-appt-cancel" bindtap="closeHoldSheet">取消</text>
+    </view>
+    <view class="od-appt-sub muted">{{holdSheet.mode === 'request' ? '提交后由主管审批，同意后工单进入「暂停搁置」' : '暂停期间不能打卡、开始处理和提交完工，恢复后回到暂停前的状态'}}</view>
+    <view class="od-sheet-label">暂停原因</view>
+    <view class="od-reasons" aria-role="radiogroup">
+      <view wx:for="{{holdReasons}}" wx:key="value" class="chip od-reason {{holdSheet.reasonType === item.value ? 'active' : ''}}"
+            data-value="{{item.value}}" bindtap="onHoldReason" aria-role="radio" aria-checked="{{holdSheet.reasonType === item.value}}">{{item.label}}</view>
+    </view>
+    <view class="od-sheet-label">说明<text class="od-sheet-opt">{{holdSheet.reasonType === 'Other' ? '（必填）' : '（选填）'}}</text></view>
+    <input class="od-sheet-input" value="{{holdSheet.note}}" bindinput="onHoldNote" maxlength="200" cursor-spacing="160"
+           placeholder="{{holdPlaceholder}}" placeholder-class="placeholder" />
+    <view class="btn-primary od-appt-btn {{busy ? 'btn-disabled' : ''}}" hover-class="btn-hover" bindtap="saveHold">确定</view>
+  </view>
+</block>
+
+<!-- 定价（主管）/ 价格建议（销售） -->
+<block wx:if="{{priceSheet.show}}">
+  <view class="mask" bindtap="closePriceSheet" catchtouchmove="noop"></view>
+  <view class="sheet od-appt" catchtouchmove="noop">
+    <view class="sheet-handle"></view>
+    <view class="row-between od-appt-head">
+      <text class="od-appt-title">{{priceSheet.title}}</text>
+      <text class="muted od-appt-cancel" bindtap="closePriceSheet">取消</text>
+    </view>
+    <view class="od-appt-sub muted">{{priceSheet.hint}}</view>
+    <view wx:if="{{priceSheet.suggestText}}" class="od-adopt row">
+      <text class="flex1 od-adopt-text">{{priceSheet.suggestText}}</text>
+      <view class="od-adopt-btn" hover-class="btn-hover" bindtap="onAdoptSuggestion" aria-role="button">采用建议</view>
+    </view>
+    <view class="od-amount row">
+      <text class="od-sheet-label od-amount-label">{{priceSheet.mode === 'suggest' ? '建议价格' : '服务价格'}}</text>
+      <view class="flex1"></view>
+      <text class="od-yen">¥</text>
+      <input class="od-amount-input" type="digit" value="{{priceSheet.amount}}" bindinput="onPriceAmount" placeholder="0" placeholder-class="placeholder" maxlength="12" cursor-spacing="200" />
+    </view>
+    <block wx:if="{{priceSheet.mode === 'suggest'}}">
+      <view class="od-sheet-label">备注<text class="od-sheet-opt">（选填）</text></view>
+      <input class="od-sheet-input" value="{{priceSheet.note}}" bindinput="onPriceNote" maxlength="200" cursor-spacing="160"
+             placeholder="如：老客户，建议优惠" placeholder-class="placeholder" />
+    </block>
+    <view class="btn-primary od-appt-btn {{busy ? 'btn-disabled' : ''}}" hover-class="btn-hover" bindtap="savePrice">{{priceSheet.mode === 'suggest' ? '提交建议' : '确定'}}</view>
+  </view>
+</block>
 
 <!-- 设置预约 -->
 <block wx:if="{{apptShow}}">

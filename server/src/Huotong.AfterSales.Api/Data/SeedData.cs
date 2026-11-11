@@ -66,6 +66,9 @@ public class SeedData
             "无锡市新吴区 [示例地址] 制剂车间", 31.55, 120.36, "高压反应釜 HTR-1000", "SN2409033", "2024-09", true,
             "11月6日 上午", "釜内压力降不下来，安全阀一天起跳好几次", "手动泄压、检查进气阀", "GMP 车间，需更衣入场", 2400,
             created: D(11, 6, 10, 42), urgency: Urgency.Urgent, request: "希望今天下午能到现场");
+        // v1.1：建单不定价，此单尚未定价（销售已提价格建议，见下）
+        o2.Price = 0;
+        o2.PriceSet = false;
         // 3. 南通某试剂厂：待启动，预约 11月9日 10:00
         var o3 = Order(No(11, 5, "014"), OrderStatus.Accepted, wm, li, "南通某试剂厂", "赵工", "13900000000",
             "南通市崇川区 [示例地址]", 32.00, 120.89, "微型反应釜 HTM-100", "SN2501021", "2025-01", true,
@@ -116,7 +119,26 @@ public class SeedData
         Complete(o10, "新设备安装调试", "完成安装调试与操作培训，客户签署 SAT", "", RunStatus.Normal, D(10, 21, 16, 45));
         o10.ClosedAt = D(10, 22, 10, 0);
 
-        var orders = new[] { o1, o2, o3, o4, o5, o6, o7, o8, o9, o10 };
+        // 11. 常州某材料厂（v1.1 演示）：刘工负责 + 王工协助，9月25日两人各自打卡；等备件暂停搁置
+        var o11 = Order(No(9, 24, "006"), OrderStatus.OnHold, sl, liu, "常州某材料厂", "蒋工", "13800000011",
+            "常州市新北区 [示例地址] 2 号厂房", 31.83, 119.97, "高压反应釜 HTR-1000", "SN2312020", "2023-12", true,
+            "9月23日", "釜体下法兰渗漏，保压不合格", "更换垫片后仍渗漏", "生产车间，380V 三相电", 2600,
+            created: D(9, 24, 10, 0), claimed: D(9, 24, 10, 30));
+        o11.StartedAt = D(9, 25, 9, 0);
+        o11.HoldReasonType = HoldReasonType.WaitParts;
+        o11.HoldReason = "进口密封件预计 11 月中旬到货";
+        o11.HoldFromStatus = OrderStatus.InProgress;
+        o11.HoldAt = D(9, 26, 10, 0);
+        o11.HoldById = zhao.Id;
+        // 12. 常熟某研究院（v1.1 演示）：返厂单，已记客户寄出、工厂收货，检测/维修中
+        var o12 = Order(No(11, 3, "009"), OrderStatus.InProgress, wm, wang, "常熟某研究院", "沈工", "13800000012",
+            "苏州市常熟市 [示例地址]", 31.65, 120.75, "微型反应釜 HTM-100", "SN2411007", "2024-11", true,
+            "11月2日", "加热套不升温，温控表显示断偶", "更换保险丝", "研发实验室", 520,
+            created: D(11, 3, 10, 0), claimed: D(11, 3, 10, 20), service: ServiceType.Factory, problem: ProblemType.Return,
+            source: OrderSource.ReturnLogistics);
+        o12.StartedAt = D(11, 5, 9, 40);
+
+        var orders = new[] { o1, o2, o3, o4, o5, o6, o7, o8, o9, o10, o11, o12 };
         _db.Orders.AddRange(orders);
         await _db.SaveChangesAsync();
 
@@ -146,6 +168,37 @@ public class SeedData
         Punch(o10, li, PunchKind.Arrive, D(10, 21, 9, 10), 40);
         Punch(o10, li, PunchKind.Leave, D(10, 21, 16, 30), 47);
 
+        // v1.1：协助人与各自的打卡（9 月，不影响当月工时统计）
+        _db.OrderAssistants.Add(new OrderAssistant { OrderId = o11.Id, EngineerId = wang.Id, AddedById = zhao.Id, AddedAt = D(9, 24, 11, 0) });
+        Punch(o11, liu, PunchKind.Arrive, D(9, 25, 9, 0), 70);
+        Punch(o11, wang, PunchKind.Arrive, D(9, 25, 9, 30), 75);
+        Punch(o11, wang, PunchKind.Leave, D(9, 25, 16, 30), 72);
+        Punch(o11, liu, PunchKind.Leave, D(9, 25, 17, 0), 68);
+
+        // v1.1：待审批申请（暂停申请、协助人申请）与价格建议
+        _db.OrderRequests.Add(new OrderRequest
+        {
+            OrderId = o3.Id, Type = OrderRequestType.Hold, Status = RequestStatus.Pending, RequesterId = li.Id, CreatedAt = D(11, 6, 9, 30),
+            HoldReasonType = HoldReasonType.WaitCustomer, Note = "客户要求下周再安排停机"
+        });
+        _db.OrderRequests.Add(new OrderRequest
+        {
+            OrderId = o5.Id, Type = OrderRequestType.AddAssistant, Status = RequestStatus.Pending, RequesterId = chen.Id, CreatedAt = D(11, 6, 13, 20),
+            TargetEngineerId = wang.Id, Note = "釜盖拆装需要两人"
+        });
+        _db.PriceSuggestions.Add(new PriceSuggestion { OrderId = o2.Id, SalesId = wm.Id, Amount = 2400, Note = "老客户，按上次价格", CreatedAt = D(11, 6, 10, 50) });
+
+        // v1.1：返厂节点。苏州某药企（已闭环）走完 4 个节点；常熟某研究院进行到工厂收货
+        Factory(o9, FactoryNode.CustomerShipped, sl, D(11, 2, 14, 0), "顺丰", "SF1100200300");
+        Factory(o9, FactoryNode.FactoryReceived, chen, D(11, 3, 10, 0));
+        AddFile(chen, o9, FileCategory.FactoryReceivePhoto, D(11, 3, 10, 0));
+        Factory(o9, FactoryNode.ShippedBack, chen, D(11, 4, 16, 0), "顺丰", "SF1100200399");
+        AddFile(chen, o9, FileCategory.FactoryShipPhoto, D(11, 4, 16, 0));
+        Factory(o9, FactoryNode.CustomerSigned, sl, D(11, 5, 10, 45));
+        Factory(o12, FactoryNode.CustomerShipped, wm, D(11, 3, 15, 0), "顺丰", "SF1100300500");
+        Factory(o12, FactoryNode.FactoryReceived, wang, D(11, 5, 9, 40), note: "外观完好，含电源线 1 根");
+        AddFile(wang, o12, FileCategory.FactoryReceivePhoto, D(11, 5, 9, 40));
+
         // 完工资料
         foreach (var (o, eng) in new[] { (o7, liu), (o8, li), (o9, chen), (o10, li) })
         {
@@ -159,12 +212,15 @@ public class SeedData
         Log(o1, li, "李工 认领 → 待启动", OrderStatus.Accepted, D(11, 5, 9, 48));
         Log(o1, li, "李工 首次到场 → 处理中", OrderStatus.InProgress, D(11, 5, 15, 40));
         Log(o2, wm, "王敏 建单 · 紧急", OrderStatus.Pending, D(11, 6, 10, 42));
+        Log(o2, wm, "王敏 建议价格 ¥2,400（老客户，按上次价格）", OrderStatus.Pending, D(11, 6, 10, 50), LogKind.Price);
         Log(o3, wm, "王敏 建单", OrderStatus.Pending, D(11, 5, 14, 10));
         Log(o3, li, "李工 认领 → 待启动", OrderStatus.Accepted, D(11, 5, 16, 2));
+        Log(o3, li, "李工 申请暂停搁置（等客户：客户要求下周再安排停机）", OrderStatus.Accepted, D(11, 6, 9, 30), LogKind.Hold);
         Log(o4, sl, "孙磊 建单", OrderStatus.Pending, D(11, 5, 11, 30));
         Log(o5, sl, "孙磊 建单", OrderStatus.Pending, D(11, 4, 16, 20));
         Log(o5, chen, "陈工 认领 → 待启动", OrderStatus.Accepted, D(11, 4, 17, 5));
         Log(o5, chen, "陈工 首次到场 → 处理中", OrderStatus.InProgress, D(11, 5, 9, 10));
+        Log(o5, chen, "陈工 申请添加协助人 王工（釜盖拆装需要两人）", OrderStatus.InProgress, D(11, 6, 13, 20), LogKind.Assist);
         Log(o6, sl, "孙磊 建单", OrderStatus.Pending, D(11, 4, 10, 5));
         Log(o7, wm, "王敏 建单", OrderStatus.Pending, D(11, 4, 8, 40));
         Log(o7, liu, "刘工 认领 → 待启动", OrderStatus.Accepted, D(11, 4, 8, 55));
@@ -174,12 +230,25 @@ public class SeedData
         Log(o8, li, "李工 提交完工 → 待验收", OrderStatus.Submitted, D(11, 3, 15, 40));
         Log(o8, zhao, "赵主管 确认闭环 → 已闭环", OrderStatus.Closed, D(11, 3, 17, 10));
         Log(o9, sl, "孙磊 建单", OrderStatus.Pending, D(11, 2, 9, 30));
+        Log(o9, sl, "孙磊 记录客户寄出（顺丰 SF1100200300）", OrderStatus.Accepted, D(11, 2, 14, 0), LogKind.Factory);
+        Log(o9, chen, "陈工 工厂收货 → 处理中", OrderStatus.InProgress, D(11, 3, 10, 0), LogKind.Factory);
+        Log(o9, chen, "陈工 寄回客户（顺丰 SF1100200399）", OrderStatus.InProgress, D(11, 4, 16, 0), LogKind.Factory);
+        Log(o9, sl, "孙磊 记录客户签收", OrderStatus.Submitted, D(11, 5, 10, 45), LogKind.Factory);
         Log(o9, zhao, "赵主管 确认闭环 → 已闭环", OrderStatus.Closed, D(11, 5, 11, 0));
         Log(o10, wm, "王敏 建单", OrderStatus.Pending, D(10, 20, 8, 10));
         Log(o10, li, "李工 认领 → 待启动", OrderStatus.Accepted, D(10, 20, 8, 30));
         Log(o10, li, "李工 首次到场 → 处理中", OrderStatus.InProgress, D(10, 20, 9, 0));
         Log(o10, li, "李工 提交完工 → 待验收", OrderStatus.Submitted, D(10, 21, 16, 45));
         Log(o10, zhao, "赵主管 确认闭环 → 已闭环", OrderStatus.Closed, D(10, 22, 10, 0));
+        Log(o11, sl, "孙磊 建单", OrderStatus.Pending, D(9, 24, 10, 0));
+        Log(o11, liu, "刘工 认领 → 待启动", OrderStatus.Accepted, D(9, 24, 10, 30));
+        Log(o11, zhao, "赵主管 添加协助人 王工", OrderStatus.Accepted, D(9, 24, 11, 0), LogKind.Assist);
+        Log(o11, liu, "刘工 首次到场 → 处理中", OrderStatus.InProgress, D(9, 25, 9, 0));
+        Log(o11, zhao, "赵主管 标为暂停搁置 → 暂停搁置（等备件：进口密封件预计 11 月中旬到货）", OrderStatus.OnHold, D(9, 26, 10, 0), LogKind.Hold);
+        Log(o12, wm, "王敏 建单", OrderStatus.Pending, D(11, 3, 10, 0));
+        Log(o12, wang, "王工 认领 → 待启动", OrderStatus.Accepted, D(11, 3, 10, 20));
+        Log(o12, wm, "王敏 记录客户寄出（顺丰 SF1100300500）", OrderStatus.Accepted, D(11, 3, 15, 0), LogKind.Factory);
+        Log(o12, wang, "王工 工厂收货 → 处理中", OrderStatus.InProgress, D(11, 5, 9, 40), LogKind.Factory);
 
         await _db.SaveChangesAsync();
     }
@@ -197,7 +266,7 @@ public class SeedData
             ProblemType = problem, Urgency = urgency, ServiceType = service, CustomerName = customer, ContactName = contact,
             ContactPhone = phone, Address = address, City = city, Region = region, Latitude = lat, Longitude = lng,
             DeviceModel = model, DeviceSn = sn, SatDate = sat, SatSigned = signed, FaultTime = faultTime, Symptom = symptom,
-            CustomerTried = tried, SiteEnvironment = env, CustomerRequest = request, Price = price, CreatorId = creator.Id,
+            CustomerTried = tried, SiteEnvironment = env, CustomerRequest = request, Price = price, PriceSet = true, CreatorId = creator.Id,
             AssigneeId = assignee?.Id, CreatedAt = created, ClaimedAt = assignee == null ? null : claimed,
             StartedAt = status is OrderStatus.InProgress or OrderStatus.Submitted or OrderStatus.Closed ? claimed : null
         };
@@ -246,6 +315,12 @@ public class SeedData
             IsSupplement = true, SupplementById = by.Id, SupplementReason = reason, SupplementAt = at
         });
 
-    private void Log(WorkOrder o, Employee actor, string text, OrderStatus to, DateTime time) =>
-        _db.StatusLogs.Add(new StatusLog { OrderId = o.Id, ActorId = actor.Id, Text = text, ToStatus = to, Time = time });
+    private void Log(WorkOrder o, Employee actor, string text, OrderStatus to, DateTime time, LogKind kind = LogKind.Status) =>
+        _db.StatusLogs.Add(new StatusLog { OrderId = o.Id, ActorId = actor.Id, Text = text, ToStatus = to, Time = time, Kind = kind });
+
+    private void Factory(WorkOrder o, FactoryNode node, Employee by, DateTime time, string? courier = null, string? trackingNo = null, string? note = null) =>
+        _db.FactoryRecords.Add(new FactoryRecord
+        {
+            OrderId = o.Id, Node = node, OperatorId = by.Id, Time = time, Courier = courier, TrackingNo = trackingNo, Note = note
+        });
 }

@@ -179,13 +179,14 @@ public sealed class ServiceIntegrationTests : IDisposable
     [Fact]
     public async Task QueryCountsOnlyAffectedByKeyword()
     {
-        var all = await _orders.Query(new OrderQuery { Status = "Pending" });
+        var sup = U("赵主管");
+        var all = await _orders.Query(new OrderQuery { Status = "Pending" }, sup);
         Assert.Equal(3, all.Total);
-        Assert.Equal(10, all.Counts["all"]);
+        Assert.Equal(12, all.Counts["all"]); // 种子 12 张工单（v1.1 增加 常州某材料厂、常熟某研究院）
         Assert.Equal(3, all.Counts["Pending"]);
-        var kw = await _orders.Query(new OrderQuery { Keyword = "合肥" });
+        var kw = await _orders.Query(new OrderQuery { Keyword = "合肥" }, sup);
         Assert.Equal(1, kw.Counts["all"]);
-        var issue = await _orders.Query(new OrderQuery { Issue = "DistanceAbnormal" });
+        var issue = await _orders.Query(new OrderQuery { Issue = "DistanceAbnormal" }, sup);
         Assert.Equal("南京某检测中心", Assert.Single(issue.Items).CustomerName);
     }
 
@@ -208,14 +209,15 @@ public sealed class ServiceIntegrationTests : IDisposable
         var sup = U("赵主管");
         var li = U("李工");
         var id = OrderId("江苏某化工研究院");
-        var ex = await Assert.ThrowsAsync<BizException>(() => _orders.Hold(id, new ReasonRequest { Reason = "等待备件" }, sup));
+        var ex = await Assert.ThrowsAsync<BizException>(() => _orders.Hold(id, new HoldRequest { ReasonType = "WaitParts" }, sup));
         Assert.Equal(40900, ex.Code);
         Assert.Equal("工程师正在现场计时，请先离场打卡后再搁置", ex.Message);
 
         _clock.Now = _clock.Now.AddMinutes(5);
         await Leave(li, id);
-        var held = await _orders.Hold(id, new ReasonRequest { Reason = "等待备件" }, sup);
+        var held = await _orders.Hold(id, new HoldRequest { ReasonType = "WaitParts" }, sup);
         Assert.Equal(OrderStatus.OnHold, held.Status);
+        Assert.Equal("等备件", held.HoldReason);
     }
 
     [Fact]
@@ -234,7 +236,7 @@ public sealed class ServiceIntegrationTests : IDisposable
         await Leave(li, id);
         var after = await _punches.Context(li, id);
         Assert.Equal(PunchKind.Arrive, after!.NextKind);
-        Assert.Equal("工单当前为「暂停搁置」，不能打卡", after.BlockedReason);
+        Assert.Equal("工单已暂停搁置，恢复后才能打卡", after.BlockedReason);
     }
 
     [Fact]

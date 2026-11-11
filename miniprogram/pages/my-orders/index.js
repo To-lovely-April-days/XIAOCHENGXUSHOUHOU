@@ -1,7 +1,8 @@
-// 我的工单（工程师，原型 10）：本人负责的工单，含已闭环历史
+// 我的工单（工程师，原型 10）：本人负责或协助的工单，含已闭环历史（v1.1：不显示价格）
 const api = require('../../api/index.js');
 const auth = require('../../utils/auth.js');
 const format = require('../../utils/format.js');
+const enums = require('../../utils/enums.js');
 
 const FILTERS = [
   { key: 'doing', label: '进行中' },
@@ -10,17 +11,27 @@ const FILTERS = [
   { key: 'all', label: '全部' }
 ];
 
+/** 本人今天在本单未离场的到场时间（v1.1：myOnSiteSince；旧服务端兜底 onSiteSince） */
+function mySince(o) {
+  return o.myOnSiteSince !== undefined ? o.myOnSiteSince : o.onSiteSince;
+}
+
 /** 状态备注 */
 function noteOf(o) {
+  const factory = o.serviceType === 'Factory' && o.factoryText;
   switch (o.status) {
     case 'InProgress':
-      if (o.onSiteSince) return { text: '今日 ' + format.formatHm(o.onSiteSince) + ' 到场 · 计时中', running: true };
+      if (mySince(o)) return { text: '今日 ' + format.formatHm(mySince(o)) + ' 到场 · 计时中', running: true };
+      if (factory) return { text: o.factoryText };
       if (o.lastArriveTime) return { text: '最近到场 ' + format.formatDateTimeShort(o.lastArriveTime) };
-      return { text: o.serviceType === 'Onsite' ? '处理中' : '远程/返厂处理中' };
+      return { text: o.serviceType === 'Onsite' ? '处理中' : enums.label(enums.SERVICE_TYPE, o.serviceType) + '处理中' };
     case 'Accepted':
+      if (factory) return { text: o.factoryText };
       return { text: o.appointmentTime ? '预约 ' + format.formatDateTimeShort(o.appointmentTime) : '待预约' };
-    case 'OnHold':
-      return { text: '暂停搁置，等待恢复' };
+    case 'OnHold': {
+      const holdText = enums.holdTextOf(o);
+      return { text: '暂停' + (holdText ? ' · ' + holdText : '搁置，等待恢复'), hold: true };
+    }
     case 'Submitted':
       return { text: o.submittedAt ? format.formatMonthDay(o.submittedAt) + '提交完工' : '已提交完工' };
     case 'Closed':
@@ -30,11 +41,12 @@ function noteOf(o) {
   }
 }
 
-/** 现场工时：已配对 + 正在计时（加载时刻）；非现场单或无工时显示 — */
+/** 本人现场工时：已配对（myMinutes）+ 正在计时（加载时刻）；非现场单或无工时显示 — */
 function hoursOf(o) {
-  let min = o.totalMinutes || 0;
-  if (o.onSiteSince) min += Math.floor(format.secondsBetween(o.onSiteSince) / 60);
-  if (o.serviceType !== 'Onsite' || (!min && !o.onSiteSince)) return '—';
+  const since = mySince(o);
+  let min = (o.myMinutes !== null && o.myMinutes !== undefined ? o.myMinutes : o.totalMinutes) || 0;
+  if (since) min += Math.floor(format.secondsBetween(since) / 60);
+  if (o.serviceType !== 'Onsite' || (!min && !since)) return '—';
   return format.formatDuration(min);
 }
 
@@ -44,11 +56,11 @@ function toRow(o) {
     id: o.id,
     customerName: o.customerName,
     status: o.status,
-    priceText: format.formatPrice(o.price, true),
-    priceFree: Number(o.price) === 0,
+    assist: o.myRole === 'Assistant',
     device: [o.orderNo, o.deviceModel, o.symptom].filter(Boolean).join(' · '),
     note: note.text,
     running: !!note.running,
+    hold: !!note.hold,
     hours: hoursOf(o)
   };
 }

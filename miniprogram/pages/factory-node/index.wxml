@@ -1,0 +1,89 @@
+<nav-bar title="{{title}}" />
+
+<view class="page fn">
+  <view wx:if="{{loading && !order}}" class="fn-state muted">加载中…</view>
+  <empty wx:elif="{{loadError && !order}}" text="{{loadError}}">
+    <button class="btn-sm btn-secondary" hover-class="btn-hover" bindtap="onRetry">重新加载</button>
+  </empty>
+
+  <block wx:else>
+    <view class="fn-notice">{{notice}}</view>
+
+    <view class="fn-order">
+      <text class="fn-order-name ellipsis flex1">{{order.customerName}}</text>
+      <text class="fn-order-no num">{{order.orderNo}}</text>
+    </view>
+
+    <view wx:if="{{!canSubmit}}" class="fn-warn">
+      <ui-icon name="warning" color="#9A5B00" size="16" stroke="2" />
+      <text class="flex1">{{blockText}}</text>
+    </view>
+    <view wx:elif="{{skipHint}}" class="fn-warn">
+      <ui-icon name="info" color="#9A5B00" size="16" stroke="2" />
+      <text class="flex1">{{skipHint}}</text>
+    </view>
+    <view wx:elif="{{recordedText}}" class="fn-warn gray">
+      <ui-icon name="edit" color="#636366" size="16" stroke="2" />
+      <text class="flex1">{{recordedText}}</text>
+    </view>
+
+    <!-- 快递信息 -->
+    <view wx:if="{{needCourier}}" class="fn-card">
+      <view class="fn-field">
+        <view class="fn-label">快递公司 <text class="red">*</text></view>
+        <input class="fn-input" value="{{courier}}" data-field="courier" bindinput="onInput"
+          maxlength="50" placeholder="如：顺丰" placeholder-class="placeholder" />
+        <view class="fn-chips">
+          <view wx:for="{{couriers}}" wx:key="*this" class="fn-chip {{courier === item ? 'on' : ''}}"
+            data-value="{{item}}" bindtap="onPickCourier" aria-role="button">{{item}}</view>
+        </view>
+      </view>
+      <view class="fn-field fn-field-last">
+        <view class="fn-label">快递单号 <text class="red">*</text></view>
+        <view class="row">
+          <input class="fn-input flex1 num" value="{{trackingNo}}" data-field="trackingNo" bindinput="onInput"
+            maxlength="60" placeholder="输入或扫码" placeholder-class="placeholder" />
+          <view class="fn-scan" hover-class="btn-hover" bindtap="onScan" aria-role="button" aria-label="扫码识别快递单号">扫码</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 照片 -->
+    <view wx:if="{{photoMode}}" class="fn-card {{needCourier ? 'fn-mt' : ''}}">
+      <view class="fn-photo-head">
+        <text class="fn-label">{{photoLabel}} <text wx:if="{{photoMode === 'required'}}" class="red">*</text></text>
+        <text class="fn-photo-tip">{{photoTip}}</text>
+      </view>
+      <view class="fn-grid">
+        <view wx:for="{{photos}}" wx:key="key" class="fn-thumb" data-key="{{item.key}}" bindtap="onTapPhoto">
+          <image class="fn-thumb-img" src="{{item.path}}" mode="aspectFill" />
+          <view wx:if="{{item.status === 'uploading'}}" class="fn-thumb-mask">上传中</view>
+          <view wx:elif="{{item.status === 'fail'}}" class="fn-thumb-mask fail"><view>上传失败</view><view>点击重试</view></view>
+          <view class="fn-thumb-del" data-key="{{item.key}}" catchtap="onRemovePhoto" aria-role="button" aria-label="删除照片">
+            <ui-icon name="close" color="#FFFFFF" size="10" stroke="2.6" />
+          </view>
+        </view>
+        <view wx:if="{{photos.length < maxPhotos}}" class="fn-add" hover-class="btn-hover" bindtap="onAddPhoto"
+          aria-role="button" aria-label="拍照或从相册添加{{photoLabel}}">
+          <ui-icon name="plus" color="#6E6E73" size="22" stroke="2" />
+        </view>
+      </view>
+    </view>
+
+    <!-- 备注 -->
+    <view class="fn-card fn-mt">
+      <view class="fn-field fn-field-last">
+        <view class="fn-label">备注</view>
+        <textarea class="fn-textarea" value="{{note}}" data-field="note" bindinput="onInput"
+          auto-height maxlength="500" disable-default-padding placeholder="{{notePlaceholder}}"
+          placeholder-class="placeholder" />
+      </view>
+    </view>
+
+    <view class="footer-space"></view>
+    <view class="footer-bar">
+      <button class="{{canSubmit && !submitting ? 'btn-primary' : 'btn-disabled'}} fn-submit" hover-class="btn-hover"
+        bindtap="onSubmit">{{submitting ? '保存中…' : submitLabel}}</button>
+    </view>
+  </block>
+</view>

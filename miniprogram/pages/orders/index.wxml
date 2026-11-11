@@ -31,7 +31,6 @@
             data-id="{{item.id}}" bindtap="goDetail">
         <view class="row gap8">
           <text class="customer flex1 ellipsis">{{item.customerName}}</text>
-          <text class="price num-bold {{item.priceFree ? 'free' : ''}}">{{item.priceText}}</text>
         </view>
         <view class="device ellipsis">{{item.device}}</view>
         <view wx:if="{{item.fault}}" class="fault ellipsis2">{{item.fault}}</view>
@@ -49,7 +48,7 @@
   <block wx:elif="{{role}}">
     <view class="head-plain">
       <view class="page-title">全部工单</view>
-      <view class="page-subtitle">共 {{allCount}} 张<text wx:if="{{role === 'Sales'}}"> · 只能查看，认领在工程师端操作</text></view>
+      <view class="page-subtitle">共 {{allCount}} 张<text wx:if="{{role === 'Sales'}}"> · 可查看进度、提价格建议</text></view>
     </view>
 
     <view class="search">
@@ -82,12 +81,14 @@
         <view class="row gap8">
           <text class="customer ellipsis">{{item.customerName}}</text>
           <urgency-tag wx:if="{{item.urgency === 'Urgent'}}" urgency="Urgent" />
-          <text class="price price-sm num-bold {{item.priceFree ? 'free-green' : ''}}">{{item.priceText}}</text>
+          <text wx:if="{{item.pending}}" class="tag tag-sm tag-amber pending-tag">待审批</text>
+          <text class="price price-sm {{item.unpriced ? 'unpriced' : 'num-bold'}} {{item.priceFree ? 'free-green' : ''}}">{{item.priceText}}</text>
         </view>
         <view class="device ellipsis">{{item.device}}</view>
         <view class="row gap8 list-foot">
           <status-tag status="{{item.status}}" />
-          <text class="meta-body ellipsis">{{item.meta}}</text>
+          <text class="meta-body flex1 ellipsis {{item.hold ? 'meta-hold' : ''}}">{{item.meta}}</text>
+          <text wx:if="{{item.assistText}}" class="assist">{{item.assistText}}</text>
         </view>
       </view>
       <view class="load-more">{{loadingMore ? '加载中…' : (hasMore ? '上拉加载更多' : '没有更多了')}}</view>

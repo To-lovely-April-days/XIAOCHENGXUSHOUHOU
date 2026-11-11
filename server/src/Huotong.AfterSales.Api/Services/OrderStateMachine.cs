@@ -14,6 +14,7 @@ public static class OrderStateMachine
         [(OrderStatus.Accepted, OrderAction.Start)] = OrderStatus.InProgress,
         [(OrderStatus.Accepted, OrderAction.Void)] = OrderStatus.Voided,
         [(OrderStatus.Accepted, OrderAction.Reassign)] = OrderStatus.Accepted,
+        [(OrderStatus.Accepted, OrderAction.Hold)] = OrderStatus.OnHold,
         [(OrderStatus.InProgress, OrderAction.Complete)] = OrderStatus.Submitted,
         [(OrderStatus.InProgress, OrderAction.Hold)] = OrderStatus.OnHold,
         [(OrderStatus.InProgress, OrderAction.Reassign)] = OrderStatus.InProgress,
@@ -32,45 +33,72 @@ public static class OrderStateMachine
         throw BizException.Conflict($"工单当前为「{EnumText.Status(from)}」，不能执行此操作");
     }
 
+    /// <summary>恢复处理的目标状态：回到暂停前的状态；旧数据（null）回处理中</summary>
+    public static OrderStatus ResumeTarget(OrderStatus? holdFrom) =>
+        holdFrom == OrderStatus.Accepted ? OrderStatus.Accepted : OrderStatus.InProgress;
+
+    /// <summary>Resume 专用重载：目标状态由暂停前状态决定；其余动作同 Apply(from, action)</summary>
+    public static OrderStatus Apply(OrderStatus from, OrderAction action, OrderStatus? holdFrom)
+    {
+        var to = Apply(from, action);
+        return action == OrderAction.Resume ? ResumeTarget(holdFrom) : to;
+    }
+
+    /// <summary>计算 actions 所需的全部事实（CHANGES-v1.1 §2.7）</summary>
+    public record ActionContext(Role Role, int UserId, OrderStatus Status, int? AssigneeId, ServiceType ServiceType,
+        bool HasMissingPunch, bool IsAssistant = false, bool PriceSet = true, bool HasPendingHoldRequest = false,
+        bool FactoryCanRecord = false, bool FactoryShippedBack = false);
+
     /// <summary>
-    /// 计算当前用户可执行动作（API.md actions 规则）
+    /// 计算当前用户可执行动作（CHANGES-v1.1 §2.7，固定顺序）
     /// </summary>
-    public static List<string> Actions(Role role, int userId, OrderStatus status, int? assigneeId,
-        ServiceType serviceType, bool hasMissingPunch)
+    public static List<string> Actions(ActionContext c)
     {
         var a = new List<string>();
-        switch (role)
+        var status = c.Status;
+        var active = status is OrderStatus.Accepted or OrderStatus.InProgress;
+        var factory = c.ServiceType == ServiceType.Factory && c.FactoryCanRecord;
+        switch (c.Role)
         {
             case Role.Engineer:
+                var lead = c.AssigneeId == c.UserId;
                 if (status == OrderStatus.Pending) a.Add("claim");
-                if (assigneeId == userId)
-                {
-                    if (status is OrderStatus.Accepted or OrderStatus.InProgress) a.Add("appoint");
-                    if (serviceType == ServiceType.Onsite && status is OrderStatus.Accepted or OrderStatus.InProgress) a.Add("checkin");
-                    if (serviceType != ServiceType.Onsite && status == OrderStatus.Accepted) a.Add("start");
-                    if (status == OrderStatus.InProgress) a.Add("complete");
-                }
+                if (lead && active) a.Add("appoint");
+                if ((lead || c.IsAssistant) && c.ServiceType == ServiceType.Onsite && active) a.Add("checkin");
+                if (lead && c.ServiceType == ServiceType.Remote && status == OrderStatus.Accepted) a.Add("start");
+                if (factory) a.Add("factory");
+                if (lead && status == OrderStatus.InProgress && (c.ServiceType != ServiceType.Factory || c.FactoryShippedBack)) a.Add("complete");
+                if (lead && active && !c.HasPendingHoldRequest) a.Add("requestHold");
+                if (lead && active) a.Add("requestAssistant");
                 break;
             case Role.Supervisor:
                 if (status == OrderStatus.Pending) a.Add("assign");
-                if (status is OrderStatus.Accepted or OrderStatus.InProgress or OrderStatus.OnHold) a.Add("reassign");
+                if (active || status == OrderStatus.OnHold) a.Add("reassign");
+                if (active || status == OrderStatus.OnHold) a.Add("assistants");
                 if (status is OrderStatus.Pending or OrderStatus.Accepted) a.Add("void");
-                if (status == OrderStatus.InProgress) a.Add("hold");
+                if (active) a.Add("hold");
                 if (status == OrderStatus.OnHold) a.Add("resume");
                 if (status == OrderStatus.Submitted) a.Add("reject");
-                if (status == OrderStatus.Submitted && !hasMissingPunch) a.Add("close");
-                if (hasMissingPunch) a.Add("supplement");
+                if (status == OrderStatus.Submitted && !c.HasMissingPunch && c.PriceSet) a.Add("close");
+                if (c.HasMissingPunch) a.Add("supplement");
+                if (status != OrderStatus.Voided) a.Add("setPrice");
+                if (factory) a.Add("factory");
+                break;
+            case Role.Sales:
+                if (status is not (OrderStatus.Closed or OrderStatus.Voided)) a.Add("suggestPrice");
+                if (factory) a.Add("factory");
                 break;
         }
         return a;
     }
 
-    /// <summary>销售首页 5 阶段进度</summary>
-    public static int ProgressStep(OrderStatus s) => s switch
+    /// <summary>5 段进度：OnHold = 暂停前状态对应的段（旧数据无来源 → 3）</summary>
+    public static int ProgressStep(OrderStatus s, OrderStatus? holdFrom = null) => s switch
     {
         OrderStatus.Pending => 1,
         OrderStatus.Accepted => 2,
-        OrderStatus.InProgress or OrderStatus.OnHold => 3,
+        OrderStatus.InProgress => 3,
+        OrderStatus.OnHold => holdFrom == OrderStatus.Accepted ? 2 : 3,
         OrderStatus.Submitted => 4,
         OrderStatus.Closed => 5,
         _ => 0

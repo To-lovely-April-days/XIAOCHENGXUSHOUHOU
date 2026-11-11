@@ -3,9 +3,9 @@
 
 .row-card { padding: 28rpx 32rpx; }
 .card-hover { opacity: 0.85; }
-.customer { font-size: 32rpx; font-weight: 600; line-height: 44rpx; }
-.price { margin-left: auto; flex-shrink: 0; font-size: 36rpx; color: var(--text); }
-.price.free { color: var(--green); }
+.customer { font-size: 32rpx; font-weight: 600; line-height: 44rpx; min-width: 0; }
+.assist-tag { background: var(--soft); color: var(--gray); }
+.note-hold { color: #8E8E93; }
 .device { font-size: 26rpx; color: var(--text-2); margin-top: 4rpx; }
 .foot { margin-top: 20rpx; font-size: 26rpx; color: var(--text-body); }
 .note { flex: 1; min-width: 0; font-family: var(--font-num); font-variant-numeric: tabular-nums; }

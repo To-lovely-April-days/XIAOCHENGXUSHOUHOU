@@ -1,0 +1,11 @@
+<view class="pb" aria-role="img" aria-label="{{aria}}">
+  <view class="pb-segs {{paused ? 'has-pause' : ''}}">
+    <view wx:for="{{segs}}" wx:key="i" class="pb-col">
+      <view class="pb-seg {{item.on ? 'on' : ''}} {{item.paused ? 'paused' : ''}}">
+        <view wx:if="{{item.paused}}" class="pb-mark"><view class="pb-mark-bar"></view><view class="pb-mark-bar"></view></view>
+      </view>
+      <text wx:if="{{labels}}" class="pb-label {{item.on ? 'on' : ''}} {{item.current ? 'current' : ''}} {{item.paused ? 'paused' : ''}}">{{item.label}}</text>
+    </view>
+  </view>
+  <view wx:if="{{showText && holdLine}}" class="pb-hold">{{holdLine}}</view>
+</view>

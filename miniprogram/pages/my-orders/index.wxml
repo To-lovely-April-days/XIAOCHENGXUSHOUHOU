@@ -1,6 +1,6 @@
 <nav-bar title="我的工单" />
 <view class="page safe-bottom">
-  <view class="desc">本人认领的工单，含已闭环的历史记录</view>
+  <view class="desc">本人负责或协助的工单</view>
 
   <view class="chips" aria-role="tablist" aria-label="筛选">
     <view wx:for="{{filters}}" wx:key="key" class="chip {{filter === item.key ? 'active' : ''}}"
@@ -18,15 +18,15 @@
     <view wx:for="{{rows}}" wx:key="id" class="card row-card" hover-class="card-hover" hover-stay-time="80"
           data-id="{{item.id}}" bindtap="goDetail">
       <view class="row gap8">
-        <text class="customer flex1 ellipsis">{{item.customerName}}</text>
-        <text class="price num-bold {{item.priceFree ? 'free' : ''}}">{{item.priceText}}</text>
+        <text class="customer ellipsis">{{item.customerName}}</text>
+        <text wx:if="{{item.assist}}" class="tag tag-sm assist-tag">协助</text>
       </view>
       <view class="device ellipsis">{{item.device}}</view>
       <view class="row gap8 foot">
         <status-tag status="{{item.status}}" />
-        <text class="note ellipsis {{item.running ? 'red' : ''}}">{{item.note}}</text>
+        <text class="note ellipsis {{item.running ? 'red' : ''}} {{item.hold ? 'note-hold' : ''}}">{{item.note}}</text>
         <view class="hours">
-          <view class="hours-label">现场工时</view>
+          <view class="hours-label">我的现场工时</view>
           <view class="hours-value num-bold">{{item.hours}}</view>
         </view>
       </view>

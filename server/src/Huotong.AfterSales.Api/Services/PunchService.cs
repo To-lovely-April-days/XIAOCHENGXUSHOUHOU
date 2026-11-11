@@ -40,6 +40,16 @@ public class PunchService
         status is OrderStatus.Accepted or OrderStatus.InProgress
         || (status is (OrderStatus.OnHold or OrderStatus.Voided) && d.Kind == PunchKind.Leave && d.OpenArrive != null && d.BlockedByOrderId == null);
 
+    private static string StatusBlock(OrderStatus status) => status == OrderStatus.OnHold
+        ? "工单已暂停搁置，恢复后才能打卡"
+        : $"工单当前为「{EnumText.Status(status)}」，不能打卡";
+
+    /// <summary>带协助人导航的工单查询（打卡权限按负责人或协助人判断）</summary>
+    private IQueryable<WorkOrder> OrdersWithAssistants() => _db.Orders.Include(o => o.Assistants);
+
+    private static ParticipantRole EnsureParticipant(WorkOrder order, CurrentUser user) =>
+        OrderViewBuilder.RoleIn(order, user.Id) ?? throw BizException.Forbidden("只有本单的负责人或协助人可以打卡");
+
     /// <summary>首页「下一单」与打卡入口共用的已受理单选取顺序：预约最早优先，无预约排最后，再按认领时间</summary>
     public static IEnumerable<WorkOrder> OrderAcceptedForNext(IEnumerable<WorkOrder> xs) =>
         xs.OrderBy(o => o.AppointmentTime == null ? 1 : 0).ThenBy(o => o.AppointmentTime).ThenBy(o => o.ClaimedAt);
@@ -51,20 +61,23 @@ public class PunchService
         WorkOrder? order;
         if (orderId != null)
         {
-            order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == orderId) ?? throw BizException.NotFound("工单不存在");
-            if (order.AssigneeId != user.Id) throw BizException.Forbidden("只有负责工程师可以打卡");
+            order = await OrdersWithAssistants().FirstOrDefaultAsync(o => o.Id == orderId) ?? throw BizException.NotFound("工单不存在");
+            EnsureParticipant(order, user);
             if (order.ServiceType != ServiceType.Onsite) throw BizException.Conflict("远程/返厂工单无需打卡");
         }
         else
         {
             order = null;
             var open = PunchCalculator.Pair(punches).Where(p => p.IsRunning(now.Date)).OrderByDescending(p => p.Arrive.Time).FirstOrDefault();
-            if (open != null) order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == open.Arrive.OrderId);
-            order ??= await _db.Orders.Where(o => o.AssigneeId == user.Id && o.ServiceType == ServiceType.Onsite && o.Status == OrderStatus.InProgress)
+            if (open != null) order = await OrdersWithAssistants().FirstOrDefaultAsync(o => o.Id == open.Arrive.OrderId);
+            // 自动选单范围 = 本人参与（负责人或协助人）的现场单
+            var mine = OrdersWithAssistants().Where(o => (o.AssigneeId == user.Id || o.Assistants.Any(a => a.EngineerId == user.Id))
+                                                         && o.ServiceType == ServiceType.Onsite);
+            order ??= await mine.Where(o => o.Status == OrderStatus.InProgress)
                 .OrderByDescending(o => o.StartedAt).ThenByDescending(o => o.Id).FirstOrDefaultAsync();
             if (order == null)
             {
-                var accepted = await _db.Orders.Where(o => o.AssigneeId == user.Id && o.ServiceType == ServiceType.Onsite && o.Status == OrderStatus.Accepted).ToListAsync();
+                var accepted = await mine.Where(o => o.Status == OrderStatus.Accepted).ToListAsync();
                 order = OrderAcceptedForNext(accepted).FirstOrDefault();
             }
             if (order == null) return null;
@@ -74,13 +87,13 @@ public class PunchService
         var me = await _view.LoadEmployee(user.Id);
         var blocked = await BlockedReason(d);
         if (blocked == null && !CanPunch(order.Status, d))
-            blocked = $"工单当前为「{EnumText.Status(order.Status)}」，不能打卡";
+            blocked = StatusBlock(order.Status);
         return new PunchContextDto
         {
             OrderId = order.Id, OrderNo = order.OrderNo, CustomerName = order.CustomerName, Address = order.Address,
             Latitude = order.Latitude, Longitude = order.Longitude, NextKind = d.Kind,
             OpenArriveTime = d.OpenArrive?.Time, BlockedReason = blocked, RangeMeters = GeoUtil.RangeMeters,
-            ServerTime = now, EngineerName = me.Name
+            ServerTime = now, EngineerName = me.Name, MyRole = OrderViewBuilder.RoleIn(order, user.Id)
         };
     }
 
@@ -92,14 +105,14 @@ public class PunchService
         if (r.Latitude is < -90 or > 90 || r.Longitude is < -180 or > 180) throw BizException.BadRequest("定位坐标不正确");
         if (r.PhotoFileId == null) throw BizException.BadRequest("请现场拍照后再打卡");
 
-        var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == r.OrderId) ?? throw BizException.NotFound("工单不存在");
-        if (order.AssigneeId != user.Id) throw BizException.Forbidden("只有负责工程师可以打卡");
+        var order = await OrdersWithAssistants().FirstOrDefaultAsync(o => o.Id == r.OrderId) ?? throw BizException.NotFound("工单不存在");
+        EnsureParticipant(order, user);
         if (order.ServiceType != ServiceType.Onsite) throw BizException.Conflict("远程/返厂工单无需打卡");
         var now = _clock.Now;
         var punches = await EngineerPunches(user.Id);
         var d = PunchCalculator.DecideNext(punches, order.Id, now);
         if (!CanPunch(order.Status, d))
-            throw BizException.Conflict($"工单当前为「{EnumText.Status(order.Status)}」，不能打卡");
+            throw BizException.Conflict(StatusBlock(order.Status));
         var blocked = await BlockedReason(d);
         if (blocked != null) throw BizException.Conflict(blocked);
         if (d.Kind != r.Kind) throw BizException.Conflict("打卡状态已变化，请刷新");
@@ -128,13 +141,13 @@ public class PunchService
             var to = OrderStateMachine.Apply(order.Status, OrderAction.FirstArrive);
             order.Status = to;
             order.StartedAt ??= now;
-            _db.StatusLogs.Add(new StatusLog { OrderId = order.Id, ActorId = me.Id, Text = $"{me.Name} 首次到场 → {EnumText.Status(to)}", Time = now, ToStatus = to });
+            _db.StatusLogs.Add(new StatusLog { OrderId = order.Id, ActorId = me.Id, Text = $"{me.Name} 首次到场 → {EnumText.Status(to)}", Time = now, ToStatus = to, Kind = LogKind.Status });
         }
         await _db.SaveChangesAsync();
 
         var full = await _view.PunchesFull().Where(p => p.OrderId == order.Id).ToListAsync();
         var dto = _view.PunchDtos(full).First(p => p.Id == punch.Id);
         var orderFull = await _view.Orders().FirstAsync(o => o.Id == order.Id);
-        return new PunchResultDto { Punch = dto, Order = await _view.BuildOne(orderFull) };
+        return new PunchResultDto { Punch = dto, Order = await _view.BuildOne(orderFull, user) };
     }
 }

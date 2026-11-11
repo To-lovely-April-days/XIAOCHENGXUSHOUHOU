@@ -15,7 +15,7 @@ public class OrdersController : ApiControllerBase
     public OrdersController(OrderService orders) => _orders = orders;
 
     [HttpGet("hall")]
-    public async Task<ApiResponse<ListResult<OrderListItem>>> Hall([FromQuery] string? filter) => Ok(await _orders.Hall(filter));
+    public async Task<ApiResponse<ListResult<OrderListItem>>> Hall([FromQuery] string? filter) => Ok(await _orders.Hall(filter, Me));
 
     [HttpGet("mine")]
     [Authorize(Roles = "Engineer")]
@@ -28,12 +28,13 @@ public class OrdersController : ApiControllerBase
     [Authorize(Roles = "Sales,Supervisor")]
     public async Task<ApiResponse<PagedOrders>> Query([FromQuery] string? status, [FromQuery] string? keyword, [FromQuery] string? issue,
         [FromQuery] int? assigneeId, [FromQuery] string? serviceType, [FromQuery] string? from, [FromQuery] string? to,
+        [FromQuery] string? priceSet = null, [FromQuery] bool? pendingRequest = null,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20) =>
         Ok(await _orders.Query(new OrderQuery
         {
             Status = status, Keyword = keyword, Issue = issue, AssigneeId = assigneeId, ServiceType = serviceType,
-            From = from, To = to, Page = page, PageSize = pageSize
-        }));
+            From = from, To = to, PriceSet = priceSet, PendingRequest = pendingRequest, Page = page, PageSize = pageSize
+        }, Me));
 
     [HttpGet("recent-customers")]
     public async Task<ApiResponse<List<RecentCustomerDto>>> RecentCustomers() => Ok(await _orders.RecentCustomers(Me));
@@ -70,7 +71,7 @@ public class OrdersController : ApiControllerBase
 
     [HttpPost("{id:int}/hold")]
     [Authorize(Roles = "Supervisor")]
-    public async Task<ApiResponse<OrderDetail>> Hold(int id, [FromBody] ReasonRequest? req) => Ok(await _orders.Hold(id, req ?? new(), Me));
+    public async Task<ApiResponse<OrderDetail>> Hold(int id, [FromBody] HoldRequest? req) => Ok(await _orders.Hold(id, req ?? new(), Me));
 
     [HttpPost("{id:int}/resume")]
     [Authorize(Roles = "Supervisor")]
@@ -83,4 +84,50 @@ public class OrdersController : ApiControllerBase
     [HttpPost("{id:int}/close")]
     [Authorize(Roles = "Supervisor")]
     public async Task<ApiResponse<OrderDetail>> Close(int id) => Ok(await _orders.Close(id, Me));
+
+    // ---------- v1.1：价格 ----------
+
+    [HttpPost("{id:int}/price")]
+    [Authorize(Roles = "Supervisor")]
+    public async Task<ApiResponse<OrderDetail>> SetPrice(int id, [FromBody] PriceRequest? req) => Ok(await _orders.SetPrice(id, req ?? new(), Me));
+
+    [HttpPost("{id:int}/price-suggestions")]
+    [Authorize(Roles = "Sales")]
+    public async Task<ApiResponse<OrderDetail>> SuggestPrice(int id, [FromBody] PriceSuggestRequest? req) =>
+        Ok(await _orders.SuggestPrice(id, req ?? new(), Me));
+
+    // ---------- v1.1：暂停申请 / 协助人 / 审批 ----------
+
+    [HttpPost("{id:int}/hold-requests")]
+    [Authorize(Roles = "Engineer")]
+    public async Task<ApiResponse<OrderDetail>> RequestHold(int id, [FromBody] HoldRequest? req) => Ok(await _orders.RequestHold(id, req ?? new(), Me));
+
+    [HttpPost("{id:int}/assistants")]
+    [Authorize(Roles = "Supervisor")]
+    public async Task<ApiResponse<OrderDetail>> SetAssistants(int id, [FromBody] AssistantsRequest? req) =>
+        Ok(await _orders.SetAssistants(id, req ?? new(), Me));
+
+    [HttpPost("{id:int}/assistant-requests")]
+    [Authorize(Roles = "Engineer")]
+    public async Task<ApiResponse<OrderDetail>> RequestAssistant(int id, [FromBody] AssistantRequestRequest? req) =>
+        Ok(await _orders.RequestAssistant(id, req ?? new(), Me));
+
+    [HttpPost("{id:int}/requests/{requestId:int}/approve")]
+    [Authorize(Roles = "Supervisor")]
+    public async Task<ApiResponse<OrderDetail>> ApproveRequest(int id, int requestId) => Ok(await _orders.ApproveRequest(id, requestId, Me));
+
+    [HttpPost("{id:int}/requests/{requestId:int}/reject")]
+    [Authorize(Roles = "Supervisor")]
+    public async Task<ApiResponse<OrderDetail>> RejectRequest(int id, int requestId, [FromBody] ReplyRequest? req) =>
+        Ok(await _orders.RejectRequest(id, requestId, req ?? new(), Me));
+
+    [HttpPost("{id:int}/requests/{requestId:int}/cancel")]
+    [Authorize(Roles = "Engineer")]
+    public async Task<ApiResponse<OrderDetail>> CancelRequest(int id, int requestId) => Ok(await _orders.CancelRequest(id, requestId, Me));
+
+    // ---------- v1.1：返厂流程（任何角色，服务端按节点判权）----------
+
+    [HttpPost("{id:int}/factory-nodes")]
+    public async Task<ApiResponse<OrderDetail>> FactoryNode(int id, [FromBody] FactoryNodeRequest? req) =>
+        Ok(await _orders.RecordFactoryNode(id, req ?? new(), Me));
 }

@@ -11,9 +11,9 @@ export const store = reactive({
   /**
    * 侧栏计数。
    * pending = 待处理（待认领 + 待验收），用于「工单」菜单角标
-   * all = 全部工单数（不含已作废）；missing / distance / submitted = 快捷筛选数量
+   * all = 全部工单数（不含已作废）；missing / distance / submitted / requests / unpriced = 快捷筛选数量
    */
-  counts: { pending: null, all: null, missing: null, distance: null, submitted: null },
+  counts: { pending: null, all: null, missing: null, distance: null, submitted: null, requests: null, unpriced: null },
 });
 
 /**
@@ -42,13 +42,17 @@ export function refreshCounts() {
     api.orders.list({ page: 1, pageSize: 1 }),
     api.orders.list({ issue: 'MissingPunch', page: 1, pageSize: 1 }),
     api.orders.list({ issue: 'DistanceAbnormal', page: 1, pageSize: 1 }),
-  ]).then(([all, missing, distance]) => {
+    api.orders.list({ pendingRequest: true, page: 1, pageSize: 1 }),
+    api.orders.list({ priceSet: false, page: 1, pageSize: 1 }),
+  ]).then(([all, missing, distance, requests, unpriced]) => {
     const c = (all && all.counts) || {};
     store.counts.all = c.all ?? (all ? all.total : null);
     store.counts.submitted = c.Submitted ?? 0;
     store.counts.pending = (c.Pending ?? 0) + (c.Submitted ?? 0);
     store.counts.missing = missing ? missing.total : null;
     store.counts.distance = distance ? distance.total : null;
+    store.counts.requests = requests ? requests.total : null;
+    store.counts.unpriced = unpriced ? unpriced.total : null;
   }).catch(() => { /* 计数失败不打扰 */ }).finally(() => { pendingRefresh = null; });
   return pendingRefresh;
 }
@@ -57,7 +61,7 @@ export function refreshCounts() {
 export function logout() {
   api.clearToken();
   store.user = null;
-  store.counts = { pending: null, all: null, missing: null, distance: null, submitted: null };
+  store.counts = { pending: null, all: null, missing: null, distance: null, submitted: null, requests: null, unpriced: null };
 }
 
 store.refreshCounts = refreshCounts;

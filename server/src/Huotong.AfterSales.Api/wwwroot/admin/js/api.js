@@ -165,7 +165,8 @@ export const me = {
 export const orders = {
   /**
    * 全部工单（分页）。
-   * @param {{status?:string,keyword?:string,issue?:'MissingPunch'|'DistanceAbnormal',assigneeId?:number,serviceType?:string,from?:string,to?:string,page?:number,pageSize?:number}} [params]
+   * priceSet：按是否已定价过滤；pendingRequest=true：只返回有待审批申请的工单。
+   * @param {{status?:string,keyword?:string,issue?:'MissingPunch'|'DistanceAbnormal',assigneeId?:number,serviceType?:string,from?:string,to?:string,priceSet?:boolean,pendingRequest?:boolean,page?:number,pageSize?:number}} [params]
    * @returns {Promise<{items:object[],total:number,page:number,pageSize:number,counts:Record<string,number>}>}
    */
   list: (params) => get('/orders', params),
@@ -173,22 +174,40 @@ export const orders = {
   detail: (id) => get(`/orders/${id}`),
   /** @param {object} body 见 API.md POST /api/orders @returns {Promise<object>} OrderDetail */
   create: (body) => post('/orders', body),
-  /** 指派/改派 @param {number} id @param {number} engineerId */
-  assign: (id, engineerId) => post(`/orders/${id}/assign`, { engineerId }),
+  /**
+   * 指派/改派。assistantIds 省略 = 不调整协助人；传数组（含空数组）= 协助人最终全集。
+   * @param {number} id @param {number} engineerId @param {number[]} [assistantIds]
+   */
+  assign: (id, engineerId, assistantIds) =>
+    post(`/orders/${id}/assign`, Array.isArray(assistantIds) ? { engineerId, assistantIds } : { engineerId }),
+  /** 调整协助人（最终全集，[] = 清空） @param {number} id @param {number[]} engineerIds */
+  setAssistants: (id, engineerIds) => post(`/orders/${id}/assistants`, { engineerIds: engineerIds || [] }),
   /** 作废 @param {number} id @param {string} [reason] */
   void: (id, reason) => post(`/orders/${id}/void`, { reason: reason || '' }),
-  /** 暂停搁置 @param {number} id @param {string} reason */
-  hold: (id, reason) => post(`/orders/${id}/hold`, { reason: reason || '' }),
+  /** 暂停搁置 @param {number} id @param {'WaitCustomer'|'WaitParts'|'WaitThirdParty'|'Other'} reasonType @param {string} [note] 「其他」时必填 */
+  hold: (id, reasonType, note) => post(`/orders/${id}/hold`, { reasonType, note: note || null }),
   /** 恢复处理 @param {number} id */
   resume: (id) => post(`/orders/${id}/resume`),
   /** 退回处理中 @param {number} id @param {string} [reason] */
   reject: (id, reason) => post(`/orders/${id}/reject`, { reason: reason || '' }),
   /** 确认闭环 @param {number} id */
   close: (id) => post(`/orders/${id}/close`),
+  /** 定价 / 改价（0 = 保内免费） @param {number} id @param {number} price */
+  setPrice: (id, price) => post(`/orders/${id}/price`, { price }),
+  /** 同意申请（暂停 / 协助人共用） @param {number} id @param {number} requestId */
+  approveRequest: (id, requestId) => post(`/orders/${id}/requests/${requestId}/approve`),
+  /** 驳回申请 @param {number} id @param {number} requestId @param {string} [reply] 选填，≤ 200 字 */
+  rejectRequest: (id, requestId, reply) => post(`/orders/${id}/requests/${requestId}/reject`, { reply: reply || null }),
+  /**
+   * 记录 / 更正返厂节点。photoIds 为该节点照片的最终全集。
+   * @param {number} id
+   * @param {{node:'CustomerShipped'|'FactoryReceived'|'ShippedBack'|'CustomerSigned',courier?:string,trackingNo?:string,note?:string,photoIds?:number[]}} body
+   */
+  factoryNode: (id, body) => post(`/orders/${id}/factory-nodes`, body),
 };
 
 export const engineers = {
-  /** 指派面板 @returns {Promise<Array<{user:object,doingCount:number,acceptedCount:number,submittedCount:number,onSiteNow:boolean,loadText:string}>>} */
+  /** 指派面板 @returns {Promise<Array<{user:object,doingCount:number,acceptedCount:number,submittedCount:number,assistCount:number,onSiteNow:boolean,loadText:string}>>} */
   list: () => get('/engineers'),
 };
 
@@ -201,7 +220,7 @@ export const hours = {
 };
 
 export const admin = {
-  /** @returns {Promise<{pending:number,urgentPending:number,inProgress:number,onSiteEngineers:number,submitted:number,closedThisWeek:number,weekMinutes:number,updatedAt:string}>} */
+  /** @returns {Promise<{pending:number,urgentPending:number,inProgress:number,onSiteEngineers:number,submitted:number,closedThisWeek:number,weekMinutes:number,onHold:number,pendingRequests:number,unpriced:number,priceSuggestions:number,updatedAt:string}>} */
   overview: () => get('/admin/overview'),
   /**
    * 补录打卡。
@@ -239,7 +258,7 @@ export const admin = {
 export const files = {
   /**
    * 上传文件（multipart）。
-   * @param {File|Blob} file @param {string} category FileCategory，如 'OrderPhoto'
+   * @param {File|Blob} file @param {string} category FileCategory，如 'OrderPhoto'；返厂节点照片用 FactoryReceivePhoto / FactoryShipPhoto / FactorySignPhoto
    * @returns {Promise<{id:number,url:string,category:string,mimeType:string,createdAt:string}>}
    */
   upload: (file, category) => {

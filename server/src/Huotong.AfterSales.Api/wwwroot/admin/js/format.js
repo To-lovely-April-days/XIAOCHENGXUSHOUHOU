@@ -84,18 +84,19 @@ export function fmtNumber(n) {
 }
 
 /**
- * 价格：0 → '保内'（opts.free 时 '保内免费'）；其他 → '¥1,800'。
- * @param {number} price
- * @param {{free?: boolean}} [opts]
+ * 价格：未定价（opts.priceSet === false）→ '未定价'；0 → '保内'（opts.free 时 '保内免费'）；其他 → '¥1,800'。
+ * @param {number|null} price
+ * @param {{free?: boolean, priceSet?: boolean|null}} [opts]
  */
 export function fmtPrice(price, opts = {}) {
+  if (opts.priceSet === false) return '未定价';
   if (price === null || price === undefined || price === '') return '—';
   if (Number(price) === 0) return opts.free ? '保内免费' : '保内';
   return '¥' + fmtNumber(price);
 }
 
-/** 是否保内（price === 0），用于绿色字 */
-export const isWarranty = (price) => price !== null && price !== undefined && Number(price) === 0;
+/** 是否保内（price === 0），用于绿色字。未定价（priceSet === false）不算保内 */
+export const isWarranty = (price, priceSet) => priceSet !== false && price !== null && price !== undefined && Number(price) === 0;
 
 /**
  * 相对时间：刚刚 / N 分钟前 / N 小时前 / 昨天 HH:mm / M月D日 / yyyy年M月D日

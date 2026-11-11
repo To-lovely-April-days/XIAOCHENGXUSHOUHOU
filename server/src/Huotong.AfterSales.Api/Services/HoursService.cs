@@ -18,6 +18,16 @@ public class HoursService
         _view = view;
     }
 
+    /// <summary>工程师当前在各工单的角色：负责人 / 协助人 / 已退出</summary>
+    private async Task<Dictionary<int, ParticipantRole>> Roles(int engineerId, List<int> orderIds)
+    {
+        var lead = (await _db.Orders.Where(o => orderIds.Contains(o.Id) && o.AssigneeId == engineerId).Select(o => o.Id).ToListAsync()).ToHashSet();
+        var assist = (await _db.OrderAssistants.Where(a => orderIds.Contains(a.OrderId) && a.EngineerId == engineerId)
+            .Select(a => a.OrderId).ToListAsync()).ToHashSet();
+        return orderIds.ToDictionary(id => id, id => lead.Contains(id) ? ParticipantRole.Lead
+            : assist.Contains(id) ? ParticipantRole.Assistant : ParticipantRole.Former);
+    }
+
     public async Task<TodayHoursDto> Today(int engineerId)
     {
         var now = _clock.Now;
@@ -31,6 +41,7 @@ public class HoursService
         var orderIds = pairs.Select(p => p.Arrive.OrderId).Distinct().ToList();
         var orders = await _db.Orders.Where(o => orderIds.Contains(o.Id)).Select(o => new { o.Id, o.OrderNo, o.CustomerName }).ToDictionaryAsync(o => o.Id);
         var pairMin = PunchCalculator.LeavePairMinutes(pairs);
+        var roles = await Roles(engineerId, orderIds);
 
         var running = pairs.Where(p => p.IsRunning(today)).OrderByDescending(p => p.Arrive.Time).FirstOrDefault();
         return new TodayHoursDto
@@ -50,7 +61,8 @@ public class HoursService
                 Arrive = _view.PunchToDto(full.First(f => f.Id == p.Arrive.Id), null),
                 Leave = p.Leave == null ? null : _view.PunchToDto(full.First(f => f.Id == p.Leave.Id), pairMin[p.Leave.Id]),
                 Minutes = p.Minutes,
-                IsSupplement = p.IsSupplement
+                IsSupplement = p.IsSupplement,
+                Role = roles.GetValueOrDefault(p.Arrive.OrderId, ParticipantRole.Former)
             }).ToList()
         };
     }
@@ -68,6 +80,7 @@ public class HoursService
         var orderIds = pairs.Select(p => p.Arrive.OrderId).Distinct().ToList();
         var orders = await _db.Orders.Where(o => orderIds.Contains(o.Id)).Select(o => new { o.Id, o.OrderNo, o.CustomerName }).ToDictionaryAsync(o => o.Id);
         var byId = punches.ToDictionary(p => p.Id);
+        var roles = await Roles(engineerId, orderIds);
 
         var days = pairs.GroupBy(p => p.Date).OrderByDescending(g => g.Key).Select(g => new MonthDayDto
         {
@@ -86,7 +99,8 @@ public class HoursService
                 IsSupplement = p.IsSupplement,
                 SupplementReason = p.Leave != null && p.Leave.IsSupplement ? byId[p.Leave.Id].SupplementReason
                     : p.Arrive.IsSupplement ? byId[p.Arrive.Id].SupplementReason : null,
-                Missing = p.IsMissing(today)
+                Missing = p.IsMissing(today),
+                Role = roles.GetValueOrDefault(p.Arrive.OrderId, ParticipantRole.Former)
             }).ToList()
         }).ToList();
 

@@ -30,7 +30,7 @@ public class AdminService
         var now = _clock.Now;
         var today = now.Date;
         var weekStart = TimeText.WeekStart(today);
-        var orders = await _db.Orders.Select(o => new { o.Status, o.Urgency, o.ClosedAt }).ToListAsync();
+        var orders = await _db.Orders.Select(o => new { o.Status, o.Urgency, o.ClosedAt, o.PriceSet }).ToListAsync();
         var punches = await _db.Punches.Where(p => p.Time >= weekStart)
             .Select(p => new PunchInfo(p.Id, p.OrderId, p.EngineerId, p.Kind, p.Time, p.OutOfRange, p.IsSupplement)).ToListAsync();
         var pairs = PunchCalculator.Pair(punches).Where(p => p.Date >= weekStart).ToList();
@@ -45,6 +45,10 @@ public class AdminService
             Submitted = orders.Count(o => o.Status == OrderStatus.Submitted),
             ClosedThisWeek = orders.Count(o => o.Status == OrderStatus.Closed && o.ClosedAt >= weekStart),
             WeekMinutes = pairs.Sum(p => p.Minutes) + running,
+            OnHold = orders.Count(o => o.Status == OrderStatus.OnHold),
+            PendingRequests = await _db.OrderRequests.CountAsync(r => r.Status == RequestStatus.Pending),
+            Unpriced = orders.Count(o => !o.PriceSet && o.Status != OrderStatus.Voided),
+            PriceSuggestions = (await HomeService.PendingPriceSuggestions(_db)).Count,
             UpdatedAt = now
         };
     }
@@ -71,6 +75,9 @@ public class AdminService
         if (err != null) throw BizException.BadRequest(err);
 
         var me = await _view.LoadEmployee(user.Id);
+        // 被补录人不是当前负责人（协助人 / 已退出）时，在记录里标明是谁
+        var who = arrive.EngineerId == order.AssigneeId ? ""
+            : $"（{await _db.Employees.Where(e => e.Id == arrive.EngineerId).Select(e => e.Name).FirstOrDefaultAsync()}）";
         _db.Punches.Add(new Punch
         {
             OrderId = order.Id, EngineerId = arrive.EngineerId, Kind = PunchKind.Leave, Time = leaveTime,
@@ -78,7 +85,7 @@ public class AdminService
         });
         _db.StatusLogs.Add(new StatusLog
         {
-            OrderId = order.Id, ActorId = me.Id, Text = $"{me.Name} 补录离场 {TimeText.Hm(leaveTime)}", Time = now, ToStatus = order.Status
+            OrderId = order.Id, ActorId = me.Id, Text = $"{me.Name} 补录离场 {TimeText.Hm(leaveTime)}{who}", Time = now, ToStatus = order.Status, Kind = LogKind.Status
         });
         await _db.SaveChangesAsync();
         return await _view.BuildDetail(order.Id, user);
@@ -91,19 +98,25 @@ public class AdminService
         var f = OrderService.ParseDate(from, "开始日期");
         var t = OrderService.ParseDate(to, "结束日期");
         var st = OrderService.ParseEnum<OrderStatus>(status, "状态");
-        var q = _db.Orders.Include(o => o.Assignee).Include(o => o.Creator).AsQueryable();
+        var q = _db.Orders.Include(o => o.Assignee).Include(o => o.Creator)
+            .Include(o => o.Assistants).ThenInclude(a => a.Engineer).AsQueryable();
         if (f != null) { var x = f.Value.ToDateTime(TimeOnly.MinValue); q = q.Where(o => o.CreatedAt >= x); }
         if (t != null) { var x = t.Value.AddDays(1).ToDateTime(TimeOnly.MinValue); q = q.Where(o => o.CreatedAt < x); }
         q = st == null ? q.Where(o => o.Status != OrderStatus.Voided) : q.Where(o => o.Status == st);
         var orders = await q.OrderBy(o => o.CreatedAt).ThenBy(o => o.Id).ToListAsync();
         var map = await _view.PunchMap(orders.Select(o => o.Id));
         var sigOrders = (await _db.Files.Where(x => x.Category == FileCategory.Signature && x.OrderId != null).Select(x => x.OrderId!.Value).ToListAsync()).ToHashSet();
+        var orderIds = orders.Select(o => o.Id).ToList();
+        var factory = (await _db.FactoryRecords.Where(r => orderIds.Contains(r.OrderId)).ToListAsync())
+            .GroupBy(r => r.OrderId).ToDictionary(g => g.Key, g => g.ToList());
+        var empNames = await _db.Employees.ToDictionaryAsync(e => e.Id, e => e.Name);
 
         string[] headers =
         {
             "项目编号", "工单号", "客户全称", "设备型号", "设备编号", "产品阶段", "故障描述", "故障发生时间", "报修人", "报修电话",
             "维修类型", "处理人", "处理时间(首次到场)", "解决措施", "进度状态", "是否收费", "服务价格", "现场工时(小时)",
-            "验收结果(运行状况)", "客户签字(有/无)", "建单人", "建单时间"
+            "验收结果(运行状况)", "客户签字(有/无)", "建单人", "建单时间",
+            "协助人", "人员工时", "暂停原因", "返厂进度", "寄回单号"
         };
         using var wb = new XLWorkbook();
         var ws = wb.AddWorksheet("售后进度台账");
@@ -114,15 +127,28 @@ public class AdminService
             var punches = map.GetValueOrDefault(o.Id) ?? new();
             var firstArrive = punches.Where(p => p.Kind == PunchKind.Arrive).Select(p => (DateTime?)p.Time).Min();
             var handleTime = firstArrive ?? o.StartedAt;
-            var minutes = PunchCalculator.Pair(punches).Sum(p => p.Minutes);
+            var pairs = PunchCalculator.Pair(punches);
+            var minutes = pairs.Sum(p => p.Minutes);
+            // 人员工时：每个在本单有工时的人，负责人在前，其余按首次到场时间
+            var personHours = string.Join("；", pairs.Where(p => p.Minutes > 0).GroupBy(p => p.Arrive.EngineerId)
+                .OrderBy(g => g.Key == o.AssigneeId ? 0 : 1).ThenBy(g => g.Min(p => p.Arrive.Time)).ThenBy(g => g.Key)
+                .Select(g => $"{empNames.GetValueOrDefault(g.Key)} {TimeText.Hours1(g.Sum(p => p.Minutes)).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)}h"));
+            var records = factory.GetValueOrDefault(o.Id) ?? new();
+            var back = records.FirstOrDefault(r => r.Node == FactoryNode.ShippedBack);
+            var isFactory = o.ServiceType == ServiceType.Factory;
             object?[] values =
             {
                 o.ProjectNo ?? "", o.OrderNo, o.CustomerName, o.DeviceModel, o.DeviceSn, o.SatSigned ? "老产品" : "新产品",
                 o.Symptom, o.FaultTime, o.ContactName, o.ContactPhone, EnumText.Service(o.ServiceType), o.Assignee?.Name ?? "",
                 handleTime == null ? "" : handleTime.Value.ToString("yyyy-MM-dd HH:mm"), o.Solution ?? "", EnumText.Status(o.Status),
-                o.Price > 0 ? "是" : "否（保内）", (double)o.Price, TimeText.Hours1(minutes),
+                !o.PriceSet ? "未定价" : o.Price > 0 ? "是" : "否（保内）", o.PriceSet ? (object)(double)o.Price : "未定价", TimeText.Hours1(minutes),
                 o.RunStatus == null ? "" : EnumText.Run(o.RunStatus.Value), sigOrders.Contains(o.Id) ? "有" : "无",
-                o.Creator?.Name ?? "", o.CreatedAt.ToString("yyyy-MM-dd HH:mm")
+                o.Creator?.Name ?? "", o.CreatedAt.ToString("yyyy-MM-dd HH:mm"),
+                string.Join("、", o.Assistants.OrderBy(a => a.AddedAt).ThenBy(a => a.Id).Select(a => a.Engineer?.Name)),
+                personHours,
+                o.Status == OrderStatus.OnHold ? EnumText.HoldText(o.HoldReasonType, o.HoldReason) : "",
+                isFactory ? EnumText.FactoryText(records.Select(r => r.Node)) : "",
+                isFactory && back != null ? $"{back.Courier} {back.TrackingNo}" : ""
             };
             WriteRow(ws, row++, values);
         }
@@ -142,9 +168,9 @@ public class AdminService
         var pairs = PunchCalculator.Pair(punches.Select(Info)).Where(p => p.Date >= start && p.Date < end)
             .OrderBy(p => byId[p.Arrive.Id].Engineer?.Name).ThenBy(p => p.Arrive.Time).ToList();
         var orderIds = pairs.Select(p => p.Arrive.OrderId).Distinct().ToList();
-        var orders = await _db.Orders.Where(o => orderIds.Contains(o.Id)).ToDictionaryAsync(o => o.Id);
+        var orders = await _db.Orders.Include(o => o.Assistants).Where(o => orderIds.Contains(o.Id)).ToDictionaryAsync(o => o.Id);
 
-        string[] headers = { "工程师", "日期", "工单号", "客户", "到场", "离场", "工时(小时)", "是否补录", "补录原因" };
+        string[] headers = { "工程师", "日期", "工单号", "客户", "到场", "离场", "工时(小时)", "是否补录", "补录原因", "本单角色" };
         using var wb = new XLWorkbook();
         var ws = wb.AddWorksheet($"{year}年{month}月工时");
         WriteHeader(ws, headers);
@@ -155,12 +181,13 @@ public class AdminService
             var l = p.Leave == null ? null : byId[p.Leave.Id];
             var o = orders.GetValueOrDefault(p.Arrive.OrderId);
             var reason = l?.IsSupplement == true ? l.SupplementReason : a.IsSupplement ? a.SupplementReason : null;
+            var role = o == null ? ParticipantRole.Former : OrderViewBuilder.RoleIn(o, a.EngineerId) ?? ParticipantRole.Former;
             object?[] values =
             {
                 a.Engineer?.Name ?? "", p.Date.ToString("yyyy-MM-dd"), o?.OrderNo ?? "", o?.CustomerName ?? "",
                 a.Time.ToString("HH:mm"),
                 l != null ? l.Time.ToString("HH:mm") : p.IsRunning(today) ? "计时中" : "缺卡",
-                TimeText.Hours1(p.Minutes), p.IsSupplement ? "主管补录" : "否", reason ?? ""
+                TimeText.Hours1(p.Minutes), p.IsSupplement ? "主管补录" : "否", reason ?? "", EnumText.Participant(role)
             };
             WriteRow(ws, row++, values);
         }

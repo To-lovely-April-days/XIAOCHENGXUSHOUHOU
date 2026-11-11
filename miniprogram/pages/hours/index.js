@@ -162,6 +162,7 @@ Page({
         minutes: e.minutes,
         dur: isRunning ? format.formatDuration(format.secondsBetween(e.arrive && e.arrive.time) / 60) : format.formatDuration(e.minutes),
         isSupplement: !!e.isSupplement,
+        assist: e.role === 'Assistant',
         arrive: punchSide(e.arrive, 'Arrive'),
         leave: punchSide(e.leave, 'Leave')
       };
@@ -395,6 +396,8 @@ Page({
     const entries = day.entries || [];
     const names = [];
     entries.forEach((e) => { if (e.customerName && names.indexOf(e.customerName) < 0) names.push(e.customerName); });
+    // v1.1：当天全部明细都是协助身份时标「协助」
+    const assist = entries.length > 0 && entries.every((e) => e.role === 'Assistant');
     const missing = entries.filter((e) => e.missing);
     const sup = entries.filter((e) => e.isSupplement);
     const open = entries.filter((e) => !e.leaveTime && !e.missing);
@@ -417,6 +420,7 @@ Page({
       week: format.weekday(day.date),
       day: format.parseTime(day.date).getDate(),
       customer: names.join('、') || '—',
+      assist: assist,
       note: note,
       noteClass: noteClass,
       running: !!day.running,

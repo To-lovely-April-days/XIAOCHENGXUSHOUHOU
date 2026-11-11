@@ -1,4 +1,4 @@
-// 新建工单弹窗：字段按 API.md POST /api/orders。PC 端没有地图选点，手工填写地址与经纬度（现场单必填）。
+// 新建工单弹窗：字段按 API.md POST /api/orders（v1.1 起建单不填价格，建单后在详情里定价）。PC 端没有地图选点，手工填写地址与经纬度（现场单必填）。
 // 照片/视频先 POST /api/files（category=OrderPhoto）上传，最多 9 个，提交时带 photoFileIds。
 import * as api from '../api.js';
 import { confirm } from '../ui.js';
@@ -19,7 +19,6 @@ function emptyForm() {
     deviceModel: '', deviceSn: '', satDate: '', satSigned: null, projectNo: '',
     faultDate: toApiDate(new Date()), faultPeriod: '',
     symptom: '', customerTried: '', siteEnvironment: '', customerRequest: '',
-    price: '',
   };
 }
 
@@ -57,10 +56,6 @@ export default {
     dirty() {
       const e = emptyForm();
       return this.photos.length > 0 || Object.keys(e).some(k => k !== 'faultDate' && this.f[k] !== e[k]);
-    },
-    priceHint() {
-      const p = trim(this.f.price);
-      return p !== '' && Number(p) === 0 ? '将显示为「保内免费」' : '质保期内填 0（显示「保内免费」）';
     },
   },
   beforeUnmount() {
@@ -153,9 +148,6 @@ export default {
       req('symptom', '请按客户原话填写故障现象/报错');
       req('customerTried', '请填写客户已尝试的操作');
       req('siteEnvironment', '请填写现场环境条件');
-      const price = trim(f.price);
-      if (price === '') e.price = '请填写服务价格（保内填 0）';
-      else if (!isFinite(Number(price)) || Number(price) < 0) e.price = '服务价格不能小于 0';
       if (this.photos.some(p => p.status === 'error')) e.photos = '有文件未上传成功，请重试或移除';
       this.errors = e;
       return Object.keys(e).length === 0;
@@ -176,7 +168,6 @@ export default {
         faultTime: this.faultTimeText,
         symptom: trim(f.symptom), customerTried: trim(f.customerTried), siteEnvironment: trim(f.siteEnvironment),
         customerRequest: opt(f.customerRequest),
-        price: Number(trim(f.price)),
         photoFileIds: this.photos.filter(p => p.status === 'done').map(p => p.id),
       };
     },
@@ -303,12 +294,7 @@ export default {
       <label class="field span-2"><span class="field-label">客户诉求与限制</span>
         <textarea class="textarea" v-model="f.customerRequest" rows="2" maxlength="500" placeholder="选填，如：希望本周内上门，周末不方便"></textarea></label>
 
-      <div class="form-section-title">价格与照片</div>
-      <label class="field"><span class="field-label">服务价格（元）<span class="req">*</span></span>
-        <input class="input num" :class="{ invalid: errors.price }" v-model="f.price" type="number" min="0" step="0.01"
-               placeholder="0" @input="clearErr('price')">
-        <span v-if="errors.price" class="field-error">{{ errors.price }}</span>
-        <span v-else class="field-hint">{{ priceHint }}</span></label>
+      <div class="form-section-title">现场照片</div>
       <div class="field span-2"><span class="field-label">现场照片/视频（选填，最多 {{ maxPhotos }} 个）</span>
         <div class="orders-create-photos">
           <div v-for="(p, i) in photos" :key="p.key" class="orders-create-photo" :class="'is-' + p.status" :title="p.error || p.name">
@@ -326,7 +312,7 @@ export default {
           <input ref="file" type="file" accept="image/*,video/*" multiple hidden @change="onFiles">
         </div>
         <span v-if="errors.photos" class="field-error">{{ errors.photos }}</span>
-        <span v-else class="field-hint">支持图片或视频，单个不超过 20MB</span>
+        <span v-else class="field-hint">支持图片或视频，单个不超过 20MB。服务价格不在建单时填写，建单后由主管在工单详情中定价。</span>
       </div>
       <button type="submit" hidden></button>
     </form>

@@ -33,6 +33,7 @@ miniprogram/
 ├── custom-tab-bar/                  按角色切换的底部导航
 ├── components/                      全局组件（app.json 已注册，页面直接用）
 │   ├── nav-bar  avatar  status-tag  urgency-tag  empty  assign-sheet  ui-icon
+│   └── progress-bar                 5 段进度条（v1.1：暂停显示灰色暂停标记 + 原因）
 └── pages/
     ├── home        首页（tab，按角色：工程师 00/01/02，销售 11，主管 14）
     ├── orders      工单（tab，工程师=工单大厅 05，销售/主管=全部工单 12）
@@ -44,6 +45,7 @@ miniprogram/
     ├── order-detail 工单详情（工程师 06 / 销售主管只读 13，按 actions 显示按钮）
     ├── checkin     拍照打卡（07）
     ├── complete    完工提交（08）
+    ├── factory-node 返厂节点记录 / 更正（v1.1，?id=&node=）
     └── order-new   新建工单（15）
 ```
 
@@ -56,7 +58,7 @@ miniprogram/
   ```
 - **tab 页**（home/orders/hours/me）：`onShow` 里调用 `tabbar.setTabSelected(this, 'home')`，WXML 根节点加 `class="page tabbar-space"` 给 tabBar 留位置。
 - **自定义导航**：页面 json 写 `"navigationStyle": "custom"`，WXML 顶部放 `<nav-bar title="工单详情" />`。tab 页通常 `back="{{false}}"` 或自己画大标题（用 `utils/system.js` 的 `getNavMetrics()` 对齐胶囊）。
-- **跳转路径**：详情 `/pages/order-detail/index?id=3`；打卡 `/pages/checkin/index?orderId=3`（不带参数 = 底部打卡按钮进入）；完工 `/pages/complete/index?id=3`；新建 `/pages/order-new/index`。
+- **跳转路径**：详情 `/pages/order-detail/index?id=3`；打卡 `/pages/checkin/index?orderId=3`（不带参数 = 底部打卡按钮进入）；完工 `/pages/complete/index?id=3`；返厂节点 `/pages/factory-node/index?id=3&node=ShippedBack`；新建 `/pages/order-new/index`。
 - 页面 json 的 `usingComponents` 写 `{}` 即可，全局组件已在 app.json 注册。
 - 尺寸：原型 1px = 2rpx。颜色用 `var(--xxx)` 令牌，不要硬编码新颜色。
 - 所有面向用户的文案用简体中文。
@@ -79,7 +81,13 @@ api.orders.recentCustomers()
 api.orders.detail(id) → OrderDetail（含 actions）
 api.orders.create(body) → OrderDetail
 api.orders.claim(id) / appoint(id, 'yyyy-MM-ddTHH:mm:ss') / start(id) / complete(id, body)
-api.orders.assign(id, engineerId) / void(id, reason) / hold(id, reason) / resume(id) / reject(id, reason) / close(id)
+api.orders.assign(id, engineerId, assistantIds?) / void(id, reason) / hold(id, reasonType, note) / resume(id) / reject(id, reason) / close(id)
+// v1.1（详见 docs/CHANGES-v1.1.md）
+api.orders.setPrice(id, price) / suggestPrice(id, amount, note)               // 主管定价 / 销售价格建议；建单不再带 price
+api.orders.requestHold(id, reasonType, note)                                  // 负责人申请暂停
+api.orders.approveRequest(id, requestId) / rejectRequest(id, requestId, reply) / cancelRequest(id, requestId)
+api.orders.setAssistants(id, engineerIds) / requestAssistant(id, engineerId, note)
+api.orders.factoryNode(id, {node, courier, trackingNo, note, photoIds})       // 返厂节点记录 / 更正
 api.punches.context(orderId?) → 上下文或 null
 api.punches.create({orderId, kind, latitude, longitude, address, photoFileId}) → {punch, order}
 api.hours.today(engineerId?) / api.hours.month(year, month, engineerId?)
@@ -104,7 +112,7 @@ api.admin.employees() / createEmployee(body) / updateEmployee(id, body) / unbind
 | `formatDuration(min)` | `217` → `'3:37'`，null → `'—'` |
 | `splitClock(seconds)` | `13038` → `{hm:'3:37', ss:':18'}` |
 | `secondsBetween(start, end?)` | end 缺省为 `now()` |
-| `formatPrice(price, short)` | `1800` → `'¥1,800'`，`0` → `'保内免费'`（short：`'保内'`） |
+| `formatPrice(price, short, priceSet)` | `1800` → `'¥1,800'`，`0` → `'保内免费'`（short：`'保内'`）；`priceSet === false` 或 price 为 null → `'未定价'`。工程师端不展示价格 |
 | `formatMonthDay(d)` / `weekday(d)` / `formatHm(d)` | `'11月6日'` / `'周五'` / `'10:05'` |
 | `formatDate(d)` / `formatDateDot(d)` / `today()` | `'2026-11-06'` / `'2026.11.06'` |
 | `formatDateTimeShort(str)` | `'今天 10:00'` / `'11月9日 10:00'` |

@@ -25,8 +25,7 @@ const REQUIRED = [
   { key: 'faultTime', msg: '请选择故障发生时间' },
   { key: 'symptom', msg: '请填写故障现象 / 报错' },
   { key: 'customerTried', msg: '请填写客户已尝试的操作' },
-  { key: 'siteEnvironment', msg: '请填写现场环境条件' },
-  { key: 'price', msg: '请填写服务价格' }
+  { key: 'siteEnvironment', msg: '请填写现场环境条件' }
 ];
 
 function indexOf(options, value) {
@@ -78,8 +77,7 @@ Page({
       symptom: '',
       customerTried: '',
       siteEnvironment: '',
-      customerRequest: '',
-      price: ''
+      customerRequest: ''
     },
     loc: { name: '', address: '', picked: false },
     faultDate: '',
@@ -197,18 +195,6 @@ Page({
     this.setData(patch);
     this.clearErr(key);
     this.markDirty();
-  },
-
-  onPriceInput(e) {
-    // 只保留数字和一个小数点，最多 2 位小数
-    let v = String(e.detail.value || '').replace(/[^\d.]/g, '');
-    const dot = v.indexOf('.');
-    if (dot >= 0) v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, '').slice(0, 2);
-    if (/^0\d/.test(v)) v = v.replace(/^0+(?=\d)/, '');
-    this.setData({ 'form.price': v });
-    this.clearErr('price');
-    this.markDirty();
-    return v;
   },
 
   /* ---------- 地址 ---------- */
@@ -370,9 +356,6 @@ Page({
       if (r.key === 'address' && f.serviceType === 'Onsite' && !hasCoords(f.latitude, f.longitude)) {
         return { key: 'address', msg: '现场工单需要在地图上选点' };
       }
-      if (r.key === 'price' && !(/^\d+(\.\d{1,2})?$/.test(trim(f.price)) && Number(f.price) >= 0)) {
-        return { key: 'price', msg: '服务价格格式不正确' };
-      }
     }
     if (this.data.media.some((m) => m.status === 'uploading')) return { key: 'media', msg: '照片还在上传，请稍候' };
     if (this.data.media.some((m) => m.status === 'fail')) return { key: 'media', msg: '有照片上传失败，请点击重试或删除' };
@@ -412,7 +395,6 @@ Page({
       customerTried: trim(f.customerTried),
       siteEnvironment: trim(f.siteEnvironment),
       customerRequest: opt(f.customerRequest),
-      price: Number(trim(f.price)),
       photoFileIds: this.data.media.filter((m) => m.fileId).map((m) => m.fileId)
     };
   },

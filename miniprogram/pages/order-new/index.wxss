@@ -11,7 +11,6 @@ page { background: var(--bg); }
 .cell { display: flex; align-items: center; gap: 20rpx; min-height: 104rpx; border-bottom: 2rpx solid var(--divider); font-size: 32rpx; color: var(--text); }
 .cell-tall { min-height: 120rpx; padding: 12rpx 0; }
 .cell-addr { min-height: 128rpx; padding: 16rpx 0; }
-.cell-price { min-height: 112rpx; }
 .no-line { border-bottom: none; }
 .cell-hover { opacity: 0.7; }
 
@@ -36,11 +35,9 @@ page { background: var(--bg); }
 .pick-chip { height: 64rpx; padding: 0 24rpx; border-radius: 16rpx; background: var(--bg); display: flex; align-items: center; font-size: 30rpx; color: var(--text); }
 .pick-chip.placeholder { color: var(--text-3); }
 
-.yen { font-size: 36rpx; font-weight: 600; color: var(--text-2); }
-.ipt-price { width: 240rpx; height: 88rpx; font-size: 40rpx; font-weight: 600; color: var(--text); text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
-.price-tip { margin-top: 16rpx; font-size: 26rpx; color: var(--text-2); }
 
 .media-title { padding: 32rpx 0 16rpx; font-size: 32rpx; }
+.media-title-first { padding-top: 24rpx; }
 .media-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16rpx; }
 .media-item { position: relative; height: 144rpx; border-radius: 12rpx; background: var(--track); overflow: hidden; }
 .media-img { width: 100%; height: 100%; display: block; }

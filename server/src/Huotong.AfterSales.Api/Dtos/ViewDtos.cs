@@ -39,6 +39,7 @@ public class PunchContextDto
     public int RangeMeters { get; set; }
     public DateTime ServerTime { get; set; }
     public string EngineerName { get; set; } = "";
+    public ParticipantRole? MyRole { get; set; }
 }
 
 public class PunchResultDto
@@ -56,6 +57,8 @@ public class TodayEntryDto
     public PunchDto? Leave { get; set; }
     public int Minutes { get; set; }
     public bool IsSupplement { get; set; }
+    /// <summary>此工程师当前在该工单的角色</summary>
+    public ParticipantRole Role { get; set; }
 }
 
 public class TodayHoursDto
@@ -81,6 +84,8 @@ public class MonthEntryDto
     public bool IsSupplement { get; set; }
     public string? SupplementReason { get; set; }
     public bool Missing { get; set; }
+    /// <summary>此工程师当前在该工单的角色</summary>
+    public ParticipantRole Role { get; set; }
 }
 
 public class MonthDayDto
@@ -118,6 +123,8 @@ public class EngineerHomeDto
     public List<OrderListItem> Upcoming { get; set; } = new();
     public HallSummaryDto Hall { get; set; } = new();
     public List<OrderListItem> RecentDone { get; set; } = new();
+    /// <summary>本人参与的暂停搁置工单，按 HoldAt 倒序</summary>
+    public List<OrderListItem> OnHold { get; set; } = new();
     public int MonthMinutes { get; set; }
 }
 
@@ -140,6 +147,7 @@ public class TodoDto
 {
     public string Type { get; set; } = "";
     public int OrderId { get; set; }
+    public int? RequestId { get; set; }
     public string Title { get; set; } = "";
     public bool Urgent { get; set; }
     public string Subtitle { get; set; } = "";
@@ -160,6 +168,7 @@ public class EngineerLoadDto
     public int DoingCount { get; set; }
     public int AcceptedCount { get; set; }
     public int SubmittedCount { get; set; }
+    public int AssistCount { get; set; }
     public bool OnSiteNow { get; set; }
     public string LoadText { get; set; } = "";
 }
@@ -173,6 +182,10 @@ public class OverviewDto
     public int Submitted { get; set; }
     public int ClosedThisWeek { get; set; }
     public int WeekMinutes { get; set; }
+    public int OnHold { get; set; }
+    public int PendingRequests { get; set; }
+    public int Unpriced { get; set; }
+    public int PriceSuggestions { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
 

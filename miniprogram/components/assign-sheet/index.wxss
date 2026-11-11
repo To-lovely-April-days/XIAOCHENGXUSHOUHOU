@@ -23,3 +23,13 @@
 .as-confirm { margin-top: 28rpx; height: 104rpx; border-radius: 20rpx; background: #1D1D1F; color: #FFFFFF; font-size: 34rpx; font-weight: 600; display: flex; align-items: center; justify-content: center; }
 .as-confirm.disabled { background: #C7C7C5; }
 .as-hover { opacity: 0.75; }
+/* v1.1 多人协作 */
+.as-legend { margin-top: 16rpx; display: flex; align-items: center; justify-content: space-between; gap: 16rpx; font-size: 24rpx; color: #6E6E73; }
+.as-legend-count { flex-shrink: 0; font-weight: 600; color: #1D1D1F; }
+.as-list.short { max-height: 40vh; }
+.as-item.off { opacity: 0.45; }
+.as-chip { flex-shrink: 0; height: 56rpx; padding: 0 20rpx; border-radius: 28rpx; display: inline-flex; align-items: center; font-size: 24rpx; font-weight: 600; color: #1D1D1F; background: #FFFFFF; box-shadow: inset 0 0 0 2rpx #E3E3E1; }
+.as-chip.on { background: #1D1D1F; color: #FFFFFF; box-shadow: none; }
+.as-check { width: 44rpx; height: 44rpx; border-radius: 12rpx; border: 4rpx solid #C7C7C5; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-sizing: border-box; }
+.as-check.on { border-color: #1D1D1F; background: #1D1D1F; }
+.as-note-input { margin-top: 20rpx; height: 88rpx; padding: 0 28rpx; border-radius: 20rpx; background: #F6F6F4; font-size: 30rpx; color: #1D1D1F; }

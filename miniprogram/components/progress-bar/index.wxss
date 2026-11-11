@@ -1,0 +1,16 @@
+/* 5 段进度条（v1.1）：暂停段为灰色 #AEAEB2 斜纹 + 暂停标记，不用红 / 黑 */
+:host { display: block; }
+.pb-segs { display: flex; gap: 6rpx; }
+.pb-segs.has-pause { padding-top: 10rpx; }
+.pb-col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: stretch; }
+.pb-seg { position: relative; height: 8rpx; border-radius: 4rpx; background: #E5E5E3; }
+.pb-seg.on { background: #1D1D1F; }
+.pb-seg.paused { background: repeating-linear-gradient(135deg, #AEAEB2 0, #AEAEB2 8rpx, #D1D1CF 8rpx, #D1D1CF 14rpx); }
+/* 暂停标记「⏸」：压在暂停段正中的灰色圆点 */
+.pb-mark { position: absolute; left: 50%; top: 50%; width: 28rpx; height: 28rpx; margin: -14rpx 0 0 -14rpx; border-radius: 14rpx; background: #AEAEB2; box-shadow: 0 0 0 4rpx #FFFFFF; display: flex; align-items: center; justify-content: center; gap: 4rpx; }
+.pb-mark-bar { width: 4rpx; height: 12rpx; border-radius: 2rpx; background: #FFFFFF; }
+.pb-label { margin-top: 12rpx; font-size: 22rpx; line-height: 30rpx; color: #AEAEB2; text-align: center; white-space: nowrap; }
+.pb-label.on { color: #6E6E73; }
+.pb-label.current { color: #1D1D1F; font-weight: 600; }
+.pb-label.paused { color: #636366; font-weight: 600; }
+.pb-hold { margin-top: 10rpx; font-size: 24rpx; line-height: 34rpx; color: #8E8E93; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

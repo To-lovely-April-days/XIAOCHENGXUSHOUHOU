@@ -42,8 +42,21 @@ public class OrderListItem
     public string DeviceModel { get; set; } = "";
     public string DeviceSn { get; set; } = "";
     public string Symptom { get; set; } = "";
-    public decimal Price { get; set; }
+    /// <summary>Engineer 永远为 null；未定价为 null</summary>
+    public decimal? Price { get; set; }
+    /// <summary>Engineer 永远为 null</summary>
+    public bool? PriceSet { get; set; }
     public UserBrief? Assignee { get; set; }
+    public List<UserBrief> Assistants { get; set; } = new();
+    public ParticipantRole? MyRole { get; set; }
+    public int? MyMinutes { get; set; }
+    public DateTime? MyOnSiteSince { get; set; }
+    public int ProgressStep { get; set; }
+    public HoldReasonType? HoldReasonType { get; set; }
+    public string? HoldText { get; set; }
+    public OrderStatus? HoldFromStatus { get; set; }
+    public int PendingRequestCount { get; set; }
+    public string? FactoryText { get; set; }
     public UserBrief Creator { get; set; } = new();
     public DateTime CreatedAt { get; set; }
     public DateTime? ClaimedAt { get; set; }
@@ -81,6 +94,7 @@ public class OrderFilesDto
     public List<FileDto> PunchPhotos { get; set; } = new();
     public List<FileDto> ProcessPhotos { get; set; } = new();
     public List<FileDto> Signatures { get; set; } = new();
+    public List<FileDto> FactoryPhotos { get; set; } = new();
 }
 
 public class IssueDetailDto
@@ -89,6 +103,80 @@ public class IssueDetailDto
     public string Text { get; set; } = "";
     public int? PunchId { get; set; }
     public DateOnly Date { get; set; }
+    public UserBrief? Engineer { get; set; }
+}
+
+public class PriceSuggestionDto
+{
+    public int Id { get; set; }
+    public decimal Amount { get; set; }
+    public string? Note { get; set; }
+    public UserBrief By { get; set; } = new();
+    public DateTime CreatedAt { get; set; }
+    /// <summary>主管尚未在此建议之后定价</summary>
+    public bool Pending { get; set; }
+}
+
+public class HoldDto
+{
+    public HoldReasonType ReasonType { get; set; }
+    public string ReasonText { get; set; } = "";
+    public string? Note { get; set; }
+    public string Text { get; set; } = "";
+    public OrderStatus FromStatus { get; set; }
+    public DateTime? At { get; set; }
+    public UserBrief? By { get; set; }
+}
+
+public class RequestDto
+{
+    public int Id { get; set; }
+    public int OrderId { get; set; }
+    public OrderRequestType Type { get; set; }
+    public RequestStatus Status { get; set; }
+    public UserBrief Requester { get; set; } = new();
+    public DateTime CreatedAt { get; set; }
+    public HoldReasonType? ReasonType { get; set; }
+    public string? ReasonText { get; set; }
+    public string? Note { get; set; }
+    public string Text { get; set; } = "";
+    public UserBrief? Engineer { get; set; }
+    public UserBrief? Decider { get; set; }
+    public DateTime? DecidedAt { get; set; }
+    public string? Reply { get; set; }
+    public bool CanDecide { get; set; }
+    public bool CanCancel { get; set; }
+}
+
+public class ParticipantDto
+{
+    public UserBrief User { get; set; } = new();
+    public ParticipantRole Role { get; set; }
+    public int TotalMinutes { get; set; }
+    public DateTime? OnSiteSince { get; set; }
+    public bool MissingPunch { get; set; }
+}
+
+public class FactoryNodeDto
+{
+    public FactoryNode Node { get; set; }
+    public string Label { get; set; } = "";
+    /// <summary>done / current / todo / skipped</summary>
+    public string State { get; set; } = "todo";
+    public bool Recorded { get; set; }
+    public DateTime? Time { get; set; }
+    public UserBrief? Operator { get; set; }
+    public string? Courier { get; set; }
+    public string? TrackingNo { get; set; }
+    public string? Note { get; set; }
+    public List<FileDto> Photos { get; set; } = new();
+    public bool CanRecord { get; set; }
+    public bool CanEdit { get; set; }
+}
+
+public class FactoryDto
+{
+    public List<FactoryNodeDto> Nodes { get; set; } = new();
 }
 
 public class OrderDetail : OrderListItem
@@ -107,7 +195,16 @@ public class OrderDetail : OrderListItem
     public string CustomerTried { get; set; } = "";
     public string SiteEnvironment { get; set; } = "";
     public string? CustomerRequest { get; set; }
+    public DateTime? PriceSetAt { get; set; }
+    public PriceSuggestionDto? PriceSuggestion { get; set; }
+    /// <summary>保留（旧客户端用）：= holdText</summary>
     public string? HoldReason { get; set; }
+    public HoldDto? Hold { get; set; }
+    public List<RequestDto> Requests { get; set; } = new();
+    public List<ParticipantDto> Participants { get; set; } = new();
+    public FactoryDto? Factory { get; set; }
+    public string? CloseBlockedReason { get; set; }
+    public List<string> CloseHints { get; set; } = new();
     public CompletionDto? Completion { get; set; }
     public OrderFilesDto Files { get; set; } = new();
     public List<PunchDto> Punches { get; set; } = new();
@@ -143,6 +240,7 @@ public class StatusLogDto
     public DateTime Time { get; set; }
     public UserBrief Actor { get; set; } = new();
     public OrderStatus ToStatus { get; set; }
+    public LogKind Kind { get; set; }
 }
 
 public class ListResult<T>

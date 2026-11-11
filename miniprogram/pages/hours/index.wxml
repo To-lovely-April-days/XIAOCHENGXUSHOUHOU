@@ -48,6 +48,7 @@
           <view wx:for="{{entries}}" wx:key="key" class="card entry" hover-class="entry-hover" data-id="{{item.orderId}}" bindtap="onEntryTap">
             <view class="entry-top">
               <text class="entry-name ellipsis">{{item.customerName}}</text>
+              <text wx:if="{{item.assist}}" class="tag tag-sm assist-tag">协助</text>
               <text class="entry-dur {{item.running ? 'red' : ''}}">{{item.dur}}</text>
             </view>
             <view class="entry-sub">{{item.orderNo}} · 工时 = 离场 − 到场<text wx:if="{{item.isSupplement}}" class="amber"> · 含主管补录</text></view>
@@ -140,7 +141,7 @@
                 <text class="day-num">{{item.day}}</text>
               </view>
               <view class="day-main">
-                <text class="day-customer ellipsis">{{item.customer}}</text>
+                <text class="day-customer ellipsis">{{item.customer}}<text wx:if="{{item.assist}}" class="day-assist"> · 协助</text></text>
                 <text class="day-note ellipsis {{item.noteClass}}">{{item.note}}</text>
               </view>
               <text class="day-dur {{item.running ? 'red' : ''}}">{{item.dur}}</text>

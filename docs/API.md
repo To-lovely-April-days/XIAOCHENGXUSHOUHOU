@@ -2,6 +2,9 @@
 
 Base URL：`{host}/api`。JSON 使用 **camelCase**；枚举一律以**字符串**传输（如 `"Pending"`）。
 
+> 当前版本 **v1.1**（价格由主管定、暂停搁置原因与审批、多人协作、返厂流程）。本文件即 v1.1 的现行契约；
+> 逐条校验文案、状态记录文字、通知、测试清单与各端改动清单见 `docs/CHANGES-v1.1.md`（两者冲突时以 CHANGES-v1.1.md 为准）。
+
 ## 0. 通用约定
 
 ### 响应包装
@@ -40,7 +43,15 @@ Base URL：`{host}/api`。JSON 使用 **camelCase**；枚举一律以**字符串
 | PunchKind | `Arrive` 到场, `Leave` 离场 |
 | RunStatus | `Normal` 正常, `Observe` 待观察, `NotRecovered` 未恢复 |
 | IssueType | `MissingPunch` 缺卡, `DistanceAbnormal` 距离异常 |
-| FileCategory | `OrderPhoto` 建单照片, `PunchPhoto` 打卡照片, `ProcessPhoto` 处理照片, `Signature` 客户签字件, `Avatar` 头像 |
+| FileCategory | `OrderPhoto` 建单照片, `PunchPhoto` 打卡照片, `ProcessPhoto` 处理照片, `Signature` 客户签字件, `Avatar` 头像, `FactoryReceivePhoto` 收货照片, `FactoryShipPhoto` 寄回照片, `FactorySignPhoto` 签收凭证 |
+| HoldReasonType | `WaitCustomer` 等客户, `WaitParts` 等备件, `WaitThirdParty` 等第三方, `Other` 其他 |
+| OrderRequestType | `Hold` 暂停申请, `AddAssistant` 协助人申请 |
+| RequestStatus | `Pending` 待审批, `Approved` 已同意, `Rejected` 已驳回, `Cancelled` 已撤销 |
+| FactoryNode | `CustomerShipped` 客户寄出, `FactoryReceived` 工厂收货, `Repairing` 检测/维修（隐含节点）, `ShippedBack` 寄回客户, `CustomerSigned` 客户签收 |
+| ParticipantRole | `Lead` 负责人, `Assistant` 协助人, `Former` 已退出（在本单有打卡但已不是负责人/协助人） |
+| LogKind | `Status` 状态流转, `Price` 价格, `Hold` 暂停, `Assist` 人员, `Factory` 返厂 |
+
+**暂停原因文字 holdText**：`Other` → 只用说明；其余 → `{类型中文}`，有说明时 `{类型中文}：{说明}`（如 `等备件：轴承预计周五到`）。
 
 ### 公共 DTO
 
@@ -76,21 +87,70 @@ Base URL：`{host}/api`。JSON 使用 **camelCase**；枚举一律以**字符串
   "deviceModel": "高压反应釜 HTR-500",
   "deviceSn": "SN2408017",
   "symptom": "升温到 180℃ 左右就不再加热，面板报 E03",
-  "price": 1800.00,             // 0 = 保内
-  "assignee": { UserBrief } | null,
+  "price": 1800.00 | null,      // 0 = 保内免费；未定价为 null；**Engineer 永远为 null**
+  "priceSet": true | false | null,   // 是否已定价；**Engineer 永远为 null**
+  "assignee": { UserBrief } | null,   // 负责人
+  "assistants": [ { UserBrief } ],    // 协助人（按添加时间），无则 []
+  "myRole": "Lead" | "Assistant" | null,          // 当前用户在本单的角色
+  "myMinutes": 120 | null,            // myRole 非 null 时：本人在本单已配对工时
+  "myOnSiteSince": "2026-11-06T10:05:00" | null,  // 本人今天在本单未离场的到场时间
+  "progressStep": 3,                  // 5 段进度：Pending=1 Accepted=2 InProgress=3 Submitted=4 Closed=5 Voided=0；OnHold=暂停前状态对应的段
+  "holdReasonType": null | "WaitParts",           // 仅 OnHold
+  "holdText": null | "等备件：轴承预计周五到",       // 仅 OnHold
+  "holdFromStatus": null | "InProgress",          // 仅 OnHold
+  "pendingRequestCount": 0,           // 待审批申请数
+  "factoryText": null | "检测/维修中",  // 仅返厂单：待客户寄出 / 客户已寄出 / 检测/维修中 / 已寄回客户 / 客户已签收
   "creator": { UserBrief },     // 建单人（销售或工程师）
   "createdAt": "2026-11-05T09:20:00",
   "claimedAt": "2026-11-05T09:48:00" | null,
   "appointmentTime": "2026-11-09T10:00:00" | null,
   "submittedAt": null,
   "closedAt": null,
-  "totalMinutes": 362,          // 累计已配对现场工时（不含正在计时）
-  "onSiteSince": "2026-11-06T10:05:00" | null,   // 今天有未离场到场时为到场时间
+  "totalMinutes": 362,          // 本单所有人累计已配对现场工时（不含正在计时）
+  "onSiteSince": "2026-11-06T10:05:00" | null,   // 任一参与人今天有未离场到场时为（最近的）到场时间
   "lastArriveTime": "2026-11-06T10:05:00" | null,
-  "issues": ["DistanceAbnormal"]
+  "issues": ["DistanceAbnormal"]   // 覆盖本单所有打卡人
 }
 ```
-前端自行把 `price` 格式化为 `¥1,800` / `保内免费`，把状态等枚举映射成中文与配色。
+前端自行把 `price` 格式化为 `¥1,800` / `保内免费` / `未定价`（`priceSet === false`），把状态等枚举映射成中文与配色。
+
+**价格可见性（硬规则）**：当前用户为 `Engineer` 时，任何接口返回的任何工单对象里 `price`、`priceSet`、`priceSetAt`、`priceSuggestion` 都是 `null`，
+`logs` 不含 `kind = "Price"` 的记录，`actions` 不含价格动作。工程师端界面任何位置不展示价格。
+
+**RequestDto**（工程师发起、主管审批的申请）
+```json
+{
+  "id": 12, "orderId": 3, "type": "Hold" | "AddAssistant", "status": "Pending",
+  "requester": { UserBrief }, "createdAt": "2026-11-06T14:00:00",
+  "reasonType": "WaitParts" | null, "reasonText": "等备件" | null,   // Hold
+  "note": "轴承预计周五到" | null,
+  "text": "等备件：轴承预计周五到" | "添加协助人 王工",                 // 可直接展示
+  "engineer": { UserBrief } | null,                                 // AddAssistant 的目标工程师
+  "decider": { UserBrief } | null, "decidedAt": null, "reply": null,
+  "canDecide": true,     // 当前用户可同意/驳回（Supervisor 且 Pending）
+  "canCancel": false     // 当前用户可撤回（本人发起且 Pending）
+}
+```
+
+**ParticipantDto**
+```json
+{ "user": { UserBrief }, "role": "Lead" | "Assistant" | "Former",
+  "totalMinutes": 362, "onSiteSince": "2026-11-06T10:05:00" | null, "missingPunch": false }
+```
+
+**FactoryDto**（仅返厂单；`nodes` 固定 5 个、固定顺序）
+```json
+{ "nodes": [ {
+    "node": "CustomerShipped", "label": "客户寄出",
+    "state": "done" | "current" | "todo" | "skipped", "recorded": true,
+    "time": "2026-11-02T10:00:00" | null, "operator": { UserBrief } | null,
+    "courier": "顺丰" | null, "trackingNo": "SF1234567890" | null, "note": null,
+    "photos": [ FileDto ],
+    "canRecord": false,    // 当前用户现在可记录（未记录过）
+    "canEdit": true        // 当前用户现在可更正（已记录过）
+  } ] }
+```
+`Repairing` 为隐含节点（`recorded=false`，不可记录）：已记工厂收货未寄回 → `current`，已寄回 → `done`，否则 `todo`。
 
 **PunchDto**
 ```json
@@ -107,8 +167,9 @@ Base URL：`{host}/api`。JSON 使用 **camelCase**；枚举一律以**字符串
 
 **StatusLogDto**
 ```json
-{ "id": 1, "text": "李工 认领 → 待启动", "time": "2026-11-05T09:48:00", "actor": { UserBrief }, "toStatus": "Accepted" }
+{ "id": 1, "text": "李工 认领 → 待启动", "time": "2026-11-05T09:48:00", "actor": { UserBrief }, "toStatus": "Accepted", "kind": "Status" }
 ```
+`kind` 为 LogKind；`Price` 类记录不返回给 Engineer。
 
 ---
 
@@ -135,7 +196,7 @@ MockMode 下 `login` 的 code 直接当作 openid 使用（`mock-` 前缀），`
 
 ### GET /api/me
 → `{ "user": { User }, "monthMinutes": 1157, "activeOrderCount": 2, "monthTripDays": 4 }`
-（`activeOrderCount`：Engineer=本人 Accepted+InProgress+OnHold 数量；Sales=本人建单且未闭环/作废数量；Supervisor=全部 Pending+Submitted 数量）
+（`activeOrderCount`：Engineer=本人参与（负责人或协助人）的 Accepted+InProgress+OnHold 数量；Sales=本人建单且未闭环/作废数量；Supervisor=全部 Pending+Submitted 数量）
 
 ### PUT /api/me/avatar
 `{ "fileId": 12 }`（先用 /api/files 上传，category=Avatar）→ `{ User }`
@@ -161,15 +222,16 @@ MockMode 下 `login` 的 code 直接当作 openid 使用（`mock-` 前缀），`
 （`remote` 计数包括 Remote 和 Factory）
 
 ### GET /api/orders/mine?group=doing|check|closed|all
-工程师本人负责的工单。doing = Accepted+InProgress+OnHold；check = Submitted；closed = Closed。按状态优先级（InProgress, Accepted, OnHold, Submitted, Closed）再按时间倒序。
+工程师本人**负责或协助**的工单（每项带 `myRole`）。doing = Accepted+InProgress+OnHold；check = Submitted；closed = Closed。按状态优先级（InProgress, Accepted, OnHold, Submitted, Closed）再按时间倒序。
 → `{ "items": [OrderListItem], "counts": { "doing": 2, "check": 0, "closed": 2, "all": 4 } }`
 
 ### GET /api/orders/created?group=all|wait|doing|check|closed
 本人创建的工单（销售首页「我提交的工单」）。wait = Pending；doing = Accepted+InProgress+OnHold；check = Submitted；closed = Closed。不含 Voided（all 也不含）。
 → `{ "items": [OrderListItem], "counts": { "all": 5, "wait": 1, "doing": 2, "check": 1, "closed": 1 } }`
 
-### GET /api/orders?status=&keyword=&issue=&assigneeId=&serviceType=&from=&to=&page=1&pageSize=20
-全部工单（Sales、Supervisor 可用；Engineer 403）。`status` 为 OrderStatus 字符串或空=全部（全部不含 Voided，`status=Voided` 可单独查）；`keyword` 模糊匹配工单号/客户/设备型号/设备编号；`issue` 为 IssueType；`from`/`to` 为创建日期 yyyy-MM-dd。
+### GET /api/orders?status=&keyword=&issue=&assigneeId=&serviceType=&priceSet=&pendingRequest=&from=&to=&page=1&pageSize=20
+全部工单（Sales、Supervisor 可用；Engineer 403）。`status` 为 OrderStatus 字符串或空=全部（全部不含 Voided，`status=Voided` 可单独查）；`keyword` 模糊匹配工单号/客户/设备型号/设备编号；`issue` 为 IssueType；`from`/`to` 为创建日期 yyyy-MM-dd；`assigneeId` 按负责人过滤；
+`priceSet=true|false` 按是否已定价过滤；`pendingRequest=true` 只返回有待审批申请的工单。
 → `{ "items": [OrderListItem], "total": 9, "page": 1, "pageSize": 20, "counts": { "all": 9, "Pending": 3, "Accepted": 1, "InProgress": 2, "OnHold": 0, "Submitted": 1, "Closed": 2 } }`
 （counts 只受 keyword 影响，不受 status 影响）
 
@@ -178,7 +240,7 @@ MockMode 下 `login` 的 code 直接当作 openid 使用（`mock-` 前缀），`
 → `[ { "customerName": "", "contactName": "", "contactPhone": "", "address": "", "latitude": 0, "longitude": 0, "deviceModel": "", "deviceSn": "", "satDate": "2024-08", "satSigned": true, "projectNo": null } ]`
 
 ### GET /api/orders/{id}
-权限：Supervisor/Sales 任意；Engineer：Pending 工单或本人负责的工单。
+权限：Supervisor/Sales 任意；Engineer：Pending 工单，或本人是负责人 / 协助人 / 建单人的工单。
 → **OrderDetail** = OrderListItem 全部字段 +
 ```json
 {
@@ -193,7 +255,21 @@ MockMode 下 `login` 的 code 直接当作 openid 使用（`mock-` 前缀），`
   "customerTried": "断电重启、检查电源线",
   "siteEnvironment": "通风橱内，220V 单相电",
   "customerRequest": null,
-  "holdReason": null,
+  "priceSetAt": "2026-11-06T09:00:00" | null,      // Engineer 为 null
+  "priceSuggestion": null | {                       // 销售最新一条价格建议；Engineer 永远为 null
+    "id": 3, "amount": 1500.00, "note": "老客户，建议优惠" | null, "by": { UserBrief },
+    "createdAt": "2026-11-06T09:30:00", "pending": true    // true = 主管尚未在此建议之后定价
+  },
+  "holdReason": null | "等备件：轴承预计周五到",      // = holdText（旧客户端兼容）
+  "hold": null | {                                  // 仅 OnHold
+    "reasonType": "WaitParts", "reasonText": "等备件", "note": "轴承预计周五到" | null, "text": "等备件：轴承预计周五到",
+    "fromStatus": "InProgress", "at": "2026-11-06T15:00:00" | null, "by": { UserBrief } | null
+  },
+  "requests": [ RequestDto ],                       // 本单全部申请（含已处理），时间正序
+  "participants": [ ParticipantDto ],               // 负责人 → 协助人 → 已退出；Pending 为 []
+  "factory": null | { FactoryDto },                 // 仅返厂单
+  "closeBlockedReason": null | "请先补录缺卡" | "请先设置服务价格（保内填 0）",   // 仅 Supervisor 且 Submitted；非 null ⇔ actions 无 close
+  "closeHints": [ "客户签收尚未记录" ],               // 仅 Supervisor 且 Submitted；不阻止闭环
   "completion": null | {
     "faultCause": "", "solution": "", "partsReplaced": "", "runStatus": "Normal",
     "submittedAt": "2026-11-06T13:50:00"
@@ -202,18 +278,22 @@ MockMode 下 `login` 的 code 直接当作 openid 使用（`mock-` 前缀），`
     "orderPhotos":   [FileDto],
     "punchPhotos":   [FileDto],
     "processPhotos": [FileDto],
-    "signatures":    [FileDto]
+    "signatures":    [FileDto],
+    "factoryPhotos": [FileDto]       // 返厂 3 类照片合并
   },
-  "punches": [PunchDto],             // 时间正序
+  "punches": [PunchDto],             // 时间正序（含所有参与人）
   "logs": [StatusLogDto],            // 时间正序
-  "issueDetails": [ { "type": "MissingPunch", "text": "11月5日 15:10 到场后未打离场卡，当天未计工时。补录后系统重新计算。", "punchId": 9, "date": "2026-11-05" } ],
-  "actions": ["claim", "appoint", "checkin", "start", "complete", "assign", "reassign", "void", "hold", "resume", "reject", "close", "supplement"]
+  "issueDetails": [ { "type": "MissingPunch", "text": "刘工 11月5日 15:10 到场后未打离场卡，当天未计工时。补录后系统重新计算。", "punchId": 9, "date": "2026-11-05", "engineer": { UserBrief } } ],
+  "actions": ["claim", "appoint", "checkin", "start", "factory", "complete", "requestHold", "requestAssistant"]
 }
 ```
-`actions` 为**当前用户**在当前状态下可执行的动作（服务端计算，前端据此显示按钮）：
-- Engineer：`claim`（Pending）；本人负责时：`appoint`（Accepted/InProgress）、`checkin`（Onsite 且 Accepted/InProgress）、`start`（非 Onsite 且 Accepted）、`complete`（InProgress）
-- Supervisor：`assign`（Pending）、`reassign`（Accepted/InProgress/OnHold）、`void`（Pending/Accepted）、`hold`（InProgress）、`resume`（OnHold）、`reject`（Submitted）、`close`（Submitted 且无 MissingPunch）、`supplement`（存在 MissingPunch）
-- Sales：`[]`
+`actions` 为**当前用户**在当前状态下可执行的动作（服务端计算，前端据此显示按钮，**不得自行推导规则**）。数组按下列固定顺序过滤：
+- Engineer：`claim`（Pending）；`appoint`（负责人，Accepted/InProgress）；`checkin`（负责人或协助人，Onsite 且 Accepted/InProgress）；`start`（负责人，**Remote** 且 Accepted）；
+  `factory`（返厂单且存在 `canRecord` 的节点）；`complete`（负责人，InProgress；返厂单还须已记录寄回客户）；`requestHold`（负责人，Accepted/InProgress，且无待审批的暂停申请）；`requestAssistant`（负责人，Accepted/InProgress）
+- Supervisor：`assign`（Pending）、`reassign`（Accepted/InProgress/OnHold）、`assistants`（Accepted/InProgress/OnHold）、`void`（Pending/Accepted）、`hold`（Accepted/InProgress）、`resume`（OnHold）、`reject`（Submitted）、
+  `close`（Submitted 且无 MissingPunch 且已定价）、`supplement`（存在 MissingPunch）、`setPrice`（非 Voided）、`factory`
+- Sales：`suggestPrice`（非 Closed/Voided）、`factory`
+- 审批看 `requests[].canDecide / canCancel`；返厂节点更正看 `factory.nodes[].canEdit`。
 
 ### POST /api/orders
 任何角色可建单。
@@ -229,11 +309,11 @@ MockMode 下 `login` 的 code 直接当作 openid 使用（`mock-` 前缀），`
   "customerTried": "断电重启、检查电源线",
   "siteEnvironment": "通风橱内，220V 单相电",
   "customerRequest": null,
-  "price": 1800,
   "photoFileIds": [12, 13]
 }
 ```
-校验：带 * 字段必填；Onsite 必须有经纬度；price ≥ 0；photoFileIds ≤ 9；contactPhone 去空格后校验 7–20 位数字/横杠。
+**没有价格字段**：新单一律「未定价」（`priceSet=false`），由主管在详情里定价。旧客户端若仍传 `price`，服务端忽略、不报错。
+校验：带 * 字段必填；Onsite 必须有经纬度；photoFileIds ≤ 9；contactPhone 去空格后校验 7–20 位数字/横杠。
 → `{ OrderDetail }`
 
 ### POST /api/orders/{id}/claim（Engineer）
@@ -242,30 +322,83 @@ Pending → Accepted，assignee = 自己。已被认领 → 40900「工单已被
 ### POST /api/orders/{id}/appointment（负责工程师）
 `{ "appointmentTime": "2026-11-09T10:00:00" }` → `{ OrderDetail }`（写状态记录「李工 预约 11月9日 10:00」）
 
-### POST /api/orders/{id}/start（负责工程师，非 Onsite，Accepted → InProgress）→ `{ OrderDetail }`
+### POST /api/orders/{id}/start（负责工程师，仅远程单，Accepted → InProgress）→ `{ OrderDetail }`
+现场单 → 40900「现场工单请到场打卡后自动开始」；返厂单 → 40900「返厂工单记录「工厂收货」后自动开始处理」；OnHold → 40900「工单已暂停搁置，恢复后才能开始处理」。
 
 ### POST /api/orders/{id}/complete（负责工程师）
 ```json
 { "faultCause": "", "solution": "", "partsReplaced": "", "runStatus": "Normal", "processPhotoIds": [21], "signaturePhotoIds": [22] }
 ```
 校验见 DESIGN §5。`processPhotoIds` / `signaturePhotoIds` 为最终全集：本单已挂载但未包含在内的旧处理照片/签字件将被移除；已挂在本单的文件（含退回改派前他人上传的）可直接沿用，其他文件须为本人上传。→ `{ OrderDetail }`
+只有负责人可提交。按顺序拦截：OnHold → 40900「工单已暂停搁置，恢复后才能提交完工」；返厂单未记录寄回客户 → 40900「返厂工单请先记录「寄回客户」再提交完工」；
+负责人本人今天在本单未离场 → 40900「请先离场打卡」；其他任何人今天在本单未离场 → 40900「{姓名}还在现场计时，请其先离场打卡后再提交完工」。
 
 ### POST /api/orders/{id}/assign（Supervisor）
-`{ "engineerId": 4 }`。Pending → Accepted；Accepted/InProgress/OnHold 时为改派（状态不变）；原负责工程师今天在本单未离场 → 40900「原负责工程师正在现场计时，请先离场打卡后再改派」。→ `{ OrderDetail }`
+`{ "engineerId": 4, "assistantIds": [5, 6] }`。Pending → Accepted；Accepted/InProgress/OnHold 时为改派（状态不变）；原负责工程师今天在本单未离场 → 40900「原负责工程师正在现场计时，请先离场打卡后再改派」。
+`assistantIds` 省略或 null = 不调整协助人；传数组（含 `[]`）= 协助人最终全集（规则同下面的 `/assistants`）。改派给当前协助人 → 该人成为负责人并从协助人中移除。→ `{ OrderDetail }`
+
+### POST /api/orders/{id}/assistants（Supervisor）
+`{ "engineerIds": [5, 6] }` 协助人最终全集（`[]` 清空）。工单须为 Accepted/InProgress/OnHold，否则 40900「工单当前为「…」，不能调整协助人」。
+校验：含负责人 → 40000「协助人不能是负责人」；不存在/停用/非工程师 → 40000「所选协助人不存在或已停用」；超过 5 人 → 40000「协助人最多 5 人」；被移除的人今天在本单未离场 → 40900「{姓名}正在现场计时，请先离场打卡后再移除」。
+状态记录（kind=Assist）：`赵主管 添加协助人 王工、刘工` / `赵主管 移除协助人 王工`。通知新增的协助人。→ `{ OrderDetail }`
+
+### POST /api/orders/{id}/assistant-requests（负责工程师）
+`{ "engineerId": 5, "note": "需要两人抬设备" }`。工单须为 Accepted/InProgress。同一目标只能有一条待审批申请。通知主管，进入主管待办。→ `{ OrderDetail }`
 
 ### POST /api/orders/{id}/void（Supervisor）`{ "reason": "" }` → `{ OrderDetail }`
-### POST /api/orders/{id}/hold（Supervisor）`{ "reason": "等待备件" }`；负责工程师今天在本单未离场 → 40900「工程师正在现场计时，请先离场打卡后再搁置」→ `{ OrderDetail }`
-### POST /api/orders/{id}/resume（Supervisor）→ `{ OrderDetail }`
+
+### POST /api/orders/{id}/hold（Supervisor，Accepted / InProgress → OnHold）
+`{ "reasonType": "WaitParts", "note": "轴承预计周五到" }`（`Other` 时 note 必填，note ≤ 200 字）。兼容旧请求体 `{ "reason": "等待备件" }` → 按 `Other` + note 处理。
+错误：40000「请选择暂停原因」/「请填写暂停说明」；负责人今天在本单未离场 → 40900「工程师正在现场计时，请先离场打卡后再搁置」；协助人未离场 → 40900「协助人{姓名}正在现场计时，请先离场打卡后再搁置」。
+记录暂停前状态；状态记录 `赵主管 标为暂停搁置 → 暂停搁置（等备件：轴承预计周五到）`。→ `{ OrderDetail }`
+
+### POST /api/orders/{id}/hold-requests（负责工程师）
+请求体同 hold。工单须为 Accepted/InProgress；每单同时只能有一条待审批的暂停申请（40900「已有待审批的暂停申请」）。状态不变，通知主管并进入主管待办。→ `{ OrderDetail }`
+
+### POST /api/orders/{id}/requests/{requestId}/approve（Supervisor）
+同意申请（暂停申请 → 工单进入 OnHold，检查与直接暂停相同；协助人申请 → 添加协助人）。已处理 → 40900「该申请已处理」；不存在 → 40400「申请不存在」。→ `{ OrderDetail }`
+### POST /api/orders/{id}/requests/{requestId}/reject（Supervisor）`{ "reply": "选填，≤200 字" }` 驳回，工单状态不变，通知申请人。→ `{ OrderDetail }`
+### POST /api/orders/{id}/requests/{requestId}/cancel（申请人本人）撤回待审批的申请。→ `{ OrderDetail }`
+工单状态 / 负责人变化导致申请失去意义时，系统自动把申请置为 `Cancelled`（规则见 CHANGES-v1.1 §3.2）。
+
+### POST /api/orders/{id}/resume（Supervisor）OnHold → 暂停前的状态（Accepted 或 InProgress；旧数据回 InProgress）→ `{ OrderDetail }`
 ### POST /api/orders/{id}/reject（Supervisor）`{ "reason": "" }`（Submitted → InProgress，退回处理中）→ `{ OrderDetail }`
-### POST /api/orders/{id}/close（Supervisor）Submitted → Closed；有 MissingPunch → 40900「请先补录缺卡」→ `{ OrderDetail }`
+### POST /api/orders/{id}/close（Supervisor）Submitted → Closed；有 MissingPunch（任何参与人）→ 40900「请先补录缺卡」；未定价 → 40900「请先设置服务价格（保内填 0）」。返厂单未记录客户签收不拦截（`closeHints` 提示）。→ `{ OrderDetail }`
+
+### POST /api/orders/{id}/price（Supervisor）
+`{ "price": 1800 }`（0 = 保内免费）。除 Voided 外任何状态都可定价 / 改价。校验：必填、≥ 0、≤ 100000000，保留 2 位小数。
+状态记录（kind=Price，工程师不可见）：`赵主管 定价 ¥1,800` / `赵主管 改价 ¥1,800 → ¥2,000`。→ `{ OrderDetail }`
+
+### POST /api/orders/{id}/price-suggestions（Sales）
+`{ "amount": 1500, "note": "老客户，建议优惠" }`（note 选填 ≤ 200 字）。工单不能是 Closed/Voided。销售不能直接定价。
+详情的 `priceSuggestion` 返回最新一条；通知主管（通知正文不含金额）并进入主管待办。→ `{ OrderDetail }`
+
+### POST /api/orders/{id}/factory-nodes（返厂流程；按节点判权）
+```json
+{ "node": "ShippedBack", "courier": "顺丰", "trackingNo": "SF1234567890", "note": "含电源线 1 根", "photoIds": [41, 42] }
+```
+| # | node | 谁可以记录 | 必填 | 允许的工单状态 | 前置 |
+|---|---|---|---|---|---|
+| 1 | `CustomerShipped` 客户寄出 | 建单人、负责人、主管 | courier、trackingNo | Pending/Accepted/InProgress/OnHold | 工厂收货尚未记录 |
+| 2 | `FactoryReceived` 工厂收货 | 负责人、主管 | photoIds ≥ 1 | Accepted/InProgress | 已记客户寄出（主管可跳过） |
+| 3 | `Repairing` 检测/维修 | 隐含，不可提交 | | | |
+| 4 | `ShippedBack` 寄回客户 | 负责人、主管 | courier、trackingNo、photoIds ≥ 1 | InProgress | 已记工厂收货 |
+| 5 | `CustomerSigned` 客户签收 | 建单人、负责人、主管 | —（photoIds、note 选填） | InProgress/OnHold/Submitted | 已记寄回客户 |
+
+- 记录工厂收货时 Accepted → InProgress（取代返厂单的「开始处理」）。完工要求节点 4；闭环不要求节点 5。返厂单不打卡。
+- 已记录的节点再次提交 = 更正（同样的人可更正，工单未闭环/作废即可；不改变状态）。
+- 照片先用 `POST /api/files` 上传，category：节点 2 `FactoryReceivePhoto`、节点 4 `FactoryShipPhoto`、节点 5 `FactorySignPhoto`；`photoIds` 为该节点照片的最终全集，每节点最多 9 张。
+- 每个节点写状态记录（kind=Factory），如 `王敏 记录客户寄出（顺丰 SF1234567890）`、`陈工 工厂收货 → 处理中`、`陈工 寄回客户（顺丰 SF…）`、`王敏 记录客户签收`。
+- 全部错误文案见 CHANGES-v1.1 §3.4。→ `{ OrderDetail }`
 
 ---
 
 ## 5. 打卡 `/api/punches`（Engineer）
 
 ### GET /api/punches/context?orderId=3
-`orderId` 可省略（底部「打卡」按钮进入）：优先取今天有未离场到场的工单；否则取本人 InProgress 的现场单；否则取 Accepted 的现场单中预约时间最早的（无预约排最后，再按认领时间；与首页 next 规则一致）；都没有 → `data: null`。
-工单为 Accepted/InProgress 时可打卡；OnHold/Voided 时仅允许为本单今天未离场的到场卡补打离场卡，其余 → blockedReason「工单当前为「…」，不能打卡」/ POST 返回 40900。
+负责人和协助人都可以打卡，所有规则按工程师本人计算（各打各的卡、各算各的工时）。带 `orderId` 时本人须是该单负责人或协助人，否则 40300「只有本单的负责人或协助人可以打卡」。
+`orderId` 可省略（底部「打卡」按钮进入），在本人参与（负责或协助）的现场单中选：优先取今天有未离场到场的工单；否则取 InProgress 的现场单；否则取 Accepted 的现场单中预约时间最早的（无预约排最后，再按认领时间；与首页 next 规则一致）；都没有 → `data: null`。
+工单为 Accepted/InProgress 时可打卡；OnHold/Voided 时仅允许为本单今天未离场的到场卡补打离场卡，其余 → blockedReason / POST 40900：OnHold「工单已暂停搁置，恢复后才能打卡」，其他状态「工单当前为「…」，不能打卡」。
 →
 ```json
 {
@@ -276,7 +409,8 @@ Pending → Accepted，assignee = 自己。已被认领 → 40900「工单已被
   "blockedReason": null | "请先在〈南京某检测中心〉离场打卡",  // 不为 null 时前端禁用拍照按钮并展示
   "rangeMeters": 1000,
   "serverTime": "2026-11-06T13:42:10",
-  "engineerName": "李工"
+  "engineerName": "李工",
+  "myRole": "Lead" | "Assistant"
 }
 ```
 
@@ -284,7 +418,7 @@ Pending → Accepted，assignee = 自己。已被认领 → 40900「工单已被
 ```json
 { "orderId": 3, "kind": "Leave", "latitude": 31.301, "longitude": 120.721, "address": "江苏省苏州市...", "photoFileId": 30 }
 ```
-`kind` 为前端看到的类型；服务端重新判断，不一致 → 40900「打卡状态已变化，请刷新」。首次到场使 Accepted → InProgress（写状态记录）。
+`kind` 为前端看到的类型；服务端重新判断，不一致 → 40900「打卡状态已变化，请刷新」。任何参与人的首次到场使 Accepted → InProgress（写状态记录 `{姓名} 首次到场 → 处理中`）。
 → `{ "punch": { PunchDto }, "order": { OrderListItem } }`
 
 ---
@@ -304,10 +438,12 @@ Pending → Accepted，assignee = 自己。已被认领 → 40900「工单已被
   "tripDay": 2,                       // 出差第 N 天（今天无到场为 0）
   "entries": [                        // 今日每一对，正在计时的 leave 为 null
     { "orderId": 3, "orderNo": "SH-20261105-003", "customerName": "江苏某化工研究院",
-      "arrive": { PunchDto }, "leave": { PunchDto } | null, "minutes": 0 | 145, "isSupplement": false }
+      "arrive": { PunchDto }, "leave": { PunchDto } | null, "minutes": 0 | 145, "isSupplement": false,
+      "role": "Lead" | "Assistant" | "Former" }   // 此工程师当前在该工单的角色
   ]
 }
 ```
+工时按打卡人归属：协助人的工时计入协助人本人。
 
 ### GET /api/hours/month?year=2026&month=11
 →
@@ -319,7 +455,7 @@ Pending → Accepted，assignee = 自己。已被认领 → 40900「工单已被
     { "date": "2026-11-06", "minutes": 217, "running": true, "hasSupplement": false,
       "entries": [ { "orderId": 3, "orderNo": "", "customerName": "江苏某化工研究院",
                      "arriveTime": "2026-11-06T10:05:00", "leaveTime": null, "minutes": 0,
-                     "isSupplement": false, "supplementReason": null, "missing": false } ] }
+                     "isSupplement": false, "supplementReason": null, "missing": false, "role": "Lead" } ] }
   ]
 }
 ```
@@ -340,9 +476,11 @@ Pending → Accepted，assignee = 自己。已被认领 → 40900「工单已被
   "upcoming": [ { OrderListItem } ],      // 除 current/next 外本人 Accepted 的单，按预约时间
   "hall": { "count": 3, "urgentCount": 1, "items": [ OrderListItem 最多 2 条 ] },
   "recentDone": [ { OrderListItem } ],    // 本人 Submitted/Closed 最近 2 条
+  "onHold": [ { OrderListItem } ],        // 本人参与的暂停搁置工单（按暂停时间倒序）
   "monthMinutes": 1157
 }
 ```
+「本人」的工单 = 本人是负责人**或协助人**的工单（每项带 `myRole`；协助人不能提交完工 / 开始处理）。所有工单项的 `price`、`priceSet` 为 null。
 state 规则：有 InProgress 单 → working；否则有 Accepted 单 → next；否则 idle。
 
 ### GET /api/home/supervisor
@@ -356,32 +494,40 @@ state 规则：有 InProgress 单 → working；否则有 Accepted 单 → next�
     { "type": "Unassigned", "orderId": 2, "title": "无锡某制药企业", "urgent": true, "subtitle": "待认领 · 已发布 3 小时，暂无人认领" },
     { "type": "Submitted", "orderId": 7, "title": "合肥某研究所", "subtitle": "刘工 11月5日提交完工，资料已上传" },
     { "type": "MissingPunch", "orderId": 7, "title": "刘工 · 缺离场卡", "subtitle": "11月5日 合肥某研究所，当天未计工时" },
-    { "type": "DistanceAbnormal", "orderId": 5, "title": "陈工 · 打卡距离异常", "subtitle": "南京某检测中心 13:00 到场，距客户 2.4 km" }
+    { "type": "DistanceAbnormal", "orderId": 5, "title": "陈工 · 打卡距离异常", "subtitle": "南京某检测中心 13:00 到场，距客户 2.4 km" },
+    { "type": "HoldRequest", "orderId": 3, "requestId": 12, "title": "江苏某化工研究院", "subtitle": "李工 申请暂停 · 等备件：轴承预计周五到" },
+    { "type": "AssistantRequest", "orderId": 3, "requestId": 13, "title": "江苏某化工研究院", "subtitle": "李工 申请添加协助人 王工" },
+    { "type": "PriceSuggestion", "orderId": 2, "requestId": null, "title": "无锡某制药企业", "urgent": true, "subtitle": "王敏 建议价格 ¥1,500" }
   ]
 }
 ```
-Unassigned 只列：紧急的 Pending，或发布超过 2 小时的 Pending。DistanceAbnormal 只列最近 3 天的。
+todos 的固定顺序：HoldRequest → AssistantRequest → Unassigned → Submitted → PriceSuggestion → MissingPunch → DistanceAbnormal。每项都有 `requestId`（非申请类为 null）。
+Unassigned 只列：紧急的 Pending，或发布超过 2 小时的 Pending。DistanceAbnormal 只列最近 3 天的。HoldRequest / AssistantRequest 列全部待审批申请。
+PriceSuggestion 列「最新价格建议尚未被主管处理」且未闭环未作废的工单。Submitted 类在工单未定价时副标题末尾追加「，尚未定价」。缺卡、距离异常覆盖所有参与人。
 
-### GET /api/engineers（Supervisor）
-指派面板用。
-→ `[ { "user": { UserBrief }, "doingCount": 1, "acceptedCount": 1, "submittedCount": 0, "onSiteNow": true, "loadText": "处理中 1 单、待启动 1 单 · 苏州" } ]`
-loadText 规则：无任何进行中 → 「今日空闲」；否则拼接「处理中 N 单」「待启动 N 单」「待验收 N 单」，用「、」连接；若今天有到场打卡，追加「 · {最近到场工单城市}」，否则若无进行中则追加「 · 今日未出差」。
+### GET /api/engineers（Supervisor、Engineer）
+指派面板 / 选择协助人用。
+→ `[ { "user": { UserBrief }, "doingCount": 1, "acceptedCount": 1, "submittedCount": 0, "assistCount": 1, "onSiteNow": true, "loadText": "处理中 1 单、待启动 1 单、协助 1 单 · 苏州" } ]`
+（doing/accepted/submitted 只数作为负责人的工单；`assistCount` = 作为协助人参与的 Accepted/InProgress/OnHold 工单数。）
+loadText 规则：无任何进行中 → 「今日空闲」；否则拼接「处理中 N 单」「待启动 N 单」「待验收 N 单」「协助 N 单」，用「、」连接；若今天有到场打卡，追加「 · {最近到场工单城市}」，否则若无进行中则追加「 · 今日未出差」。
 
 ---
 
 ## 8. 主管后台 `/api/admin/*`（Supervisor）
 
 ### GET /api/admin/overview
-→ `{ "pending": 3, "urgentPending": 1, "inProgress": 2, "onSiteEngineers": 2, "submitted": 1, "closedThisWeek": 6, "weekMinutes": 5388, "updatedAt": "..." }`
+→ `{ "pending": 3, "urgentPending": 1, "inProgress": 2, "onSiteEngineers": 2, "submitted": 1, "closedThisWeek": 6, "weekMinutes": 5388, "onHold": 1, "pendingRequests": 2, "unpriced": 3, "priceSuggestions": 1, "updatedAt": "..." }`
+（`pendingRequests` 待审批申请数；`unpriced` 未定价且未作废的工单数；`priceSuggestions` 有未处理价格建议的工单数）
 
 ### POST /api/admin/punches/supplement
 `{ "orderId": 7, "arrivePunchId": 9, "kind": "Leave", "time": "2026-11-05T18:20:00", "reason": "手机电量耗尽，工程师电话确认约 18:20 离场" }`
-校验：reason 必填；Leave 时间必须晚于对应到场且同一天；→ `{ OrderDetail }`（写状态记录「赵主管 补录离场 18:20」）
+校验：reason 必填；Leave 时间必须晚于对应到场且同一天；→ `{ OrderDetail }`（写状态记录「赵主管 补录离场 18:20」；被补录人不是当前负责人时为「赵主管 补录离场 18:20（王工）」）。协助人的缺卡同样用此接口补录。
 
 ### GET /api/admin/export/orders?from=&to=&status=
-返回 xlsx（`Content-Disposition: attachment`）。列与 SOP 进度台账一致：项目编号、工单号、客户全称、设备型号、设备编号、产品阶段、故障描述、故障发生时间、报修人、报修电话、维修类型、处理人、处理时间(首次到场)、解决措施、进度状态、是否收费、服务价格、现场工时(小时,1 位小数)、验收结果(运行状况)、客户签字(有/无)、建单人、建单时间。
+返回 xlsx（`Content-Disposition: attachment`）。列与 SOP 进度台账一致：项目编号、工单号、客户全称、设备型号、设备编号、产品阶段、故障描述、故障发生时间、报修人、报修电话、维修类型、处理人(负责人)、处理时间(首次到场)、解决措施、进度状态、是否收费、服务价格、现场工时(小时,1 位小数，所有人合计)、验收结果(运行状况)、客户签字(有/无)、建单人、建单时间，
+v1.1 在最后追加：协助人、人员工时（`李工 6.0h；王工 3.5h`）、暂停原因、返厂进度、寄回单号。未定价的工单「是否收费」「服务价格」两列都写 `未定价`。
 ### GET /api/admin/export/hours?year=&month=
-xlsx：工程师、日期、工单号、客户、到场、离场、工时(小时,1 位小数)、是否补录、补录原因。
+xlsx：工程师、日期、工单号、客户、到场、离场、工时(小时,1 位小数)、是否补录、补录原因、本单角色（负责人 / 协助人 / 已退出）。每人每对打卡一行，协助人的工时在协助人名下。
 
 ### 账号管理
 - GET /api/admin/employees → `[ { "id","name","phone","role","roleName","department","enabled","bound": true,"avatarUrl" } ]`
@@ -439,7 +585,7 @@ PC 后台为纯静态网页，由后端托管在 `GET /admin/`（`wwwroot/admin/
 `running` 的时长不计入 totalMinutes（与导出一致）。
 
 ### 已有接口在后台的用法（无需新增）
-- 工单列表：`GET /api/orders`（status/keyword/issue/assigneeId/from/to/page/pageSize），`issue=MissingPunch|DistanceAbnormal`；「本周」= from 本周一 to 今天。
-- 概况：`GET /api/admin/overview`；详情抽屉：`GET /api/orders/{id}`；操作：assign/void/hold/resume/reject/close、`POST /api/admin/punches/supplement`。
-- 新建工单：`POST /api/orders`（PC 端没有地图选点，手工填写地址与经纬度，现场单经纬度必填）。
+- 工单列表：`GET /api/orders`（status/keyword/issue/assigneeId/priceSet/pendingRequest/from/to/page/pageSize），`issue=MissingPunch|DistanceAbnormal`；「本周」= from 本周一 to 今天；快捷筛选「待审批申请」= `pendingRequest=true`，「未定价」= `priceSet=false`。
+- 概况：`GET /api/admin/overview`；详情抽屉：`GET /api/orders/{id}`；操作：assign（含协助人）/assistants/void/hold/resume/reject/close/price、申请审批 `requests/{requestId}/approve|reject`、返厂节点 `factory-nodes`、`POST /api/admin/punches/supplement`。
+- 新建工单：`POST /api/orders`（PC 端没有地图选点，手工填写地址与经纬度，现场单经纬度必填；没有价格字段）。
 - 工程师列表：`GET /api/engineers`；账号：`/api/admin/employees*`；导出：`/api/admin/export/orders|hours`（需带 Authorization，前端用 fetch → blob 下载）。

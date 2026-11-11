@@ -1,6 +1,6 @@
 // 工单（#/orders）——原型 16 主体：本周概况 + 状态 tab + 筛选 + 工单表格 + 右侧详情抽屉。
 // 路由 query（均可选）：
-//   quick=missing|distance|submitted  侧栏「待处理」快捷筛选（见 enums.QUICK_FILTERS）
+//   quick=missing|distance|submitted|requests|unpriced  侧栏「待处理」快捷筛选（见 enums.QUICK_FILTERS）
 //   status=<OrderStatus>              状态 tab（'' = 全部，不含已作废）
 //   keyword=<string>                  搜索工单号/客户/设备
 //   assigneeId=<id>                   处理人
@@ -92,6 +92,14 @@ export default {
       return (this.quick && this.quick.query.status) || '';
     },
     quickIssue() { return (this.quick && this.quick.query.issue) || ''; },
+    /** v1.1 快捷筛选：待审批申请（pendingRequest=true）、未定价（priceSet=false） */
+    quickExtra() {
+      const qq = (this.quick && this.quick.query) || {};
+      return {
+        pendingRequest: qq.pendingRequest === true ? true : '',
+        priceSet: qq.priceSet === true || qq.priceSet === false ? qq.priceSet : '',
+      };
+    },
     /** 'MissingPunch' | 'DistanceAbnormal' | 'any'（两种合并）| '' */
     issueMode() {
       if (this.quickIssue) return this.quickIssue;
@@ -115,6 +123,8 @@ export default {
         assigneeId: this.assigneeId || '',
         from: this.dateRange.from,
         to: this.dateRange.to,
+        pendingRequest: this.quickExtra.pendingRequest,
+        priceSet: this.quickExtra.priceSet,
       };
     },
     currentListKey() {
@@ -152,6 +162,21 @@ export default {
         { label: '本周现场工时', value: o ? fmtHours(o.weekMinutes) : '—', note: '小时' },
       ];
     },
+    /** 概况条第二行（v1.1）：暂停搁置 / 待审批申请 / 未定价 / 价格建议。可点的项跳到对应筛选 */
+    extraStats() {
+      const o = this.overview;
+      const n = (x) => (o && x !== undefined && x !== null ? Number(x) : null);
+      return [
+        { key: 'onHold', label: '暂停搁置', value: n(o && o.onHold), tone: '', active: !this.quick && this.status === 'OnHold',
+          title: '查看暂停搁置的工单' },
+        { key: 'requests', label: '待审批申请', value: n(o && o.pendingRequests), tone: 'warn', active: this.q.quick === 'requests',
+          title: '工程师提交的暂停 / 协助人申请，点击查看相关工单' },
+        { key: 'unpriced', label: '未定价', value: n(o && o.unpriced), tone: 'danger', active: this.q.quick === 'unpriced',
+          title: '尚未定价的工单（不含已作废），闭环前必须定价' },
+        { key: 'priceSuggestions', label: '价格建议', value: n(o && o.priceSuggestions), tone: 'warn', active: false, static: true,
+          title: '销售提交了价格建议、主管尚未定价的工单数' },
+      ];
+    },
     updatedText() {
       return this.overview && this.overview.updatedAt ? fmtMDHM(this.overview.updatedAt) : '—';
     },
@@ -165,8 +190,16 @@ export default {
         urgent: o.urgency === 'Urgent',
         issues: o.issues || [],
         type: label(SERVICE_TYPE, o.serviceType),
-        price: fmtPrice(o.price),
-        warranty: isWarranty(o.price),
+        factoryText: o.serviceType === 'Factory' ? (o.factoryText || '') : '',
+        assistants: o.assistants || [],
+        assistTitle: (o.assistants || []).length ? '协助人：' + o.assistants.map(u => u.name).join('、') : '',
+        held: o.status === 'OnHold',
+        holdLine: o.status === 'OnHold' ? '暂停搁置' + (o.holdText ? ' · ' + o.holdText : '') : '',
+        pendingReq: (o.pendingRequestCount || 0) > 0,
+        reqTitle: `有 ${o.pendingRequestCount || 0} 条申请待审批`,
+        price: fmtPrice(o.price, { priceSet: o.priceSet }),
+        unpriced: o.priceSet === false,
+        warranty: isWarranty(o.price, o.priceSet),
         hours: this.rowHours(o),
         selected: o.id === this.selectedId,
         checked: !!this.checked[o.id],
@@ -316,6 +349,11 @@ export default {
       }
     },
     goPage(p) { updateQuery({ page: p > 1 ? p : null }); },
+    pickExtra(s) {
+      if (s.static) return;
+      if (s.key === 'onHold') updateQuery({ quick: null, status: s.active ? '' : 'OnHold', page: null });
+      else updateQuery({ quick: s.active ? null : s.key, status: null, page: null });
+    },
 
     // ------------------------------------------------ 选择 / 抽屉
     toggleCheck(o) { this.checked = Object.assign({}, this.checked, { [o.id]: !this.checked[o.id] }); },
@@ -374,6 +412,15 @@ export default {
           <span class="stat-note" :class="{ danger: s.danger }">{{ s.note }}</span>
         </div>
       </div>
+      <div class="orders-stats-extra" aria-label="待跟进事项">
+        <template v-for="s in extraStats" :key="s.key">
+          <span v-if="s.static" class="orders-extra" :class="[s.tone && s.value ? 'is-' + s.tone : '']" :title="s.title">
+            {{ s.label }} <b class="num">{{ s.value === null ? '—' : s.value }}</b></span>
+          <button v-else type="button" class="orders-extra orders-extra-btn" :class="[s.tone && s.value ? 'is-' + s.tone : '', { active: s.active }]"
+                  :aria-pressed="s.active ? 'true' : 'false'" :title="s.title" @click="pickExtra(s)">
+            {{ s.label }} <b class="num">{{ s.value === null ? '—' : s.value }}</b></button>
+        </template>
+      </div>
       <div v-if="overviewError" class="orders-stats-error">
         <Icon name="alert" :size="14" />概况加载失败：{{ overviewError }}
         <button type="button" class="btn-link" @click="loadOverview">重试</button>
@@ -424,7 +471,7 @@ export default {
         </div>
       </div>
 
-      <div class="grid-table" role="table" aria-label="工单" :aria-busy="listLoading ? 'true' : 'false'">
+      <div class="grid-table orders-grid" role="table" aria-label="工单" :aria-busy="listLoading ? 'true' : 'false'">
         <div class="grid-head" role="row">
           <span role="columnheader">
             <span class="checkbox-box orders-check" :class="{ on: allChecked }" role="checkbox"
@@ -435,7 +482,7 @@ export default {
           <span role="columnheader">工单号</span>
           <span role="columnheader">客户 / 设备</span>
           <span role="columnheader">类型</span>
-          <span role="columnheader">处理人</span>
+          <span role="columnheader">负责人</span>
           <span role="columnheader">状态</span>
           <span role="columnheader" class="text-right">价格</span>
           <span role="columnheader" class="text-right">现场工时</span>
@@ -461,16 +508,21 @@ export default {
                 <span class="cell-title-text">{{ r.customer }}</span>
                 <Tag v-if="r.urgent" tone="urgent">紧急</Tag>
                 <IssueTag v-for="t in r.issues" :key="t" :type="t" />
+                <Tag v-if="r.pendingReq" tone="warn" :title="r.reqTitle">待审批</Tag>
               </span>
               <span class="cell-sub">{{ r.device }}</span>
             </span>
-            <span role="cell" class="orders-type">{{ r.type }}</span>
+            <span role="cell" class="orders-type">{{ r.type }}<span v-if="r.factoryText" class="cell-sub" :title="'返厂进度：' + r.factoryText">{{ r.factoryText }}</span></span>
             <span role="cell" class="cell-user" :class="{ unassigned: !r.o.assignee }">
               <Avatar v-if="r.o.assignee" :user="r.o.assignee" :size="20" />
               <span class="ellipsis">{{ r.o.assignee ? r.o.assignee.name : '未分配' }}</span>
+              <span v-if="r.assistants.length" class="orders-plus num" :title="r.assistTitle">+{{ r.assistants.length }}</span>
             </span>
-            <span role="cell"><StatusDot :status="r.o.status" /></span>
-            <span role="cell" class="cell-num orders-price" :class="{ 'text-success': r.warranty }">{{ r.price }}</span>
+            <span role="cell">
+              <span v-if="r.held" class="status orders-hold" :title="r.holdLine"><span class="dot orders-hold-dot"></span><span class="ellipsis">{{ r.holdLine }}</span></span>
+              <StatusDot v-else :status="r.o.status" />
+            </span>
+            <span role="cell" class="cell-num orders-price" :class="{ 'text-success': r.warranty, 'text-danger': r.unpriced }">{{ r.price }}</span>
             <span role="cell" class="cell-num">{{ r.hours }}</span>
           </div>
         </div>

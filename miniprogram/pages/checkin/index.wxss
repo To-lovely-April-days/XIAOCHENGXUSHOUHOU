@@ -141,3 +141,11 @@ page { background: #000000; }
   padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
   text-align: center; font-size: 24rpx; color: #9A9EA6;
 }
+
+/* v1.1：协助人标签（取景框右上角） */
+.ck-assist {
+  position: absolute; z-index: 2; right: 32rpx; top: 32rpx;
+  height: 56rpx; padding: 0 24rpx; border-radius: 28rpx;
+  background: rgba(0, 0, 0, 0.55); color: #FFFFFF; font-size: 26rpx; font-weight: 600;
+  display: inline-flex; align-items: center;
+}

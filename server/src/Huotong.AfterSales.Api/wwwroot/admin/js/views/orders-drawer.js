@@ -1,10 +1,14 @@
-// 工单详情抽屉（原型 16 右侧）：基本信息、异常警示框 + 补录、打卡记录、状态记录、底部操作。
-// 底部按钮由 detail.actions 驱动（服务端计算），按原型映射排列。
+// 工单详情抽屉（原型 16 右侧）：进度条、基本信息与定价、暂停提示、待审批申请、异常警示框 + 补录、
+// 处理人员（按人工时）、返厂流程时间线、打卡记录、状态记录、底部操作。
+// 所有可执行动作都由服务端计算：detail.actions、requests[].canDecide、factory.nodes[].canRecord / canEdit，这里不推导规则。
 import * as api from '../api.js';
 import { toast, toastError, confirm, preview } from '../ui.js';
 import { fmtHM, fmtPrice, fmtMD, fmtMDHM, fmtTime, fmtDistance, isWarranty, parseTime, toApiDate, pad2 } from '../format.js';
-import { ORDER_STATUS, SERVICE_TYPE, PUNCH_KIND, ORDER_ACTIONS, label } from '../enums.js';
+import { ORDER_STATUS, SERVICE_TYPE, PUNCH_KIND, ORDER_ACTIONS, PROGRESS_STEPS, REQUEST_TYPE, FACTORY_NODE, PARTICIPANT_ROLE, label } from '../enums.js';
 import OrdersAssignModal from './orders-assign.js';
+import OrdersHoldModal from './orders-hold.js';
+import OrdersPriceModal from './orders-price.js';
+import OrdersFactoryModal from './orders-factory.js';
 
 /**
  * 原型按状态的按钮映射。每项：
@@ -13,16 +17,24 @@ import OrdersAssignModal from './orders-assign.js';
  *   fallbackDisabled  action 不在 actions 中时仍显示为禁用按钮，tip 为提示
  */
 const LAYOUT = {
-  Pending: [{ action: 'void', kind: 'secondary' }, { action: 'assign', kind: 'primary' }],
-  Accepted: [{ action: 'void', kind: 'secondary' }, { action: 'reassign', kind: 'primary' }],
+  Pending: [{ action: 'void', kind: 'secondary' }, { action: 'factory', kind: 'secondary' }, { action: 'assign', kind: 'primary' }],
+  Accepted: [
+    { action: 'void', kind: 'secondary' },
+    { action: 'hold', kind: 'secondary' },
+    { action: 'factory', kind: 'secondary' },
+    { action: 'reassign', kind: 'primary' },
+  ],
   InProgress: [
     { action: 'hold', kind: 'secondary' },
     { action: 'reassign', kind: 'secondary' },
+    { action: 'factory', kind: 'secondary' },
     { action: 'close', kind: 'primary', fallbackDisabled: '工程师提交完工后才能验收' },
   ],
-  OnHold: [{ action: 'resume', kind: 'primary' }, { action: 'reassign', kind: 'secondary' }],
+  OnHold: [{ action: 'reassign', kind: 'secondary' }, { action: 'factory', kind: 'secondary' }, { action: 'resume', kind: 'primary' }],
   Submitted: [
     { action: 'reject', kind: 'secondary' },
+    { action: 'factory', kind: 'secondary' },
+    // 禁用时的提示取服务端的 closeBlockedReason（缺卡 / 未定价）
     { action: 'close', kind: 'primary', fallbackDisabled: '请先补录缺卡' },
   ],
   Closed: [{ action: 'export', kind: 'secondary', label: '导出本单', always: true }],
@@ -31,7 +43,7 @@ const LAYOUT = {
 
 export default {
   name: 'OrdersDrawer',
-  components: { OrdersAssignModal },
+  components: { OrdersAssignModal, OrdersHoldModal, OrdersPriceModal, OrdersFactoryModal },
   props: {
     orderId: { type: Number, required: true },
     serverOffset: { type: Number, default: 0 },
@@ -47,6 +59,11 @@ export default {
       busy: '', // 正在执行的 action
       forms: {}, // 补录表单：key = 到场打卡 id
       assignOpen: false,
+      assignMode: 'assign', // 'assign' | 'assistants'
+      holdOpen: false,
+      priceOpen: false,
+      priceInitial: null, // 打开定价弹窗时预填的金额（采用建议）
+      factoryNode: null, // 正在记录 / 更正的返厂节点（FactoryDto.nodes 项）
     };
   },
   computed: {
@@ -57,10 +74,51 @@ export default {
       if (!d) return '';
       return [d.deviceModel, d.deviceSn, label(SERVICE_TYPE, d.serviceType)].filter(Boolean).join(' · ');
     },
+    actions() { return (this.d && this.d.actions) || []; },
+    onsite() { return !!this.d && this.d.serviceType === 'Onsite'; },
+    /** 5 段进度条：点亮段数用服务端 progressStep；暂停时第 progressStep 段显示暂停样式 */
+    segments() {
+      const d = this.d;
+      const step = d ? (Number(d.progressStep) || 0) : 0;
+      const held = !!d && d.status === 'OnHold';
+      return PROGRESS_STEPS.map((text, i) => {
+        const n = i + 1;
+        const paused = held && n === step;
+        return { key: n, label: paused ? '暂停' : text, title: text, on: n <= step && !paused, paused, current: n === step && !held };
+      });
+    },
+    progressLabel() {
+      const d = this.d;
+      if (!d) return '';
+      return '进度：' + this.statusMeta.label + (this.holdText ? '，' + this.holdText : '');
+    },
+    holdText() {
+      const d = this.d;
+      if (!d || d.status !== 'OnHold') return '';
+      return d.holdText || (d.hold && d.hold.text) || d.holdReason || '';
+    },
+    /** 暂停提示条：原因 + 暂停人、时间、恢复后回到的状态 */
+    holdInfo() {
+      const d = this.d;
+      if (!d || d.status !== 'OnHold') return null;
+      const h = d.hold || {};
+      const from = label(ORDER_STATUS, h.fromStatus || d.holdFromStatus || 'InProgress');
+      const who = [h.by && h.by.name, h.at ? fmtMDHM(h.at) : ''].filter(Boolean).join(' ');
+      return { text: this.holdText || '其他', sub: (who ? who + ' 暂停，' : '') + `恢复后回到「${from}」`, from };
+    },
+    /** 各参与人今天未离场的到场时间：engineerId → 时间串 */
+    onSiteMap() {
+      const d = this.d;
+      const map = {};
+      if (!d) return map;
+      (d.participants || []).forEach(p => { if (p.onSiteSince && p.user) map[p.user.id] = p.onSiteSince; });
+      // 旧数据 / 无 participants 时退回到工单级的 onSiteSince（归负责人）
+      if (!Object.keys(map).length && d.onSiteSince && d.assignee) map[d.assignee.id] = d.onSiteSince;
+      return map;
+    },
+    /** 所有人正在计时的分钟数合计（人·分钟） */
     runningMinutes() {
-      const since = this.d && parseTime(this.d.onSiteSince);
-      if (!since) return 0;
-      return Math.max(0, Math.floor((this.nowTs + this.serverOffset - since.getTime()) / 60000));
+      return Object.keys(this.onSiteMap).reduce((sum, k) => sum + this.minutesSince(this.onSiteMap[k]), 0);
     },
     hoursText() {
       const d = this.d;
@@ -69,8 +127,88 @@ export default {
       if (!m && !d.onSiteSince && !(d.punches || []).length) return '—';
       return fmtHM(m);
     },
-    priceText() { return this.d ? fmtPrice(this.d.price, { free: true }) : ''; },
-    warranty() { return this.d ? isWarranty(this.d.price) : false; },
+    unpriced() { return !!this.d && this.d.priceSet === false; },
+    priceText() { return this.d ? fmtPrice(this.d.price, { free: true, priceSet: this.d.priceSet }) : ''; },
+    warranty() { return this.d ? isWarranty(this.d.price, this.d.priceSet) : false; },
+    canSetPrice() { return this.actions.includes('setPrice'); },
+    /** 销售最新的价格建议 */
+    suggestion() {
+      const s = this.d && this.d.priceSuggestion;
+      if (!s) return null;
+      return {
+        amount: s.amount,
+        who: (s.by && s.by.name) || '销售',
+        money: fmtPrice(s.amount, { free: true }),
+        note: s.note || '',
+        time: fmtMDHM(s.createdAt),
+        pending: !!s.pending,
+      };
+    },
+    /** 待审批的申请（暂停 / 协助人） */
+    pendingRequests() {
+      return ((this.d && this.d.requests) || []).filter(r => r.status === 'Pending').map(r => ({
+        r,
+        key: r.id,
+        title: label(REQUEST_TYPE, r.type, '申请'),
+        who: (r.requester && r.requester.name) || '',
+        text: r.text || '',
+        time: fmtMDHM(r.createdAt),
+        canDecide: !!r.canDecide,
+        busy: this.busy === 'req' + r.id,
+      }));
+    },
+    canAssistants() { return this.actions.includes('assistants'); },
+    /** 处理人员：负责人 → 协助人 → 已退出，每人各自的工时 */
+    people() {
+      const d = this.d;
+      if (!d) return [];
+      return (d.participants || []).map((p, i) => {
+        const running = p.onSiteSince ? this.minutesSince(p.onSiteSince) : 0;
+        const m = (p.totalMinutes || 0) + running;
+        return {
+          key: (p.user && p.user.id) || 'p' + i,
+          user: p.user,
+          name: (p.user && p.user.name) || '—',
+          role: p.role,
+          roleLabel: label(PARTICIPANT_ROLE, p.role),
+          roleTone: p.role === 'Lead' ? 'dark' : 'neutral',
+          hours: this.onsite ? ((m || p.onSiteSince) ? fmtHM(m) : '—') : '—',
+          onSite: !!p.onSiteSince,
+          missing: !!p.missingPunch,
+        };
+      });
+    },
+    multiPeople() { return this.people.length > 1; },
+    /** 返厂 5 节点时间线 */
+    factoryNodes() {
+      const f = this.d && this.d.factory;
+      if (!f) return [];
+      return (f.nodes || []).map(n => {
+        const meta = FACTORY_NODE[n.node] || {};
+        const implicit = n.node === 'Repairing';
+        const who = [n.operator && n.operator.name, !implicit && n.time ? fmtMDHM(n.time) : ''].filter(Boolean).join(' · ');
+        let sub = who;
+        if (implicit) sub = n.state === 'current' ? '工厂检测/维修中，寄回后结束' : (n.state === 'done' ? '已完成' : '');
+        else if (n.state === 'skipped') sub = '未记录，主管已直接记录工厂收货';
+        return {
+          n,
+          key: n.node,
+          label: n.label || meta.label || n.node,
+          state: n.state || 'todo',
+          skipped: n.state === 'skipped',
+          sub,
+          courier: n.courier || '',
+          trackingNo: n.trackingNo || '',
+          note: n.note || '',
+          photos: (n.photos || []).filter(p => p && p.url),
+          canRecord: !!n.canRecord,
+          canEdit: !!n.canEdit,
+          actionLabel: meta.action || '记录',
+        };
+      });
+    },
+    /** 下一个可记录的返厂节点（底部「返厂」按钮用） */
+    nextFactory() { return this.factoryNodes.find(x => x.canRecord) || null; },
     creatorLabel() {
       const c = this.d && this.d.creator;
       return c && c.role && c.role !== 'Sales' ? '建单人' : '销售';
@@ -107,16 +245,17 @@ export default {
           if (p.outOfRange) { note += ' · 超出范围'; tone = 'warn'; }
         }
         if (p.kind === 'Leave' && p.pairMinutes !== null && p.pairMinutes !== undefined) dur = fmtHM(p.pairMinutes);
-        const running = p.kind === 'Arrive' && d.onSiteSince && p.time === d.onSiteSince;
+        const since = p.engineer ? this.onSiteMap[p.engineer.id] : null;
+        const running = p.kind === 'Arrive' && !!since && p.time === since;
         if (running) {
           note = (note ? note + ' · ' : '') + '现场计时中';
-          dur = fmtHM(this.runningMinutes);
+          dur = fmtHM(this.minutesSince(since));
         }
         rows.push({
           key: 'p' + p.id,
           time: fmtMDHM(p.time),
           kind: label(PUNCH_KIND, p.kind),
-          who: p.engineer && d.assignee && p.engineer.id !== d.assignee.id ? p.engineer.name : '',
+          who: p.engineer ? p.engineer.name : '',
           note, tone, dur,
           url, index: url ? urls.indexOf(url) : -1,
           photoLabel: label(PUNCH_KIND, p.kind) + '打卡照片 ' + fmtMDHM(p.time),
@@ -145,15 +284,21 @@ export default {
     buttons() {
       const d = this.d;
       if (!d) return [];
-      const actions = d.actions || [];
+      const actions = this.actions;
       const out = [];
       (LAYOUT[d.status] || []).forEach(b => {
         const meta = ORDER_ACTIONS[b.action] || {};
-        const text = b.label || meta.label || b.action;
+        let text = b.label || meta.label || b.action;
+        if (b.action === 'factory') {
+          // 文案 = 第一个可记录节点的动作；没有可记录节点（或 actions 不含 factory）时不显示
+          if (!actions.includes('factory') || !this.nextFactory) return;
+          text = this.nextFactory.actionLabel;
+        }
         if (b.always || actions.includes(b.action)) {
           out.push({ key: b.action, label: text, kind: b.kind, disabled: false, tip: '' });
         } else if (b.fallbackDisabled) {
-          out.push({ key: b.action, label: text, kind: b.kind, disabled: true, tip: b.fallbackDisabled });
+          const tip = b.action === 'close' && d.status === 'Submitted' ? (d.closeBlockedReason || b.fallbackDisabled) : b.fallbackDisabled;
+          out.push({ key: b.action, label: text, kind: b.kind, disabled: true, tip });
         }
       });
       return out;
@@ -194,6 +339,99 @@ export default {
       this.$emit('changed');
     },
     openPreview(row) { if (row.url) preview(this.photoUrls, row.index); },
+    /** 从某个时间到现在（服务器时间）的分钟数 */
+    minutesSince(s) {
+      const t = parseTime(s);
+      if (!t) return 0;
+      return Math.max(0, Math.floor((this.nowTs + this.serverOffset - t.getTime()) / 60000));
+    },
+    /** 操作失败：提示；状态冲突等刷新抽屉拿到最新状态与 actions */
+    failed(e) {
+      toastError(e);
+      if (e && (e.code === 40900 || e.code === 40400)) { this.load(); this.$emit('changed'); }
+    },
+
+    // ------------------------------------------------ 定价
+    openPrice(amount) {
+      this.priceInitial = amount === null || amount === undefined ? null : Number(amount);
+      this.priceOpen = true;
+    },
+    onPriced(res, price) {
+      this.priceOpen = false;
+      this.applied(res, '已定价 ' + fmtPrice(price, { free: true }));
+    },
+
+    // ------------------------------------------------ 暂停
+    onHeld(res) {
+      this.holdOpen = false;
+      this.applied(res, '已标为暂停搁置');
+    },
+
+    // ------------------------------------------------ 申请审批
+    async decide(req, approve) {
+      if (this.busy) return;
+      const d = this.d;
+      const r = req.r;
+      const isHold = r.type === 'Hold';
+      const line = (req.who ? req.who + '：' : '') + req.text;
+      try {
+        if (approve) {
+          const effect = isHold ? '同意后工单进入「暂停搁置」，暂停原因取申请内容。'
+            : `同意后 ${(r.engineer && r.engineer.name) || '该工程师'} 成为本单协助人。`;
+          if (!(await confirm('同意' + req.title, line + '\n' + effect, { okText: '同意' }))) return;
+          this.busy = 'req' + r.id;
+          const res = await api.orders.approveRequest(d.id, r.id);
+          this.applied(res, '已同意' + req.title);
+        } else {
+          const reply = await confirm('驳回' + req.title, line,
+            { input: true, multiline: true, inputLabel: '回复', placeholder: '选填，会写入状态记录并通知申请人', okText: '驳回', maxLength: 200 });
+          if (reply === null) return;
+          this.busy = 'req' + r.id;
+          const res = await api.orders.rejectRequest(d.id, r.id, reply);
+          this.applied(res, '已驳回' + req.title);
+        }
+      } catch (e) {
+        this.failed(e);
+      } finally {
+        this.busy = '';
+      }
+    },
+
+    // ------------------------------------------------ 协助人
+    openAssign(mode) {
+      this.assignMode = mode;
+      this.assignOpen = true;
+    },
+
+    // ------------------------------------------------ 返厂
+    openFactory(row) { if (row && row.n) this.factoryNode = row.n; },
+    onFactoryDone(res, nodeLabel, edited) {
+      this.factoryNode = null;
+      this.applied(res, (edited ? '已更正' : '已记录') + '「' + nodeLabel + '」');
+    },
+    previewNode(row, i) { preview(row.photos.map(p => p.url), i); },
+    async copyNo(text) {
+      if (!text) return;
+      let ok = false;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); ok = true; }
+      } catch (e) { ok = false; }
+      if (!ok) {
+        // 非安全上下文（http）下的兜底
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          ok = document.execCommand('copy');
+          ta.remove();
+        } catch (e) { ok = false; }
+      }
+      toast(ok ? '已复制单号 ' + text : '复制失败，请手动选择单号', ok ? 'success' : 'error');
+    },
 
     // ------------------------------------------------ 补录
     formFor(a) { return this.forms[a.punchId]; },
@@ -240,11 +478,14 @@ export default {
 
     // ------------------------------------------------ 底部操作
     async run(b) {
-      if (b.disabled || this.busy) return;
+      if (b.disabled) { if (b.tip) toast(b.tip); return; }
+      if (this.busy) return;
       const d = this.d;
       const no = d.orderNo;
       try {
-        if (b.key === 'assign' || b.key === 'reassign') { this.assignOpen = true; return; }
+        if (b.key === 'assign' || b.key === 'reassign') { this.openAssign('assign'); return; }
+        if (b.key === 'hold') { this.holdOpen = true; return; }
+        if (b.key === 'factory') { this.openFactory(this.nextFactory); return; }
         if (b.key === 'export') {
           this.busy = 'export';
           const day = toApiDate(d.createdAt);
@@ -261,18 +502,12 @@ export default {
           this.busy = b.key;
           res = await api.orders.void(d.id, reason);
           this.applied(res, '工单已作废');
-        } else if (b.key === 'hold') {
-          const reason = await confirm('标为暂停搁置', '搁置期间工程师不能打卡，可随时恢复处理。',
-            { input: true, multiline: true, required: true, inputLabel: '搁置原因', placeholder: '如：等待客户确认 / 等待备件到货', okText: '确认搁置' });
-          if (reason === null) return;
-          this.busy = b.key;
-          res = await api.orders.hold(d.id, reason);
-          this.applied(res, '已标为暂停搁置');
         } else if (b.key === 'resume') {
-          if (!(await confirm('恢复处理', `确定将 ${no} 恢复为处理中？`, { okText: '恢复处理' }))) return;
+          const from = this.holdInfo ? this.holdInfo.from : '处理中';
+          if (!(await confirm('恢复处理', `确定将 ${no} 恢复为「${from}」？`, { okText: '恢复处理' }))) return;
           this.busy = b.key;
           res = await api.orders.resume(d.id);
-          this.applied(res, '已恢复处理');
+          this.applied(res, `已恢复为「${from}」`);
         } else if (b.key === 'reject') {
           const reason = await confirm('退回处理中', '退回后工单回到处理中，工程师需重新提交完工。',
             { input: true, multiline: true, inputLabel: '退回原因', placeholder: '选填，会写入状态记录并通知工程师', okText: '退回' });
@@ -281,23 +516,24 @@ export default {
           res = await api.orders.reject(d.id, reason);
           this.applied(res, '已退回处理中');
         } else if (b.key === 'close') {
-          if (!(await confirm('确认闭环', `确认 ${no}（${d.customerName}）已处理完成并闭环？`, { okText: '确认闭环' }))) return;
+          const hints = (d.closeHints || []).filter(Boolean);
+          const msg = `确认 ${no}（${d.customerName}）已处理完成并闭环？` + (hints.length ? `\n提示：${hints.join('；')}` : '');
+          if (!(await confirm('确认闭环', msg, { okText: '确认闭环' }))) return;
           this.busy = b.key;
           res = await api.orders.close(d.id);
           this.applied(res, '已确认闭环');
         }
       } catch (e) {
-        toastError(e);
-        // 状态冲突等：刷新抽屉拿到最新状态与 actions
-        if (e.code === 40900 || e.code === 40400) { this.load(); this.$emit('changed'); }
+        this.failed(e);
       } finally {
         this.busy = '';
       }
     },
-    onAssigned(res, name) {
+    onAssigned(res, name, mode) {
       const re = this.d && this.d.status !== 'Pending';
       this.assignOpen = false;
-      this.applied(res, (re ? '已改派给 ' : '已指派给 ') + name);
+      if (mode === 'assistants') this.applied(res, '协助人已更新');
+      else this.applied(res, (re ? '已改派给 ' : '已指派给 ') + name);
     },
   },
   template: `
@@ -317,18 +553,49 @@ export default {
     <template v-else-if="d">
       <h2 class="drawer-title">{{ d.customerName }}
         <Tag v-if="d.urgency === 'Urgent'" tone="urgent" class="orders-dr-tag">紧急</Tag></h2>
-      <div class="drawer-sub">{{ deviceLine }}</div>
+      <div class="drawer-sub">{{ deviceLine }}<template v-if="d.factoryText"> · {{ d.factoryText }}</template></div>
+
+      <div class="progress5" role="img" :aria-label="progressLabel">
+        <div v-for="s in segments" :key="s.key" class="progress5-seg" :class="{ on: s.on, paused: s.paused, current: s.current }" :title="s.title">
+          <span class="progress5-bar"><span v-if="s.paused" class="progress5-pause" aria-hidden="true"></span></span>
+          <span class="progress5-label">{{ s.label }}</span>
+        </div>
+      </div>
+      <div v-if="holdInfo" class="progress5-note" :title="holdInfo.text">暂停 · {{ holdInfo.text }}</div>
 
       <dl class="kv">
-        <div><dt>服务价格</dt><dd :class="{ 'text-success': warranty }">{{ priceText }}</dd></div>
-        <div><dt>累计现场工时</dt><dd>{{ hoursText }}</dd></div>
-        <div><dt>处理人</dt><dd>{{ d.assignee ? d.assignee.name : '未分配' }}</dd></div>
+        <div><dt>服务价格</dt>
+          <dd><span :class="{ 'text-success': warranty, 'text-danger': unpriced }">{{ priceText }}</span>
+            <button v-if="canSetPrice" type="button" class="btn-link orders-dr-link" @click="openPrice(null)">{{ unpriced ? '定价' : '改价' }}</button></dd></div>
+        <div><dt>累计现场工时<template v-if="multiPeople && onsite">（合计）</template></dt><dd>{{ hoursText }}</dd></div>
+        <div><dt>负责人</dt><dd>{{ d.assignee ? d.assignee.name : '未分配' }}<span v-if="(d.assistants || []).length" class="orders-dr-plus"
+              :title="'协助人：' + d.assistants.map(u => u.name).join('、')">+{{ d.assistants.length }} 协助</span></dd></div>
         <div><dt>{{ creatorLabel }}</dt><dd>{{ d.creator ? d.creator.name : '—' }}</dd></div>
         <div v-if="d.symptom" class="span-2"><dt>故障现象</dt><dd class="orders-dr-text">{{ d.symptom }}</dd></div>
       </dl>
 
-      <div v-if="d.status === 'OnHold' && d.holdReason" class="alert alert-info" role="note">
-        <div class="alert-row"><Icon name="info" :size="15" :stroke="2" /><span>搁置原因：{{ d.holdReason }}</span></div>
+      <div v-if="suggestion" class="orders-suggest orders-dr-suggest" :class="{ pending: suggestion.pending }" role="note">
+        <div class="orders-suggest-main">
+          <div class="orders-suggest-title">{{ suggestion.who }} 建议 <span class="num">{{ suggestion.money }}</span>
+            <span v-if="suggestion.pending" class="tag tag-warn">待确认</span></div>
+          <div class="orders-suggest-sub"><template v-if="suggestion.note">{{ suggestion.note }} · </template><span class="num">{{ suggestion.time }}</span></div>
+        </div>
+        <button v-if="suggestion.pending && canSetPrice" type="button" class="btn btn-secondary btn-sm" @click="openPrice(suggestion.amount)">采用</button>
+      </div>
+
+      <div v-if="holdInfo" class="alert alert-info orders-dr-hold" role="note">
+        <div class="alert-row"><span class="orders-dr-pause" aria-hidden="true"></span><span>暂停搁置 · {{ holdInfo.text }}</span></div>
+        <div class="alert-note">{{ holdInfo.sub }}</div>
+      </div>
+
+      <div v-for="q in pendingRequests" :key="'rq' + q.key" class="alert alert-warn orders-dr-req" role="note">
+        <div class="orders-dr-req-head"><span class="orders-dr-req-title">{{ q.title }}</span><span class="tag tag-warn">待审批</span>
+          <span class="orders-dr-req-time num">{{ q.time }}</span></div>
+        <div class="orders-dr-req-text"><template v-if="q.who">{{ q.who }}：</template>{{ q.text }}</div>
+        <div v-if="q.canDecide" class="alert-actions">
+          <button type="button" class="btn btn-primary" :disabled="!!busy" @click="decide(q, true)">{{ q.busy ? '处理中…' : '同意' }}</button>
+          <button type="button" class="btn btn-secondary" :disabled="!!busy" @click="decide(q, false)">驳回</button>
+        </div>
       </div>
 
       <div v-for="a in alerts" :key="a.key" class="alert" :class="a.missing ? 'alert-danger' : 'alert-warn'" role="note">
@@ -355,6 +622,49 @@ export default {
           </template>
         </template>
       </div>
+
+      <template v-if="people.length || canAssistants">
+        <h3 class="section-title orders-dr-sec">处理人员
+          <button v-if="canAssistants" type="button" class="btn-link orders-dr-link" @click="openAssign('assistants')">调整协助人</button></h3>
+        <div v-if="!people.length" class="orders-dr-empty">暂无处理人员</div>
+        <div v-for="p in people" :key="p.key" class="orders-dr-person" :class="{ former: p.role === 'Former' }">
+          <Avatar :user="p.user" :size="24" />
+          <span class="orders-dr-person-name ellipsis">{{ p.name }}</span>
+          <Tag :tone="p.roleTone">{{ p.roleLabel }}</Tag>
+          <span v-if="p.onSite" class="hours-live"><i></i>现场中</span>
+          <Tag v-if="p.missing" tone="missing">缺卡</Tag>
+          <span class="orders-dr-person-hours num" :title="onsite ? '此人在本单的累计现场工时' : '非现场工单不计工时'">{{ p.hours }}</span>
+        </div>
+      </template>
+
+      <template v-if="d.factory">
+        <h3 class="section-title">返厂流程</h3>
+        <ol class="factory-line">
+          <li v-for="f in factoryNodes" :key="f.key" class="factory-node" :class="'is-' + f.state">
+            <span class="factory-dot" aria-hidden="true"></span>
+            <div class="factory-main">
+              <div class="factory-head">
+                <span class="factory-title">{{ f.label }}</span>
+                <Tag v-if="f.skipped" tone="neutral">已跳过</Tag>
+                <Tag v-else-if="f.state === 'current'" tone="urgent">当前</Tag>
+                <button v-if="f.canEdit" type="button" class="btn-link orders-dr-link factory-edit" @click="openFactory(f)">更正</button>
+              </div>
+              <div v-if="f.sub" class="factory-sub">{{ f.sub }}</div>
+              <div v-if="f.trackingNo || f.courier" class="factory-courier">
+                <span>{{ f.courier }}</span>
+                <button v-if="f.trackingNo" type="button" class="factory-no mono" :title="'点击复制单号 ' + f.trackingNo"
+                        :aria-label="'复制快递单号 ' + f.trackingNo" @click="copyNo(f.trackingNo)">{{ f.trackingNo }}</button>
+              </div>
+              <div v-if="f.note" class="factory-note">{{ f.note }}</div>
+              <div v-if="f.photos.length" class="factory-photos">
+                <button v-for="(ph, i) in f.photos" :key="ph.id" type="button" class="thumb" :aria-label="'查看' + f.label + '照片 ' + (i + 1)"
+                        @click="previewNode(f, i)"><img :src="ph.url" alt="" loading="lazy"></button>
+              </div>
+              <button v-if="f.canRecord" type="button" class="btn btn-primary btn-sm factory-act" @click="openFactory(f)">{{ f.actionLabel }}</button>
+            </div>
+          </li>
+        </ol>
+      </template>
 
       <h3 class="section-title">打卡记录</h3>
       <div v-if="!punchRows.length" class="orders-dr-empty">{{ emptyPunchText }}</div>
@@ -388,6 +698,10 @@ export default {
     </template>
   </Drawer>
 
-  <OrdersAssignModal v-if="assignOpen && d" :order="d" @close="assignOpen = false" @done="onAssigned" />
+  <OrdersAssignModal v-if="assignOpen && d" :order="d" :mode="assignMode" @close="assignOpen = false" @done="onAssigned" />
+  <OrdersHoldModal v-if="holdOpen && d" :order="d" @close="holdOpen = false" @done="onHeld" />
+  <OrdersPriceModal v-if="priceOpen && d" :order="d" :initial="priceInitial" @close="priceOpen = false" @done="onPriced" />
+  <OrdersFactoryModal v-if="factoryNode && d" :key="factoryNode.node" :order="d" :node="factoryNode"
+                      @close="factoryNode = null" @done="onFactoryDone" />
   `,
 };

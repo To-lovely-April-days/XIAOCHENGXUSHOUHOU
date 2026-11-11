@@ -10,6 +10,7 @@
     "pages/order-detail/index",
     "pages/checkin/index",
     "pages/complete/index",
+    "pages/factory-node/index",
     "pages/order-new/index"
   ],
   "window": {
@@ -49,6 +50,7 @@
     "urgency-tag": "/components/urgency-tag/index",
     "empty": "/components/empty/index",
     "assign-sheet": "/components/assign-sheet/index",
+    "progress-bar": "/components/progress-bar/index",
     "ui-icon": "/components/ui-icon/index"
   }
 }

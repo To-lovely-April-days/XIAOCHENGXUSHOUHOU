@@ -36,7 +36,7 @@
         <view class="oh-name ellipsis">{{current.customerName}}</view>
         <view class="oh-sub ellipsis">{{current.deviceLine}}</view>
       </view>
-      <text class="{{current.free ? 'price-free' : 'price'}}">{{current.priceText}}</text>
+      <text wx:if="{{current.assist}}" class="tag tag-sm assist-tag">协助</text>
     </view>
 
     <view class="steps" aria-label="工单进度">
@@ -59,23 +59,35 @@
     </block>
     <block wx:elif="{{currentOnsite}}">
       <view class="btn-grid mt16">
-        <view class="btn-soft" hover-class="btn-hover" data-id="{{current.id}}" bindtap="toComplete">提交完工</view>
+        <view wx:if="{{current.assist}}" class="btn-soft" hover-class="btn-hover" data-id="{{current.id}}" bindtap="toDetail">查看详情</view>
+        <view wx:else class="btn-soft" hover-class="btn-hover" data-id="{{current.id}}" bindtap="toComplete">提交完工</view>
         <view class="btn-red" hover-class="btn-hover" data-id="{{current.id}}" bindtap="toCheckin">
           <ui-icon name="camera" color="#FFFFFF" size="18" stroke="2" />到场打卡
         </view>
       </view>
-      <view class="hint">回到现场后打到场卡；处理完成并离场后提交完工</view>
+      <view class="hint">{{current.assist ? '你是本单协助人：到场、离场各打一次卡，工时按本人计算' : '回到现场后打到场卡；处理完成并离场后提交完工'}}</view>
+    </block>
+    <block wx:elif="{{current.factory}}">
+      <view class="btn-dark mt16" hover-class="btn-hover" data-id="{{current.id}}" bindtap="toDetail">查看返厂流程</view>
+      <view class="hint">{{current.factoryText ? current.factoryText + ' · ' : ''}}返厂工单在详情页记录返厂节点，寄回客户后提交完工</view>
+    </block>
+    <block wx:elif="{{current.assist}}">
+      <view class="btn-dark mt16" hover-class="btn-hover" data-id="{{current.id}}" bindtap="toDetail">查看详情</view>
+      <view class="hint">你是本单协助人，完工由负责人提交</view>
     </block>
     <block wx:else>
       <view class="btn-dark mt16" hover-class="btn-hover" data-id="{{current.id}}" bindtap="toComplete">提交完工</view>
-      <view class="hint">远程/返厂工单无需打卡，处理完成后提交完工</view>
+      <view class="hint">远程工单无需打卡，处理完成后提交完工</view>
     </block>
   </view>
 
   <!-- ===== 待启动：下一单 ===== -->
   <view wx:if="{{state === 'next' && next}}" class="hcard" aria-label="下一单">
     <view class="row-between">
-      <status-tag status="{{next.status}}" />
+      <view class="row gap8">
+        <status-tag status="{{next.status}}" />
+        <text wx:if="{{next.assist}}" class="tag tag-sm assist-tag">协助</text>
+      </view>
       <text class="order-no">{{next.orderNo}}</text>
     </view>
     <view class="order-head mt-10" hover-class="row-hover" data-id="{{next.id}}" bindtap="toDetail">
@@ -84,7 +96,6 @@
         <view class="oh-name ellipsis">{{next.customerName}}</view>
         <view class="oh-sub ellipsis2">{{next.deviceLine}}</view>
       </view>
-      <text class="{{next.free ? 'price-free' : 'price'}}">{{next.priceText}}</text>
     </view>
     <view class="info">
       <view class="info-row">
@@ -113,8 +124,10 @@
         <ui-icon name="camera" color="#FFFFFF" size="18" stroke="2" />到场打卡
       </view>
     </view>
+    <view wx:elif="{{next.factory}}" class="btn-dark mt12" hover-class="btn-hover" data-id="{{next.id}}" bindtap="toDetail">查看返厂流程</view>
+    <view wx:elif="{{next.assist}}" class="btn-dark mt12" hover-class="btn-hover" data-id="{{next.id}}" bindtap="toDetail">查看详情</view>
     <view wx:else class="btn-dark mt12" hover-class="btn-hover" data-id="{{next.id}}" bindtap="toDetail">去开始处理</view>
-    <view class="hint">{{next.onsite ? '到达客户现场后拍照打卡；距客户 1 公里以外会被标记' : '远程/返厂工单无需打卡，在详情页点「开始处理」'}}</view>
+    <view class="hint">{{next.onsite ? '到达客户现场后拍照打卡；距客户 1 公里以外会被标记' : '远程工单在详情页点「开始处理」；返厂工单在详情页记录返厂节点'}}</view>
   </view>
 
   <!-- ===== 空闲 ===== -->
@@ -136,7 +149,7 @@
         <text class="up-day">{{item.dayText}}</text>
       </view>
       <view class="flex1">
-        <view class="up-name ellipsis">{{item.customerName}}</view>
+        <view class="row gap8"><text class="up-name ellipsis">{{item.customerName}}</text><text wx:if="{{item.assist}}" class="tag tag-sm assist-tag">协助</text></view>
         <view class="oh-sub ellipsis"><text class="num-plain">{{item.apptText}}</text><text wx:if="{{item.deviceModel}}"> · {{item.deviceModel}}</text></view>
       </view>
       <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
@@ -159,7 +172,24 @@
         </view>
         <view class="oh-sub ellipsis mt-3">{{item.meta}}</view>
       </view>
-      <text class="{{item.free ? 'price-free' : 'price price-lg'}}">{{item.priceText}}</text>
+      <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+    </view>
+  </view>
+
+  <!-- ===== 暂停搁置（本人参与） ===== -->
+  <view wx:if="{{onHold.length}}" aria-label="暂停搁置">
+    <view class="sec-head">
+      <text class="sec-title">暂停搁置 <text class="sec-count">{{onHold.length}}</text></text>
+    </view>
+    <view class="list-card">
+      <view wx:for="{{onHold}}" wx:key="id" class="done-item" hover-class="row-hover" data-id="{{item.id}}" bindtap="toDetail">
+        <view class="hold-mark"><view class="hold-bar"></view><view class="hold-bar"></view></view>
+        <view class="flex1">
+          <view class="row gap8"><text class="done-name ellipsis">{{item.customerName}}</text><text wx:if="{{item.assist}}" class="tag tag-sm assist-tag">协助</text></view>
+          <view class="oh-sub hold-line ellipsis">{{item.holdLine}}</view>
+        </view>
+        <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+      </view>
     </view>
   </view>
 

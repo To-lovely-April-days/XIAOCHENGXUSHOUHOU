@@ -38,7 +38,51 @@ export const QUICK_FILTERS = [
   { key: 'missing', label: '缺卡待补录', dot: '#C81E2B', query: { issue: 'MissingPunch' } },
   { key: 'distance', label: '打卡距离异常', dot: '#D18A00', query: { issue: 'DistanceAbnormal' } },
   { key: 'submitted', label: '待验收', dot: '#18181B', query: { status: 'Submitted' } },
+  { key: 'requests', label: '待审批申请', dot: '#D18A00', query: { pendingRequest: true } },
+  { key: 'unpriced', label: '未定价', dot: '#C81E2B', query: { priceSet: false } },
 ];
+
+/** 5 段进度条（v1.1 §4）。点亮段数用服务端的 progressStep，不做本地状态映射 */
+export const PROGRESS_STEPS = ['待认领', '待启动', '处理中', '待验收', '已闭环'];
+
+/** 暂停原因（v1.1） */
+export const HOLD_REASON = {
+  WaitCustomer: { label: '等客户' },
+  WaitParts: { label: '等备件' },
+  WaitThirdParty: { label: '等第三方' },
+  Other: { label: '其他' },
+};
+
+/** 申请类型 / 状态（v1.1） */
+export const REQUEST_TYPE = {
+  Hold: { label: '暂停申请' },
+  AddAssistant: { label: '协助人申请' },
+};
+export const REQUEST_STATUS = {
+  Pending: { label: '待审批' },
+  Approved: { label: '已同意' },
+  Rejected: { label: '已驳回' },
+  Cancelled: { label: '已撤销' },
+};
+
+/**
+ * 返厂节点（v1.1）。action = 记录按钮文案；courier = 需要快递公司 + 单号；
+ * photo = 'required' | 'optional' | ''；category = 该节点照片上传用的 FileCategory。
+ */
+export const FACTORY_NODE = {
+  CustomerShipped: { label: '客户寄出', action: '记录客户寄出', courier: true, photo: '', category: '' },
+  FactoryReceived: { label: '工厂收货', action: '确认工厂收货', courier: false, photo: 'required', category: 'FactoryReceivePhoto' },
+  Repairing: { label: '检测/维修', action: '', courier: false, photo: '', category: '' },
+  ShippedBack: { label: '寄回客户', action: '寄回客户', courier: true, photo: 'required', category: 'FactoryShipPhoto' },
+  CustomerSigned: { label: '客户签收', action: '记录客户签收', courier: false, photo: 'optional', category: 'FactorySignPhoto' },
+};
+
+/** 工单参与人角色（v1.1） */
+export const PARTICIPANT_ROLE = {
+  Lead: { label: '负责人' },
+  Assistant: { label: '协助人' },
+  Former: { label: '已退出' },
+};
 
 export const ORDER_SOURCE = {
   SalesReferral: { label: '销售转报' },
@@ -91,6 +135,9 @@ export const FILE_CATEGORY = {
   ProcessPhoto: { label: '处理照片' },
   Signature: { label: '客户签字件' },
   Avatar: { label: '头像' },
+  FactoryReceivePhoto: { label: '收货照片' },
+  FactoryShipPhoto: { label: '寄回照片' },
+  FactorySignPhoto: { label: '签收凭证' },
 };
 
 /**
@@ -106,6 +153,9 @@ export const ORDER_ACTIONS = {
   reject: { label: '退回处理中', kind: 'secondary' },
   close: { label: '确认闭环', kind: 'primary' },
   supplement: { label: '补录离场时间', kind: 'primary' },
+  assistants: { label: '调整协助人', kind: 'secondary' },
+  setPrice: { label: '定价', kind: 'secondary' },
+  factory: { label: '返厂流程', kind: 'secondary' },
 };
 
 /**

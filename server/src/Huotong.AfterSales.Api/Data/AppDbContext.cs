@@ -12,6 +12,10 @@ public class AppDbContext : DbContext
     public DbSet<Punch> Punches => Set<Punch>();
     public DbSet<StatusLog> StatusLogs => Set<StatusLog>();
     public DbSet<StoredFile> Files => Set<StoredFile>();
+    public DbSet<OrderAssistant> OrderAssistants => Set<OrderAssistant>();
+    public DbSet<OrderRequest> OrderRequests => Set<OrderRequest>();
+    public DbSet<PriceSuggestion> PriceSuggestions => Set<PriceSuggestion>();
+    public DbSet<FactoryRecord> FactoryRecords => Set<FactoryRecord>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -44,6 +48,9 @@ public class AppDbContext : DbContext
             e.Property(x => x.RunStatus).HasConversion<string>().HasMaxLength(20);
             // SQLite 不支持 decimal 排序/聚合，用 double 存储
             e.Property(x => x.Price).HasConversion<double>();
+            // PriceSet：不要 HasDefaultValue(true)（EF 会吞掉显式的 false）；列默认值只写在迁移里
+            e.Property(x => x.HoldReasonType).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.HoldFromStatus).HasConversion<string>().HasMaxLength(20);
             e.HasOne(x => x.Creator).WithMany().HasForeignKey(x => x.CreatorId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Assignee).WithMany().HasForeignKey(x => x.AssigneeId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -61,6 +68,7 @@ public class AppDbContext : DbContext
         b.Entity<StatusLog>(e =>
         {
             e.Property(x => x.ToStatus).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
             e.HasOne(x => x.Order).WithMany(o => o.Logs).HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Actor).WithMany().HasForeignKey(x => x.ActorId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -72,6 +80,50 @@ public class AppDbContext : DbContext
             e.Property(x => x.Path).HasMaxLength(260);
             e.Property(x => x.MimeType).HasMaxLength(100);
             e.HasIndex(x => x.OrderId);
+        });
+
+        b.Entity<OrderAssistant>(e =>
+        {
+            e.HasIndex(x => new { x.OrderId, x.EngineerId }).IsUnique();
+            e.HasIndex(x => x.EngineerId);
+            e.HasOne(x => x.Order).WithMany(o => o.Assistants).HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Engineer).WithMany().HasForeignKey(x => x.EngineerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AddedBy).WithMany().HasForeignKey(x => x.AddedById).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<OrderRequest>(e =>
+        {
+            e.Property(x => x.Type).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.HoldReasonType).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Note).HasMaxLength(200);
+            e.Property(x => x.Reply).HasMaxLength(200);
+            e.HasIndex(x => x.OrderId);
+            e.HasIndex(x => x.Status);
+            e.HasOne(x => x.Order).WithMany().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Requester).WithMany().HasForeignKey(x => x.RequesterId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.TargetEngineer).WithMany().HasForeignKey(x => x.TargetEngineerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Decider).WithMany().HasForeignKey(x => x.DeciderId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<PriceSuggestion>(e =>
+        {
+            e.Property(x => x.Amount).HasConversion<double>();
+            e.Property(x => x.Note).HasMaxLength(200);
+            e.HasIndex(x => x.OrderId);
+            e.HasOne(x => x.Order).WithMany().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Sales).WithMany().HasForeignKey(x => x.SalesId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<FactoryRecord>(e =>
+        {
+            e.Property(x => x.Node).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Courier).HasMaxLength(50);
+            e.Property(x => x.TrackingNo).HasMaxLength(50);
+            e.Property(x => x.Note).HasMaxLength(500);
+            e.HasIndex(x => new { x.OrderId, x.Node }).IsUnique();
+            e.HasOne(x => x.Order).WithMany().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Operator).WithMany().HasForeignKey(x => x.OperatorId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

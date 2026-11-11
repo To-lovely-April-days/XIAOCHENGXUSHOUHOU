@@ -10,9 +10,12 @@
 .card-hover { opacity: 0.85; }
 .customer { font-size: 32rpx; font-weight: 600; line-height: 44rpx; min-width: 0; }
 .price { margin-left: auto; flex-shrink: 0; font-size: 36rpx; color: var(--text); }
-.price.free { color: var(--text-body); }
 .price-sm { font-size: 34rpx; }
 .price.free-green { color: var(--green); }
+.price.unpriced { font-size: 28rpx; font-weight: 600; color: var(--text-3); }
+.pending-tag { background: #FBF3E4; }
+.meta-hold { color: #8E8E93; }
+.assist { flex-shrink: 0; font-size: 24rpx; color: var(--text-2); }
 .device { font-size: 26rpx; color: var(--text-2); margin-top: 4rpx; }
 .fault { font-size: 30rpx; line-height: 44rpx; margin-top: 16rpx; color: var(--text); }
 .card-foot { margin-top: 20rpx; }

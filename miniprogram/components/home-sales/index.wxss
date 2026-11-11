@@ -33,6 +33,7 @@
 .o-free { margin-left: auto; flex-shrink: 0; font-size: 28rpx; font-weight: 600; color: #3A3A3C; }
 .o-mid { display: flex; align-items: center; gap: 16rpx; margin-top: 12rpx; font-size: 26rpx; line-height: 40rpx; color: #3A3A3C; }
 .o-note { min-width: 0; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
-.o-segs { display: flex; gap: 6rpx; margin-top: 20rpx; }
-.o-seg { flex: 1; height: 8rpx; border-radius: 4rpx; background: #E5E5E3; }
-.o-seg.on { background: #1D1D1F; }
+.o-unpriced { margin-left: auto; flex-shrink: 0; font-size: 28rpx; font-weight: 600; color: #AEAEB2; }
+.o-note-hold { color: #8E8E93; }
+.o-assist { flex-shrink: 0; margin-left: auto; font-size: 24rpx; color: #6E6E73; }
+.o-segs { margin-top: 20rpx; }

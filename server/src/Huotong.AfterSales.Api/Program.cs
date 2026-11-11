@@ -220,8 +220,12 @@ app.UseStaticFiles(new StaticFileOptions
     RequestPath = "/admin",
     OnPrepareResponse = c =>
     {
-        // 页面入口不缓存，发布新版本后立即生效
-        if (c.File.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
+        // 页面入口与脚本/样式每次向服务器校验（ETag，未变化返回 304），发布新版本后立即生效。
+        // 后台是无构建的 ES 模块：若浏览器把新旧模块混用（旧 enums.js + 新视图），整页会白屏，所以 js/css 也不能走启发式缓存。
+        var name = c.File.Name;
+        if (name.EndsWith(".html", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith(".js", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith(".css", StringComparison.OrdinalIgnoreCase))
             c.Context.Response.Headers.CacheControl = "no-cache";
     }
 });

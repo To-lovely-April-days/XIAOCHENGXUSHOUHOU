@@ -58,6 +58,10 @@ function buildRow(row, now, idx) {
 
 function buildTodo(t, i) {
   const map = {
+    // v1.1：审批 / 定价都在工单详情里完成
+    HoldRequest: { btn: '审批', act: 'detail', tone: 'amber', suffix: '暂停申请', primary: true },
+    AssistantRequest: { btn: '审批', act: 'detail', tone: 'amber', suffix: '协助人申请', primary: true },
+    PriceSuggestion: { btn: '定价', act: 'detail', tone: 'amber', suffix: '价格建议' },
     Unassigned: { btn: '指派', act: 'assign', tone: 'amber' },
     Submitted: { btn: '查看', act: 'detail', tone: 'gray', suffix: '待验收' },
     MissingPunch: { btn: '去后台', act: 'admin', tone: 'amber' },
@@ -65,12 +69,12 @@ function buildTodo(t, i) {
   };
   const m = map[t.type] || { btn: '查看', act: 'detail', tone: 'gray' };
   return Object.assign({}, t, {
-    key: t.type + '-' + t.orderId + '-' + i,
+    key: t.type + '-' + t.orderId + '-' + (t.requestId || 0) + '-' + i,
     btn: m.btn,
     act: m.act,
     tone: m.tone,
     suffix: m.suffix || '',
-    primary: m.act === 'assign'
+    primary: m.act === 'assign' || !!m.primary
   });
 }
 

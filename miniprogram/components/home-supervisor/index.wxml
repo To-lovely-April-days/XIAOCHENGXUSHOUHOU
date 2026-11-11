@@ -43,7 +43,7 @@
       <text class="sec-title">待处理事项 <text class="sec-count">{{todoCount}}</text></text>
       <text class="sec-tip">补录、导出请在电脑后台</text>
     </view>
-    <empty wx:if="{{!todos.length}}" text="暂无待处理事项" desc="新的待指派、待验收和打卡异常会出现在这里" />
+    <empty wx:if="{{!todos.length}}" text="暂无待处理事项" desc="新的申请、待指派、待验收、价格建议和打卡异常会出现在这里" />
     <view wx:else class="list-card">
       <view wx:for="{{todos}}" wx:key="key" class="todo">
         <view class="flex1" data-id="{{item.orderId}}" bindtap="toDetail" hover-class="row-hover">

@@ -43,7 +43,8 @@ public class CreateOrderRequest
     public string? CustomerTried { get; set; }
     public string? SiteEnvironment { get; set; }
     public string? CustomerRequest { get; set; }
-    public decimal? Price { get; set; }
+    /// <summary>v1.1 起忽略（旧客户端仍会传）；用 object 接收，任何形态都不报错</summary>
+    public object? Price { get; set; }
     public List<int>? PhotoFileIds { get; set; }
 }
 
@@ -59,8 +60,38 @@ public class CompleteRequest
     public List<int>? SignaturePhotoIds { get; set; }
 }
 
-public class AssignRequest { public int? EngineerId { get; set; } }
+public class AssignRequest
+{
+    public int? EngineerId { get; set; }
+    /// <summary>省略 / null = 不调整协助人；数组（含空数组）= 协助人最终全集</summary>
+    public List<int>? AssistantIds { get; set; }
+}
 public class ReasonRequest { public string? Reason { get; set; } }
+
+public class PriceRequest { public decimal? Price { get; set; } }
+public class PriceSuggestRequest { public decimal? Amount { get; set; } public string? Note { get; set; } }
+
+/// <summary>暂停 / 暂停申请。ReasonType 用字符串接收，非法值由服务层报「请选择暂停原因」；Reason 为旧客户端字段</summary>
+public class HoldRequest
+{
+    public string? ReasonType { get; set; }
+    public string? Note { get; set; }
+    public string? Reason { get; set; }
+}
+
+public class ReplyRequest { public string? Reply { get; set; } }
+public class AssistantsRequest { public List<int>? EngineerIds { get; set; } }
+public class AssistantRequestRequest { public int? EngineerId { get; set; } public string? Note { get; set; } }
+
+/// <summary>返厂节点记录 / 更正。Node 用字符串接收，非法值由服务层报「请选择返厂节点」</summary>
+public class FactoryNodeRequest
+{
+    public string? Node { get; set; }
+    public string? Courier { get; set; }
+    public string? TrackingNo { get; set; }
+    public string? Note { get; set; }
+    public List<int>? PhotoIds { get; set; }
+}
 
 public class PunchRequest
 {

@@ -82,10 +82,13 @@ function secondsBetween(start, end) {
  * 价格显示。
  * @param {?number} price 0 表示保内
  * @param {boolean} [short=false] true 时 0 显示 '保内'
- * @returns {string} '¥1,800' / '¥1,800.50' / '保内免费' / '保内'；null → '—'
+ * @param {?boolean} [priceSet] 是否已定价（v1.1）；false，或 price 为 null 且 priceSet 不为 true → '未定价'
+ * @returns {string} '¥1,800' / '¥1,800.50' / '保内免费' / '保内' / '未定价'
  */
-function formatPrice(price, short) {
-  if (price === null || price === undefined || price === '' || isNaN(price)) return '—';
+function formatPrice(price, short, priceSet) {
+  const empty = price === null || price === undefined || price === '' || isNaN(price);
+  if (priceSet === false || (empty && priceSet !== true)) return '未定价';
+  if (empty) return '—';
   const p = Number(price);
   if (p === 0) return short ? '保内' : '保内免费';
   const fixed = Math.round(p * 100) % 100 === 0 ? String(Math.round(p)) : p.toFixed(2);

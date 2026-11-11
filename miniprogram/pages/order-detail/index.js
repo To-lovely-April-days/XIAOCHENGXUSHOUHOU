@@ -8,14 +8,21 @@ const format = require('../../utils/format.js');
 const enums = require('../../utils/enums.js');
 
 const ENGINEER_TABS = [{ key: 'info', label: '信息' }, { key: 'punch', label: '打卡记录' }, { key: 'files', label: '资料' }];
+// 返厂单（工程师）：「返厂流程」取代「打卡记录」
+const ENGINEER_FACTORY_TABS = [{ key: 'info', label: '信息' }, { key: 'factory', label: '返厂流程' }, { key: 'files', label: '资料' }];
 const VIEWER_TABS = [{ key: 'progress', label: '进度' }, { key: 'info', label: '信息' }, { key: 'files', label: '资料' }];
 
-// 底部按钮顺序：越靠后越主要（最后一个可用按钮为主按钮）
-const ENGINEER_ORDER = ['appoint', 'checkin', 'start', 'claim', 'complete'];
-const SUPERVISOR_ORDER = ['void', 'hold', 'reject', 'reassign', 'resume', 'assign', 'close'];
+// 底部按钮顺序：越靠后越主要（最后一个可用按钮为主按钮）。
+// setPrice / suggestPrice / assistants / requestAssistant 是页面内链接，不进底部栏。
+const ENGINEER_ORDER = ['requestHold', 'appoint', 'checkin', 'start', 'claim', 'factory', 'complete'];
+const SUPERVISOR_ORDER = ['void', 'hold', 'reject', 'reassign', 'resume', 'assign', 'factory', 'close'];
+const SALES_ORDER = ['factory'];
+const MAX_BUTTONS = 3; // 超过时把顺序靠前的多余项收进「更多」
 const LABEL_OVERRIDE = { appoint: '设置预约', reject: '退回处理中', hold: '标为暂停搁置' };
 
-const SALES_NOTE = '销售和主管在此只能查看；改派、作废、补录由主管操作。';
+const SALES_NOTE = '销售可查看进度、提价格建议；改派、作废、定价、补录由主管操作。';
+const HOLD_NOTE_PLACEHOLDER = '如：客户下周一才能安排停机';
+const MAX_AMOUNT = 100000000;
 
 function timeMs(t) {
   const d = format.parseTime(t);
@@ -32,6 +39,48 @@ function minutesSince(t) {
 
 function statusFg(status) {
   return (enums.STATUS[status] && enums.STATUS[status].fg) || enums.COLORS.text2;
+}
+
+/** 第一个当前用户可记录的返厂节点（factory 按钮的目标） */
+function nextFactoryNode(d) {
+  const nodes = (d && d.factory && d.factory.nodes) || [];
+  return nodes.filter((n) => n.canRecord && enums.FACTORY_NODE[n.node] && enums.FACTORY_NODE[n.node].action)[0] || null;
+}
+
+/** 金额输入：只保留数字和一个小数点，最多 2 位小数 */
+function cleanAmount(value) {
+  let v = String(value || '').replace(/[^\d.]/g, '');
+  const dot = v.indexOf('.');
+  if (dot >= 0) v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, '').slice(0, 2);
+  if (/^0\d/.test(v)) v = v.replace(/^0+(?=\d)/, '');
+  return v;
+}
+
+/**
+ * 状态记录 → 时间线标题 / 标签。
+ * 「… → 处理中」「… → 暂停搁置（等备件）」这类以状态名结尾的拆成 标题 + 状态标签；
+ * 价格 / 人员等不改变状态的记录（如「改价 保内免费 → ¥1,800」）整句作标题、不带标签。
+ */
+function parseLog(log) {
+  const text = log.text || '';
+  const arrow = text.indexOf(' → ');
+  if (arrow >= 0) {
+    const rest = text.slice(arrow + 3);
+    const st = Object.keys(enums.STATUS).filter((k) => rest.indexOf(enums.STATUS[k].label) === 0)[0];
+    if (st) {
+      const extra = rest.slice(enums.STATUS[st].label.length).replace(/^（/, '').replace(/）$/, '');
+      return { title: text.slice(0, arrow), tag: enums.STATUS[st].label, tagStatus: st, extra: extra };
+    }
+  }
+  if (!log.kind || log.kind === 'Status') {
+    return {
+      title: arrow >= 0 ? text.slice(0, arrow) : text,
+      tag: log.toStatus ? enums.label(enums.STATUS, log.toStatus) : '',
+      tagStatus: log.toStatus || '',
+      extra: ''
+    };
+  }
+  return { title: text, tag: '', tagStatus: '', extra: '' };
 }
 
 /** 打卡距离 + 补录说明 */
@@ -191,24 +240,24 @@ function buildSteps(d, todayMinutes, running) {
 
   (d.logs || []).forEach((log, i) => {
     const text = log.text || '';
-    const arrow = text.indexOf(' → ');
-    const title = arrow >= 0 ? text.slice(0, arrow) : text;
-    const tag = log.toStatus ? enums.label(enums.STATUS, log.toStatus) : '';
+    const parsed = parseLog(log);
     const when = monthDayHm(log.time);
     // 「首次到场」与到场打卡合并为一条
     if (text.indexOf('首次到场') >= 0 && arriveTimes[when] !== undefined) {
       const it = items[arriveTimes[when]];
-      it.tag = tag;
-      it.tagColor = statusFg(log.toStatus);
+      it.tag = parsed.tag;
+      it.tagColor = statusFg(parsed.tagStatus);
       return;
     }
+    let sub = i === 0 && d.source ? when + ' · ' + enums.label(enums.SOURCE, d.source) : when;
+    if (parsed.extra) sub += ' · ' + parsed.extra;
     items.push({
       ms: timeMs(log.time),
-      title: title,
-      sub: i === 0 && d.source ? when + ' · ' + enums.label(enums.SOURCE, d.source) : when,
+      title: parsed.title,
+      sub: sub,
       subClass: '',
-      tag: tag,
-      tagColor: log.toStatus ? statusFg(log.toStatus) : '',
+      tag: parsed.tag,
+      tagColor: parsed.tagStatus ? statusFg(parsed.tagStatus) : '',
       photo: ''
     });
   });
@@ -217,20 +266,23 @@ function buildSteps(d, todayMinutes, running) {
   const steps = items.map((it) => Object.assign(it, { state: 'done' }));
 
   const onsite = d.serviceType === 'Onsite';
+  const factory = d.serviceType === 'Factory';
   let current = null;
   switch (d.status) {
     case 'Pending':
       current = { title: '等待认领', sub: '已发布到工单大厅，可由主管指派' };
       break;
     case 'Accepted':
-      current = { title: '待启动', sub: d.appointmentTime ? '预约 ' + format.formatDateTimeShort(d.appointmentTime) : (onsite ? '等待工程师上门，首次到场打卡后进入处理中' : '等待工程师开始处理') };
+      if (factory) current = { title: '待启动', sub: '等待设备到厂，工厂收货后进入处理中' };
+      else current = { title: '待启动', sub: d.appointmentTime ? '预约 ' + format.formatDateTimeShort(d.appointmentTime) : (onsite ? '等待工程师上门，首次到场打卡后进入处理中' : '等待工程师开始处理') };
       break;
     case 'InProgress':
       if (running) current = { title: '现场处理中', sub: '今日已计 ' + format.formatDuration(todayMinutes) + '，离场打卡后计入' };
-      else current = { title: onsite ? '处理中' : enums.label(enums.SERVICE_TYPE, d.serviceType) + '处理中', sub: onsite ? '当前不在现场' : '工程师处理中' };
+      else current = { title: onsite ? '处理中' : enums.label(enums.SERVICE_TYPE, d.serviceType) + '处理中', sub: onsite ? '当前不在现场' : (factory && d.factoryText ? d.factoryText : '工程师处理中') };
       break;
     case 'OnHold':
-      current = { title: '暂停搁置', sub: d.holdReason || '等待客户 / 备件 / 外部' };
+      // 暂停：灰色标记，不用红色
+      current = { title: '暂停搁置', sub: enums.holdTextOf(d) || '等待客户 / 备件 / 外部', state: 'paused', tag: '暂停', tagColor: enums.COLORS.gray };
       break;
     case 'Submitted':
       current = { title: '主管验收', sub: '资料齐全后确认闭环' };
@@ -243,7 +295,7 @@ function buildSteps(d, todayMinutes, running) {
   }
   const future = [];
   if (['Pending', 'Accepted', 'InProgress', 'OnHold'].indexOf(d.status) >= 0) {
-    future.push({ title: '提交完工', sub: '工程师上传处理照片和客户签字件', tag: '待验收' });
+    future.push({ title: '提交完工', sub: factory ? '寄回客户后，工程师上传处理照片并提交' : '工程师上传处理照片和客户签字件', tag: '待验收' });
     future.push({ title: '主管验收', sub: '资料齐全后确认闭环', tag: '已闭环' });
   }
   future.forEach((f) => steps.push(Object.assign({ tagColor: enums.COLORS.text3, subClass: '', photo: '', state: 'future' }, f)));
@@ -264,7 +316,8 @@ function buildFiles(d, isEngineerView) {
     { key: 'orderPhotos', title: '建单照片', desc: creatorSales ? '销售上传' : '建单时上传', list: f.orderPhotos },
     { key: 'punchPhotos', title: '打卡照片', desc: '每次到场、离场各 1 张，带水印', list: f.punchPhotos, hide: d.serviceType !== 'Onsite' && !(f.punchPhotos || []).length },
     { key: 'processPhotos', title: '处理照片', desc: '完工时上传，需包含维修前原状', list: f.processPhotos },
-    { key: 'signatures', title: '客户签字件', desc: '现场维修记录表，签字后拍照', list: f.signatures, warn: d.serviceType === 'Onsite' }
+    { key: 'signatures', title: '客户签字件', desc: '现场维修记录表，签字后拍照', list: f.signatures, warn: d.serviceType === 'Onsite' },
+    { key: 'factoryPhotos', title: '返厂照片', desc: '工厂收货、寄回客户、客户签收时上传', list: f.factoryPhotos, hide: d.serviceType !== 'Factory' }
   ];
   return rows.filter((r) => !r.hide).map((r) => {
     const n = (r.list || []).length;
@@ -279,6 +332,107 @@ function buildFiles(d, isEngineerView) {
   });
 }
 
+/** 待审批的申请卡片（所有角色可见）；工程师另显示本人最近一条被驳回的申请 */
+function buildRequests(d, isEngineerView) {
+  const all = d.requests || [];
+  const list = all.filter((r) => r.status === 'Pending').map((r) => ({
+    id: r.id,
+    type: r.type,
+    title: enums.label(enums.REQUEST_TYPE, r.type),
+    text: ((r.requester && r.requester.name) || '') + '：' + (r.text || ''),
+    time: format.formatDateTimeShort(r.createdAt),
+    canDecide: !!r.canDecide,
+    canCancel: !!r.canCancel
+  }));
+  let rejected = '';
+  if (isEngineerView && all.length && ['Accepted', 'InProgress', 'OnHold'].indexOf(d.status) >= 0) {
+    const last = all[all.length - 1];
+    if (last.status === 'Rejected') {
+      rejected = enums.label(enums.REQUEST_TYPE, last.type) + '已被' + ((last.decider && last.decider.name) || '主管') + '驳回' +
+        (last.reply ? '：' + last.reply : '') + '（' + (last.text || '') + '）';
+    }
+  }
+  return { list: list, rejected: rejected };
+}
+
+/** 暂停提示条 */
+function buildHoldBar(d) {
+  if (d.status !== 'OnHold') return null;
+  const h = d.hold || {};
+  const text = h.text || enums.holdTextOf(d);
+  const from = h.fromStatus || d.holdFromStatus || 'InProgress';
+  const who = [(h.by && h.by.name) || '', h.at ? format.formatDateTimeShort(h.at) : ''].filter(Boolean).join(' ');
+  return {
+    text: '暂停搁置' + (text ? ' · ' + text : ''),
+    sub: (who ? who + ' 暂停，' : '') + '恢复后回到「' + enums.label(enums.STATUS, from) + '」'
+  };
+}
+
+/** 处理人员：负责人 / 协助人 / 已退出，每人累计工时（含计时中） */
+function buildParticipants(d) {
+  const onsite = d.serviceType === 'Onsite';
+  return (d.participants || []).map((p, i) => {
+    const live = p.onSiteSince ? minutesSince(p.onSiteSince) : 0;
+    const role = enums.PARTICIPANT_ROLE[p.role] || {};
+    return {
+      key: 'pt' + ((p.user && p.user.id) || i) + '-' + p.role,
+      user: p.user,
+      name: (p.user && p.user.name) || '',
+      roleLabel: role.short || role.label || '',
+      roleClass: p.role === 'Lead' ? 'lead' : (p.role === 'Former' ? 'former' : ''),
+      hours: onsite ? format.formatDuration((p.totalMinutes || 0) + live) : '',
+      onSite: !!p.onSiteSince,
+      missing: !!p.missingPunch
+    };
+  });
+}
+
+/** 返厂流程 5 节点时间线 */
+function buildFactory(d) {
+  const nodes = (d.factory && d.factory.nodes) || [];
+  const shippedBack = nodes.some((n) => n.node === 'ShippedBack' && n.recorded);
+  const rows = nodes.map((n) => {
+    const def = enums.FACTORY_NODE[n.node] || {};
+    const skipped = n.state === 'skipped';
+    let sub = '';
+    let subClass = '';
+    if (n.recorded) {
+      sub = [(n.operator && n.operator.name) || '', n.time ? format.formatDateTimeShort(n.time) : ''].filter(Boolean).join(' · ');
+    } else if (n.node === 'Repairing') {
+      if (n.state === 'current') sub = '检测 / 维修中' + (n.time ? ' · ' + format.formatMonthDay(n.time) + '到厂' : '');
+      else if (n.state === 'done') sub = '已完成，维修结果见完工信息';
+    } else if (skipped) {
+      sub = '未记录，主管已直接确认工厂收货';
+    } else if (n.node === 'CustomerSigned' && shippedBack && d.status !== 'Closed' && d.status !== 'Voided') {
+      sub = '尚未记录客户签收';
+      subClass = 'amber';
+    } else if (n.state === 'current') {
+      sub = '待记录';
+    }
+    return {
+      node: n.node,
+      label: n.label || def.label || n.node,
+      state: n.state || 'todo',
+      skipped: skipped,
+      sub: sub,
+      subClass: subClass,
+      courier: n.courier || '',
+      trackingNo: n.trackingNo || '',
+      note: n.note || '',
+      photos: (n.photos || []).map((f) => ({ id: f.id, url: f.url })),
+      canRecord: !!n.canRecord && !!def.action,
+      actionLabel: def.action || '',
+      canEdit: !!n.canEdit
+    };
+  });
+  rows.forEach((r, i) => {
+    const next = rows[i + 1];
+    r.last = !next;
+    r.lineOn = !!next && r.state === 'done' && (next.state === 'done' || next.state === 'current');
+  });
+  return rows;
+}
+
 Page({
   data: {
     loading: true,
@@ -291,6 +445,18 @@ Page({
     tab: 'info',
 
     priceText: '',
+    priceClass: '',     // green（保内）/ red（主管未定价）/ muted（销售未定价）
+    priceLink: '',      // 定价 / 改价 / 提建议
+    typeText: '',       // 工程师头部第 1 格：维修类型（工程师不显示价格）
+    suggestion: null,   // { text, tag, tone:'amber'|'plain', tappable }
+    requests: [],
+    requestRejected: '',
+    holdBar: null,
+    participants: [],
+    canAssistants: false,
+    canRequestAssistant: false,
+    factoryNodes: [],
+    closeHintText: '',
     hoursText: '',
     creatorLabel: '销售',
     assigneeSub: '',
@@ -308,6 +474,11 @@ Page({
     buttons: [],
 
     sheetShow: false,
+    sheetMode: 'assign',
+    holdReasons: enums.HOLD_REASON_OPTIONS,
+    holdPlaceholder: HOLD_NOTE_PLACEHOLDER,
+    holdSheet: { show: false, mode: 'hold', title: '', reasonType: '', note: '' },
+    priceSheet: { show: false, mode: 'set', title: '', amount: '', note: '', hint: '', suggestText: '', suggestAmount: '' },
     apptShow: false,
     apptDate: '',
     apptTime: '',
@@ -365,9 +536,15 @@ Page({
     const role = auth.getRole();
     const isEngineerView = role === 'Engineer';
     const isSupervisor = role === 'Supervisor';
-    const tabs = isEngineerView ? ENGINEER_TABS : VIEWER_TABS;
+    const isFactory = d.serviceType === 'Factory';
+    const tabs = isEngineerView ? (isFactory ? ENGINEER_FACTORY_TABS : ENGINEER_TABS) : VIEWER_TABS;
     let tab = this.data.tab;
-    if (!this.tabTouched || !tabs.some((t) => t.key === tab)) tab = tabs[0].key;
+    if (!this.tabTouched || !tabs.some((t) => t.key === tab)) {
+      // 工程师看自己参与的返厂单：默认「返厂流程」
+      tab = isEngineerView && isFactory && (d.myRole || d.status !== 'Pending') ? 'factory' : tabs[0].key;
+    }
+    const actions = d.actions || [];
+    const reqs = buildRequests(d, isEngineerView);
 
     this.setData(Object.assign({
       loading: false,
@@ -378,7 +555,14 @@ Page({
       isSupervisor: isSupervisor,
       tabs: tabs,
       tab: tab,
-      priceText: format.formatPrice(d.price),
+      requests: reqs.list,
+      requestRejected: reqs.rejected,
+      holdBar: buildHoldBar(d),
+      canAssistants: actions.indexOf('assistants') >= 0,
+      canRequestAssistant: actions.indexOf('requestAssistant') >= 0,
+      factoryNodes: buildFactory(d),
+      closeHintText: isSupervisor && (d.closeHints || []).length ? '闭环提示：' + d.closeHints.join('；') : '',
+      typeText: enums.label(enums.SERVICE_TYPE, d.serviceType),
       creatorLabel: d.creator && d.creator.role === 'Sales' ? '销售' : '建单人',
       assigneeSub: this.assigneeSub(d),
       infoRows: this.infoRows(d),
@@ -390,7 +574,7 @@ Page({
       issues: this.buildIssues(d),
       buttons: this.buildButtons(d, role),
       progressNote: this.progressNote(d, isSupervisor)
-    }, this.computeLive(d)));
+    }, this.priceView(d, role), this.computeLive(d)));
 
     // 页面数据变化后，补录表单若对应的缺卡已消失则收起
     const s = this.data.supp;
@@ -407,10 +591,15 @@ Page({
     // 今日已配对 + 计时中
     const todayPaired = (d.punches || []).filter((p) => p.kind === 'Leave' && format.isToday(p.time))
       .reduce((s, p) => s + (p.pairMinutes || 0), 0);
-    const extra = d.onSiteSince ? minutesSince(d.onSiteSince) : 0;
-    this.running = running;
+    // 计时中的分钟：有 participants 时按人累加，否则用工单级 onSiteSince
+    const parts = d.participants || [];
+    const extra = parts.length
+      ? parts.reduce((s, p) => s + (p.onSiteSince ? minutesSince(p.onSiteSince) : 0), 0)
+      : (d.onSiteSince ? minutesSince(d.onSiteSince) : 0);
+    this.running = running || parts.some((p) => !!p.onSiteSince);
     return {
       days: built.days,
+      participants: buildParticipants(d),
       hoursText: format.formatDuration((d.totalMinutes || 0) + extra),
       steps: auth.getRole() === 'Engineer' ? [] : buildSteps(d, todayPaired + built.runningMinutes, running)
     };
@@ -427,6 +616,36 @@ Page({
   stopTimer() {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+  },
+
+  /** 头部价格格与价格建议行。工程师：不返回任何价格内容（接口也不会给） */
+  priceView(d, role) {
+    if (role === 'Engineer') return { priceText: '', priceClass: '', priceLink: '', suggestion: null };
+    const actions = d.actions || [];
+    const isSupervisor = role === 'Supervisor';
+    const unpriced = d.priceSet === false || d.price === null || d.price === undefined;
+    let link = '';
+    if (isSupervisor && actions.indexOf('setPrice') >= 0) link = unpriced ? '定价' : '改价';
+    else if (role === 'Sales' && actions.indexOf('suggestPrice') >= 0) link = '提建议';
+
+    let suggestion = null;
+    const ps = d.priceSuggestion;
+    if (ps) {
+      const money = format.formatPrice(ps.amount, false, true);
+      if (isSupervisor) {
+        if (ps.pending) {
+          suggestion = { text: ((ps.by && ps.by.name) || '销售') + ' 建议价格 ' + money, note: ps.note || '', tag: '', tone: 'amber', tappable: actions.indexOf('setPrice') >= 0 };
+        }
+      } else {
+        suggestion = { text: '我方建议 ' + money + (ps.note ? ' · ' + ps.note : ''), note: '', tag: ps.pending ? '待主管确认' : '', tone: 'plain', tappable: false };
+      }
+    }
+    return {
+      priceText: format.formatPrice(d.price, false, d.priceSet),
+      priceClass: unpriced ? (isSupervisor ? 'red unpriced' : 'muted-3 unpriced') : (Number(d.price) === 0 ? 'green' : ''),
+      priceLink: link,
+      suggestion: suggestion
+    };
   },
 
   assigneeSub(d) {
@@ -499,19 +718,27 @@ Page({
 
   buildButtons(d, role) {
     const actions = d.actions || [];
-    const order = role === 'Supervisor' ? SUPERVISOR_ORDER : (role === 'Engineer' ? ENGINEER_ORDER : []);
-    const list = order.filter((a) => actions.indexOf(a) >= 0).map((a) => ({
+    const order = role === 'Supervisor' ? SUPERVISOR_ORDER : (role === 'Engineer' ? ENGINEER_ORDER : SALES_ORDER);
+    const next = nextFactoryNode(d);
+    let list = order.filter((a) => actions.indexOf(a) >= 0 && (a !== 'factory' || next)).map((a) => ({
       key: a,
-      label: LABEL_OVERRIDE[a] || enums.label(enums.ACTION, a),
+      // factory 按钮文案 = 第一个可记录节点的动作文案
+      label: a === 'factory' ? enums.FACTORY_NODE[next.node].action : (LABEL_OVERRIDE[a] || enums.label(enums.ACTION, a)),
       kind: 'secondary',
       disabled: false,
       tip: ''
     }));
     if (role === 'Supervisor' && d.status === 'Submitted' && actions.indexOf('close') < 0) {
-      list.push({ key: 'close', label: enums.label(enums.ACTION, 'close'), kind: 'disabled', disabled: true, tip: '请先补录缺卡' });
+      list.push({ key: 'close', label: enums.label(enums.ACTION, 'close'), kind: 'disabled', disabled: true, tip: d.closeBlockedReason || '请先补录缺卡' });
+    }
+    // 最多 3 个按钮：顺序靠前的多余项收进「更多」
+    this.moreActions = [];
+    if (list.length > MAX_BUTTONS) {
+      this.moreActions = list.slice(0, list.length - (MAX_BUTTONS - 1));
+      list = [{ key: 'more', label: '更多', kind: 'secondary', disabled: false, tip: '' }].concat(list.slice(list.length - (MAX_BUTTONS - 1)));
     }
     for (let i = list.length - 1; i >= 0; i--) {
-      if (!list[i].disabled) {
+      if (!list[i].disabled && list[i].key !== 'more') {
         list[i].kind = 'primary';
         break;
       }
@@ -523,10 +750,17 @@ Page({
 
   progressNote(d, isSupervisor) {
     if (!isSupervisor) return SALES_NOTE;
-    const acts = (d.actions || []).filter((a) => a !== 'supplement').map((a) => LABEL_OVERRIDE[a] || enums.label(enums.ACTION, a));
+    const actions = d.actions || [];
+    const next = nextFactoryNode(d);
+    const acts = SUPERVISOR_ORDER.filter((a) => actions.indexOf(a) >= 0 && (a !== 'factory' || next))
+      .map((a) => (a === 'factory' ? enums.FACTORY_NODE[next.node].action : (LABEL_OVERRIDE[a] || enums.label(enums.ACTION, a))));
+    const inPage = [];
+    if (actions.indexOf('setPrice') >= 0) inPage.push('定价（头部「服务价格」）');
+    if (actions.indexOf('assistants') >= 0) inPage.push('调整协助人（信息 →「处理人员」）');
     const parts = [];
     if (acts.length) parts.push('主管可在底部操作：' + acts.join('、'));
-    if ((d.actions || []).indexOf('supplement') >= 0) parts.push('缺卡请在上方警示框中补录离场时间');
+    if (inPage.length) parts.push('页面内可' + inPage.join('、'));
+    if (actions.indexOf('supplement') >= 0) parts.push('缺卡请在上方警示框中补录离场时间');
     if (!parts.length) return '当前状态无可执行的主管操作。';
     return parts.join('；') + '。';
   },
@@ -602,8 +836,26 @@ Page({
       wx.showToast({ title: btn.tip || '暂不可操作', icon: 'none' });
       return;
     }
+    if (key === 'more') {
+      const more = this.moreActions || [];
+      if (!more.length) return;
+      wx.showActionSheet({
+        itemList: more.map((m) => m.label),
+        success: (res) => {
+          const m = more[res.tapIndex];
+          if (m) this.doAction(m.key);
+        },
+        fail() {}
+      });
+      return;
+    }
+    this.doAction(key);
+  },
+
+  doAction(key) {
     if (this.data.busy) return;
     const id = this.orderId;
+    const d = this.detail || {};
     switch (key) {
       case 'claim':
         this.run(api.orders.claim(id, { loading: '认领中' }), '认领成功', true);
@@ -622,9 +874,14 @@ Page({
       case 'complete':
         wx.navigateTo({ url: '/pages/complete/index?id=' + id });
         break;
+      case 'factory': {
+        const next = nextFactoryNode(d);
+        if (next) this.goFactoryNode(next.node);
+        break;
+      }
       case 'assign':
       case 'reassign':
-        this.setData({ sheetShow: true });
+        this.setData({ sheetMode: 'assign', sheetShow: true });
         break;
       case 'void':
         this.askReason('作废工单', '请输入作废原因', '作废').then((r) => {
@@ -632,25 +889,31 @@ Page({
         });
         break;
       case 'hold':
-        this.askReason('暂停搁置', '原因，如：等待备件 / 等待客户', '确定').then((r) => {
-          this.run(api.orders.hold(id, r, { loading: '提交中' }), '已暂停搁置');
-        });
+        this.openHoldSheet('hold');
+        break;
+      case 'requestHold':
+        this.openHoldSheet('request');
         break;
       case 'reject':
         this.askReason('退回处理中', '请输入退回原因', '退回').then((r) => {
           this.run(api.orders.reject(id, r, { loading: '提交中' }), '已退回处理中');
         });
         break;
-      case 'resume':
-        this.confirm('恢复处理', '确认恢复处理？工单将回到「处理中」。', '恢复').then(() => {
+      case 'resume': {
+        const from = (d.hold && d.hold.fromStatus) || d.holdFromStatus || 'InProgress';
+        this.confirm('恢复处理', '确认恢复处理？工单将回到「' + enums.label(enums.STATUS, from) + '」。', '恢复').then(() => {
           this.run(api.orders.resume(id, { loading: '提交中' }), '已恢复处理');
         });
         break;
-      case 'close':
-        this.confirm('确认闭环', '确认资料齐全并闭环此工单？闭环后不可再修改。', '确认闭环').then(() => {
+      }
+      case 'close': {
+        const hints = d.closeHints || [];
+        const content = '确认资料齐全并闭环此工单？闭环后不可再修改。' + (hints.length ? '\n提示：' + hints.join('；') : '');
+        this.confirm('确认闭环', content, '确认闭环').then(() => {
           this.run(api.orders.close(id, { loading: '提交中' }), '已闭环');
         });
         break;
+      }
       default:
         break;
     }
@@ -704,7 +967,223 @@ Page({
     });
   },
 
-  /* ---------------- 指派 ---------------- */
+  /* ---------------- 暂停 / 申请暂停（共用弹层） ---------------- */
+  openHoldSheet(mode) {
+    this.setData({
+      holdSheet: { show: true, mode: mode, title: mode === 'request' ? '申请暂停' : '标为暂停搁置', reasonType: '', note: '' }
+    });
+  },
+
+  closeHoldSheet() {
+    this.setData({ 'holdSheet.show': false });
+  },
+
+  onHoldReason(e) {
+    this.setData({ 'holdSheet.reasonType': e.currentTarget.dataset.value });
+  },
+
+  onHoldNote(e) {
+    this.setData({ 'holdSheet.note': e.detail.value });
+  },
+
+  saveHold() {
+    const h = this.data.holdSheet;
+    if (this.data.busy) return;
+    const note = (h.note || '').trim();
+    if (!h.reasonType) {
+      wx.showToast({ title: '请选择暂停原因', icon: 'none' });
+      return;
+    }
+    if (h.reasonType === 'Other' && !note) {
+      wx.showToast({ title: '请填写暂停说明', icon: 'none' });
+      return;
+    }
+    if (note.length > 200) {
+      wx.showToast({ title: '暂停说明不能超过 200 个字', icon: 'none' });
+      return;
+    }
+    const id = this.orderId;
+    const request = h.mode === 'request';
+    const p = request
+      ? api.orders.requestHold(id, h.reasonType, note, { loading: '提交中' })
+      : api.orders.hold(id, h.reasonType, note, { loading: '提交中' });
+    this.run(p, request ? '已提交申请' : '已暂停搁置').then((d) => {
+      if (d) this.setData({ 'holdSheet.show': false });
+    });
+  },
+
+  /* ---------------- 申请审批（暂停 / 协助人） ---------------- */
+  findRequest(e) {
+    const id = Number(e.currentTarget.dataset.id);
+    return this.data.requests.find((r) => r.id === id) || null;
+  },
+
+  onApproveRequest(e) {
+    const r = this.findRequest(e);
+    if (!r || this.data.busy) return;
+    this.confirm('同意' + r.title, r.text + (r.type === 'Hold' ? '\n同意后工单进入「暂停搁置」。' : '\n同意后对方成为本单协助人。'), '同意').then(() => {
+      this.run(api.orders.approveRequest(this.orderId, r.id, { loading: '提交中' }), '已同意');
+    });
+  },
+
+  onRejectRequest(e) {
+    const r = this.findRequest(e);
+    if (!r || this.data.busy) return;
+    wx.showModal({
+      title: '驳回' + r.title,
+      editable: true,
+      placeholderText: '回复（选填），如：备件明天到，先别停',
+      confirmText: '驳回',
+      confirmColor: enums.COLORS.red,
+      success: (res) => {
+        if (!res.confirm) return;
+        const reply = (res.content || '').trim();
+        if (reply.length > 200) {
+          wx.showToast({ title: '回复不能超过 200 个字', icon: 'none' });
+          return;
+        }
+        this.run(api.orders.rejectRequest(this.orderId, r.id, reply, { loading: '提交中' }), '已驳回');
+      }
+    });
+  },
+
+  onCancelRequest(e) {
+    const r = this.findRequest(e);
+    if (!r || this.data.busy) return;
+    this.confirm('撤回' + r.title, '确认撤回这条申请？', '撤回').then(() => {
+      this.run(api.orders.cancelRequest(this.orderId, r.id, { loading: '提交中' }), '已撤回');
+    });
+  },
+
+  /* ---------------- 定价（主管） / 价格建议（销售） ---------------- */
+  onPriceLink() {
+    const d = this.detail;
+    if (!d || !this.data.priceLink) return;
+    const actions = d.actions || [];
+    if (this.data.role === 'Supervisor' && actions.indexOf('setPrice') >= 0) this.openPriceSheet('set');
+    else if (this.data.role === 'Sales' && actions.indexOf('suggestPrice') >= 0) this.openPriceSheet('suggest');
+  },
+
+  onSuggestionTap() {
+    const s = this.data.suggestion;
+    if (s && s.tappable) this.openPriceSheet('set');
+  },
+
+  openPriceSheet(mode) {
+    const d = this.detail || {};
+    const ps = d.priceSuggestion;
+    const priced = d.priceSet !== false && d.price !== null && d.price !== undefined;
+    const sheet = { show: true, mode: mode, title: '', amount: '', note: '', hint: '', suggestText: '', suggestAmount: '' };
+    if (mode === 'set') {
+      sheet.title = priced ? '改价' : '定价';
+      sheet.amount = priced ? String(d.price) : '';
+      sheet.hint = '保内免费填 0。价格仅销售和主管可见，工程师看不到。';
+      if (ps && ps.pending) {
+        sheet.suggestText = ((ps.by && ps.by.name) || '销售') + ' 建议 ' + format.formatPrice(ps.amount, false, true) + (ps.note ? ' · ' + ps.note : '');
+        sheet.suggestAmount = String(ps.amount);
+      }
+    } else {
+      sheet.title = '价格建议';
+      sheet.hint = '建议仅供主管定价参考，最终价格由主管确定。保内免费填 0。';
+      if (ps) {
+        sheet.amount = String(ps.amount);
+        sheet.note = ps.note || '';
+      }
+    }
+    this.setData({ priceSheet: sheet });
+  },
+
+  closePriceSheet() {
+    this.setData({ 'priceSheet.show': false });
+  },
+
+  onPriceAmount(e) {
+    const v = cleanAmount(e.detail.value);
+    this.setData({ 'priceSheet.amount': v });
+    return v;
+  },
+
+  onPriceNote(e) {
+    this.setData({ 'priceSheet.note': e.detail.value });
+  },
+
+  onAdoptSuggestion() {
+    const s = this.data.priceSheet;
+    if (s.suggestAmount !== '') this.setData({ 'priceSheet.amount': s.suggestAmount });
+  },
+
+  savePrice() {
+    const s = this.data.priceSheet;
+    if (this.data.busy) return;
+    const suggest = s.mode === 'suggest';
+    const raw = String(s.amount || '').trim();
+    if (!raw) {
+      wx.showToast({ title: suggest ? '请填写建议价格' : '请填写服务价格（保内填 0）', icon: 'none' });
+      return;
+    }
+    if (!/^\d+(\.\d{1,2})?$/.test(raw)) {
+      wx.showToast({ title: (suggest ? '建议价格' : '服务价格') + '格式不正确', icon: 'none' });
+      return;
+    }
+    const amount = Number(raw);
+    if (amount > MAX_AMOUNT) {
+      wx.showToast({ title: (suggest ? '建议价格' : '服务价格') + '过大', icon: 'none' });
+      return;
+    }
+    const note = (s.note || '').trim();
+    if (suggest && note.length > 200) {
+      wx.showToast({ title: '备注不能超过 200 个字', icon: 'none' });
+      return;
+    }
+    const id = this.orderId;
+    const p = suggest
+      ? api.orders.suggestPrice(id, amount, note, { loading: '提交中' })
+      : api.orders.setPrice(id, amount, { loading: '保存中' });
+    this.run(p, suggest ? '已提交价格建议' : '价格已保存').then((d) => {
+      if (d) this.setData({ 'priceSheet.show': false });
+    });
+  },
+
+  /* ---------------- 协助人 ---------------- */
+  onEditAssistants() {
+    if (this.data.canAssistants) this.setData({ sheetMode: 'assistants', sheetShow: true });
+  },
+
+  onRequestAssistant() {
+    if (this.data.canRequestAssistant) this.setData({ sheetMode: 'request', sheetShow: true });
+  },
+
+  /* ---------------- 返厂流程 ---------------- */
+  goFactoryNode(node) {
+    wx.navigateTo({ url: '/pages/factory-node/index?id=' + this.orderId + '&node=' + node });
+  },
+
+  onFactoryNode(e) {
+    const node = e.currentTarget.dataset.node;
+    if (node) this.goFactoryNode(node);
+  },
+
+  /** 点击复制快递单号 */
+  onCopyTracking(e) {
+    const no = e.currentTarget.dataset.no;
+    if (!no) return;
+    wx.setClipboardData({
+      data: String(no),
+      success: () => wx.showToast({ title: '单号已复制', icon: 'none' }),
+      fail() {}
+    });
+  },
+
+  onPreviewFactoryPhoto(e) {
+    const node = e.currentTarget.dataset.node;
+    const url = e.currentTarget.dataset.url;
+    const row = this.data.factoryNodes.find((n) => n.node === node);
+    const urls = row ? row.photos.map((p) => p.url) : [];
+    if (!url) return;
+    wx.previewImage({ urls: urls.indexOf(url) >= 0 ? urls : [url], current: url });
+  },
+
+  /* ---------------- 指派 / 协助人弹层 ---------------- */
   onSheetClose() {
     this.setData({ sheetShow: false });
   },

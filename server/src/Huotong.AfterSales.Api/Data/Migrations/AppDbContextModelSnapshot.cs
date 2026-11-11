@@ -75,6 +75,176 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                     b.ToTable("Employees");
                 });
 
+            modelBuilder.Entity("Huotong.AfterSales.Api.Domain.FactoryRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Courier")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Node")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("OperatorId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("Time")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TrackingNo")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("UpdatedById")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperatorId");
+
+                    b.HasIndex("OrderId", "Node")
+                        .IsUnique();
+
+                    b.ToTable("FactoryRecords");
+                });
+
+            modelBuilder.Entity("Huotong.AfterSales.Api.Domain.OrderAssistant", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AddedById")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("EngineerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AddedById");
+
+                    b.HasIndex("EngineerId");
+
+                    b.HasIndex("OrderId", "EngineerId")
+                        .IsUnique();
+
+                    b.ToTable("OrderAssistants");
+                });
+
+            modelBuilder.Entity("Huotong.AfterSales.Api.Domain.OrderRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("DeciderId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("HoldReasonType")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Reply")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RequesterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("TargetEngineerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeciderId");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("RequesterId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("TargetEngineerId");
+
+                    b.ToTable("OrderRequests");
+                });
+
+            modelBuilder.Entity("Huotong.AfterSales.Api.Domain.PriceSuggestion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("Amount")
+                        .HasColumnType("REAL");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SalesId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("SalesId");
+
+                    b.ToTable("PriceSuggestions");
+                });
+
             modelBuilder.Entity("Huotong.AfterSales.Api.Domain.Punch", b =>
                 {
                     b.Property<int>("Id")
@@ -147,6 +317,10 @@ namespace Huotong.AfterSales.Api.Data.Migrations
 
                     b.Property<int>("ActorId")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("OrderId")
                         .HasColumnType("INTEGER");
@@ -282,7 +456,21 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("HoldAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("HoldById")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("HoldFromStatus")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("HoldReason")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HoldReasonType")
+                        .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
                     b.Property<double?>("Latitude")
@@ -301,6 +489,12 @@ namespace Huotong.AfterSales.Api.Data.Migrations
 
                     b.Property<double>("Price")
                         .HasColumnType("REAL");
+
+                    b.Property<bool>("PriceSet")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("PriceSetAt")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ProblemType")
                         .IsRequired()
@@ -391,6 +585,104 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                     b.Navigation("AvatarFile");
                 });
 
+            modelBuilder.Entity("Huotong.AfterSales.Api.Domain.FactoryRecord", b =>
+                {
+                    b.HasOne("Huotong.AfterSales.Api.Domain.Employee", "Operator")
+                        .WithMany()
+                        .HasForeignKey("OperatorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Huotong.AfterSales.Api.Domain.WorkOrder", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Operator");
+
+                    b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("Huotong.AfterSales.Api.Domain.OrderAssistant", b =>
+                {
+                    b.HasOne("Huotong.AfterSales.Api.Domain.Employee", "AddedBy")
+                        .WithMany()
+                        .HasForeignKey("AddedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Huotong.AfterSales.Api.Domain.Employee", "Engineer")
+                        .WithMany()
+                        .HasForeignKey("EngineerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Huotong.AfterSales.Api.Domain.WorkOrder", "Order")
+                        .WithMany("Assistants")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AddedBy");
+
+                    b.Navigation("Engineer");
+
+                    b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("Huotong.AfterSales.Api.Domain.OrderRequest", b =>
+                {
+                    b.HasOne("Huotong.AfterSales.Api.Domain.Employee", "Decider")
+                        .WithMany()
+                        .HasForeignKey("DeciderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Huotong.AfterSales.Api.Domain.WorkOrder", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Huotong.AfterSales.Api.Domain.Employee", "Requester")
+                        .WithMany()
+                        .HasForeignKey("RequesterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Huotong.AfterSales.Api.Domain.Employee", "TargetEngineer")
+                        .WithMany()
+                        .HasForeignKey("TargetEngineerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Decider");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Requester");
+
+                    b.Navigation("TargetEngineer");
+                });
+
+            modelBuilder.Entity("Huotong.AfterSales.Api.Domain.PriceSuggestion", b =>
+                {
+                    b.HasOne("Huotong.AfterSales.Api.Domain.WorkOrder", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Huotong.AfterSales.Api.Domain.Employee", "Sales")
+                        .WithMany()
+                        .HasForeignKey("SalesId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Sales");
+                });
+
             modelBuilder.Entity("Huotong.AfterSales.Api.Domain.Punch", b =>
                 {
                     b.HasOne("Huotong.AfterSales.Api.Domain.Employee", "Engineer")
@@ -463,6 +755,8 @@ namespace Huotong.AfterSales.Api.Data.Migrations
 
             modelBuilder.Entity("Huotong.AfterSales.Api.Domain.WorkOrder", b =>
                 {
+                    b.Navigation("Assistants");
+
                     b.Navigation("Logs");
 
                     b.Navigation("Punches");

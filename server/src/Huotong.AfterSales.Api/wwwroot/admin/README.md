@@ -30,18 +30,37 @@ admin/
     ├── ui.js             toast / confirm / preview + 公共组件（已全局注册）
     └── views/
         ├── login.js      登录页（已完成）
-        ├── orders.js     工单（占位，待覆盖）
-        ├── punches.js    打卡记录（占位，待覆盖）
-        ├── hours.js      工时统计（占位，待覆盖）
-        └── accounts.js   账号管理（占位，待覆盖）
+        ├── orders.js          工单列表 + 概况条 + 筛选
+        ├── orders-drawer.js   工单详情抽屉（进度条、定价、暂停、申请审批、处理人员、返厂流程、打卡、状态记录）
+        ├── orders-assign.js   指派 / 改派（负责人 + 协助人）与「调整协助人」弹窗
+        ├── orders-hold.js     暂停搁置弹窗（原因 + 说明）
+        ├── orders-price.js    定价 / 改价弹窗（展示销售的价格建议）
+        ├── orders-factory.js  返厂节点记录 / 更正弹窗（快递、照片上传）
+        ├── orders-create.js   新建工单（不含价格）
+        ├── orders-export.js   导出台账
+        ├── punches.js    打卡记录
+        ├── hours.js      工时统计
+        └── accounts.js   账号管理
 ```
+
+## v1.1 功能（契约见 `docs/CHANGES-v1.1.md`）
+
+PC 后台只有主管能登录，只实现主管视角的动作。所有可执行动作都看服务端返回的 `detail.actions`、`requests[].canDecide`、`factory.nodes[].canRecord / canEdit`，前端不推导规则。
+
+- **价格**：新建工单不再填价格。列表价格列与抽屉里未定价显示红色「未定价」；抽屉「服务价格」旁有「定价 / 改价」（`orders-price.js`，0 = 保内免费）。销售的最新价格建议显示在抽屉里，`pending` 时高亮并可点「采用」（预填金额后仍需保存）。未定价的待验收单「确认闭环」为禁用，提示取 `closeBlockedReason`。
+- **暂停搁置**：「待启动」「处理中」都可点「标为暂停搁置」（`orders-hold.js`：原因下拉 4 项 + 说明，选「其他」时说明必填）。列表状态列显示 `暂停搁置 · {holdText}`；抽屉 5 段进度条里暂停所在的段显示为灰色斜纹 + 暂停图标，下方显示 `暂停 · {holdText}`，并有暂停提示条（暂停人、时间、恢复后回到的状态）。「恢复处理」回到暂停前的状态。
+- **申请审批**：工程师的暂停申请 / 协助人申请在抽屉里以琥珀色卡片展示，可「同意」或「驳回」（回复选填）。列表里有待审批申请的工单带「待审批」标；侧栏快捷筛选「待审批申请」、概况条第二行「待审批申请 N」可直达。
+- **多人协作**：指派 / 改派弹窗里单选负责人、多选协助人（最多 5 人，负责人不能同时是协助人，改派时预选当前协助人）；抽屉「处理人员」区按人列出角色、累计工时、现场中 / 缺卡，并可「调整协助人」。列表负责人列显示 `+N`（悬停看协助人名单）。打卡记录每条都显示打卡人姓名。工时统计的每日明细里，该工程师作为协助人的条目带「协助」标签。
+- **返厂流程**：返厂单抽屉里有 5 节点时间线（操作人、时间、快递公司与单号——点击单号复制、备注、照片缩略图可预览）；可记录的节点显示按钮，已记录的节点可「更正」（`orders-factory.js`，照片用 `api.files.upload` 上传，category 按节点，最多 9 张）。底部按钮区也会出现下一个可记录节点的按钮。列表类型列在「返厂」下显示 `factoryText`。闭环确认框里展示 `closeHints`（如「客户签收尚未记录」）。
+- **概况条第二行**：暂停搁置 / 待审批申请 / 未定价 / 价格建议（来自 `GET /api/admin/overview`），前三项可点击跳到对应筛选。
+- **导出**：台账末尾新增 5 列（协助人、人员工时、暂停原因、返厂进度、寄回单号），未定价显示「未定价」；工时导出新增第 10 列「本单角色」。导出由后端生成，前端无逻辑改动。
 
 ## 路由
 
 | hash | 视图 |
 |---|---|
 | `#/login?redirect=...` | 登录 |
-| `#/orders` | 工单。`?quick=missing|distance|submitted` 对应侧栏「待处理」快捷筛选 |
+| `#/orders` | 工单。`?quick=missing|distance|submitted|requests|unpriced` 对应侧栏「待处理」快捷筛选 |
 | `#/punches` | 打卡记录 |
 | `#/hours` | 工时统计 |
 | `#/accounts` | 账号管理 |
@@ -90,8 +109,10 @@ export default {
 - 接口函数（参数名与 API.md 一致）：
   - `auth.passwordLogin(phone, password)`
   - `me.get()`、`me.changePassword(oldPassword, newPassword)`
-  - `orders.list({status, keyword, issue, assigneeId, serviceType, from, to, page, pageSize})`、`orders.detail(id)`、`orders.create(body)`
-  - `orders.assign(id, engineerId)`、`orders.void(id, reason)`、`orders.hold(id, reason)`、`orders.resume(id)`、`orders.reject(id, reason)`、`orders.close(id)`
+  - `orders.list({status, keyword, issue, assigneeId, serviceType, from, to, priceSet, pendingRequest, page, pageSize})`、`orders.detail(id)`、`orders.create(body)`
+  - `orders.assign(id, engineerId, assistantIds?)`（`assistantIds` 省略 = 不调整协助人）、`orders.setAssistants(id, engineerIds)`
+  - `orders.void(id, reason)`、`orders.hold(id, reasonType, note)`、`orders.resume(id)`、`orders.reject(id, reason)`、`orders.close(id)`
+  - `orders.setPrice(id, price)`、`orders.approveRequest(id, requestId)`、`orders.rejectRequest(id, requestId, reply)`、`orders.factoryNode(id, {node, courier, trackingNo, note, photoIds})`
   - `engineers.list()`
   - `hours.month(year, month, engineerId)`
   - `admin.overview()`、`admin.supplement({orderId, arrivePunchId, kind, time, reason})`
@@ -102,13 +123,14 @@ export default {
 
 ### format.js
 
-`parseTime(s)`（按本地时间解析 `yyyy-MM-ddTHH:mm:ss` / `yyyy-MM-dd`）、`toApiDate(d)`、`toApiDateTime(d)`、`fmtTime` → `HH:mm`、`fmtMD` → `M月D日`、`fmtMDHM` → `M月D日 HH:mm`、`fmtDateTime` → `yyyy-MM-dd HH:mm`、`fmtWeekday`、`fmtHM(minutes)` → `H:mm`（空值为 `—`）、`fmtHours(minutes)` → 1 位小数、`fmtNumber`、`fmtPrice(p, {free})` → `¥1,800` / `保内`（`free: true` 时为 `保内免费`）、`isWarranty(p)`、`fmtRelative`、`fmtDistance(m)` → `86 m` / `2.4 km`、`maskPhone`、`thisWeekRange()`、`lastDaysRange(n)`、`monthRange(y, m)`。
+`parseTime(s)`（按本地时间解析 `yyyy-MM-ddTHH:mm:ss` / `yyyy-MM-dd`）、`toApiDate(d)`、`toApiDateTime(d)`、`fmtTime` → `HH:mm`、`fmtMD` → `M月D日`、`fmtMDHM` → `M月D日 HH:mm`、`fmtDateTime` → `yyyy-MM-dd HH:mm`、`fmtWeekday`、`fmtHM(minutes)` → `H:mm`（空值为 `—`）、`fmtHours(minutes)` → 1 位小数、`fmtNumber`、`fmtPrice(p, {free, priceSet})` → `¥1,800` / `保内`（`free: true` 时为 `保内免费`；`priceSet === false` 时为 `未定价`）、`isWarranty(p, priceSet)`、`fmtRelative`、`fmtDistance(m)` → `86 m` / `2.4 km`、`maskPhone`、`thisWeekRange()`、`lastDaysRange(n)`、`monthRange(y, m)`。
 
 ### enums.js
 
 - `ROLE`、`ORDER_STATUS`（`label` / `dot` / `bg` / `fg`）、`ORDER_SOURCE`、`PROBLEM_TYPE`、`URGENCY`、`SERVICE_TYPE`、`PUNCH_KIND`、`RUN_STATUS`、`ISSUE`（标签色 + 警示框色 `alertBg` / `alertBorder` / `alertFg`）、`FILE_CATEGORY`。
 - `STATUS_TABS`（原型顺序，`countKey` 对应 `orders.list().counts`）。
-- `QUICK_FILTERS`（`key` 对应 `?quick=`，`query` 是 orders.list 参数）。
+- `QUICK_FILTERS`（`key` 对应 `?quick=`，`query` 是 orders.list 参数；v1.1 加了 `requests`、`unpriced`）。
+- v1.1：`PROGRESS_STEPS`（5 段进度条文字）、`HOLD_REASON`、`REQUEST_TYPE`、`REQUEST_STATUS`、`FACTORY_NODE`（`label` / `action` 按钮文案 / `courier` / `photo` / `category`）、`PARTICIPANT_ROLE`；`FILE_CATEGORY` 加了 3 类返厂照片。
 - `ORDER_ACTIONS`：action → 按钮文案和样式。
 - `label(map, v)`、`options(map)`。
 
@@ -149,6 +171,7 @@ export default {
 - 警示框：`alert` + `alert-danger` / `alert-warn` / `alert-info`，里面用 `alert-row`、`alert-actions`、`alert-form`（96px + 1fr）、`alert-note`
 - 打卡行：`punch-row` > `thumb(.thumb-missing)` + `punch-main` > `punch-title` / `punch-note(.warn|.danger)` + `punch-dur`；缩略图网格：`thumb-grid`
 - 状态记录：`log-list` > `log-item` > `dot` + `log-text` + `log-time`
+- v1.1：5 段进度条 `progress5` > `progress5-seg(.on|.current|.paused)`；价格建议 `orders-suggest(.pending)`；申请卡片 `alert alert-warn orders-dr-req`；人员行 `orders-dr-person`；返厂时间线 `factory-line` > `factory-node.is-done|is-current|is-todo|is-skipped`
 - 表单：`field` > `field-label`（`<span class="req">*</span>`）+ `input` / `select` / `textarea`（`.invalid`）+ `field-hint` / `field-error`；布局用 `form-stack` / `form-grid`（`.span-2`）/ `form-section-title`；选项用 `radio-group` > `radio-chip(.active)`，复选用 `checkbox`
 - 菜单：`dropdown` > `menu` > `menu-item`
 - 工具类：`num`、`mono`、`text-muted` / `text-faint` / `text-danger` / `text-warn` / `text-success`、`text-right`、`ellipsis`、`nowrap`

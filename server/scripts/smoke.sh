@@ -83,6 +83,9 @@ NEW=$(call POST /api/orders "$SALES" "{\"source\":\"SalesReferral\",\"problemTyp
  \"projectNo\":null,\"faultTime\":\"11月4日 下午\",\"symptom\":\"升温到 180℃ 不再加热\",\"customerTried\":\"断电重启\",\"siteEnvironment\":\"通风橱内\",
  \"customerRequest\":null,\"price\":1800,\"photoFileIds\":[$PHOTO]}")
 OID=$(echo "$NEW" | py 'd["id"]')
+expect "$(echo "$NEW" | py 'str(d["priceSet"])+"/"+str(d["price"])')" "False/None" "建单忽略旧客户端传入的 price（未定价）"
+expect "$(echo "$NEW" | py '",".join(d["actions"])')" "suggestPrice" "销售 actions（可提价格建议）"
+expect "$(echo "$NEW" | py 'd["progressStep"]')" "1" "progressStep=1"
 expect "$(echo "$NEW" | py 'd["status"]')" "Pending" "新建工单 $(echo "$NEW" | py 'd["orderNo"]') → Pending"
 expect "$(echo "$NEW" | py 'd["city"]+"/"+d["region"]')" "苏州/苏州市工业园区" "地址解析 city/region"
 expect "$(echo "$NEW" | py 'len(d["files"]["orderPhotos"])')" "1" "建单照片已关联"
@@ -91,7 +94,9 @@ expect "$(echo "$NEW" | py 'd["logs"][0]["text"]')" "王敏 建单 · 紧急" "�
 echo "== 工程师认领"
 D=$(call POST "/api/orders/$OID/claim" "$ENG")
 expect "$(echo "$D" | py 'd["status"]')" "Accepted" "认领 → Accepted"
-expect "$(echo "$D" | py '",".join(d["actions"])')" "appoint,checkin" "工程师 actions"
+expect "$(echo "$D" | py '",".join(d["actions"])')" "appoint,checkin,requestHold,requestAssistant" "工程师 actions"
+expect "$(echo "$D" | py 'str(d["price"])+"/"+str(d["priceSet"])+"/"+str(d["priceSuggestion"])')" "None/None/None" "工程师看不到价格"
+expect "$(echo "$D" | py 'd["myRole"]')" "Lead" "myRole=Lead"
 req POST "/api/orders/$OID/claim" "$LI"; expect "$(py 'd["message"]' < "$TMP/body")" "工单已被他人认领" "重复认领 → 409"
 
 echo "== 打卡"
@@ -120,14 +125,30 @@ D=$(call POST "/api/orders/$OID/complete" "$ENG" "{\"faultCause\":\"加热棒接
 expect "$(echo "$D" | py 'd["status"]')" "Submitted" "提交完工 → Submitted"
 expect "$(echo "$D" | py 'd["completion"]["runStatus"]')" "Normal" "完工信息"
 
-echo "== 主管闭环"
+echo "== 价格：销售建议 → 主管定价 → 闭环"
 D=$(call GET "/api/orders/$OID" "$SUP")
-expect "$(echo "$D" | py '",".join(d["actions"])')" "reject,close" "主管 actions（待验收）"
+expect "$(echo "$D" | py '",".join(d["actions"])')" "reject,setPrice" "主管 actions（待验收、未定价）"
+expect "$(echo "$D" | py 'd["closeBlockedReason"]')" "请先设置服务价格（保内填 0）" "closeBlockedReason（未定价）"
+req POST "/api/orders/$OID/close" "$SUP"; expect "$(py 'd["message"]' < "$TMP/body")" "请先设置服务价格（保内填 0）" "未定价闭环 → 409"
+req POST "/api/orders/$OID/price" "$SALES" '{"price":1}'; expect "$(cat "$TMP/status")" "403" "销售定价 → 403"
+req POST "/api/orders/$OID/price" "$ENG" '{"price":1}'; expect "$(cat "$TMP/status")" "403" "工程师定价 → 403"
+req POST "/api/orders/$OID/price-suggestions" "$ENG" '{"amount":1}'; expect "$(cat "$TMP/status")" "403" "工程师提价格建议 → 403"
+D=$(call POST "/api/orders/$OID/price-suggestions" "$SALES" '{"amount":1500,"note":"老客户，建议优惠"}')
+expect "$(echo "$D" | py 'd["logs"][-1]["text"]+"/"+d["logs"][-1]["kind"]')" "王敏 建议价格 ¥1,500（老客户，建议优惠）/Price" "销售提价格建议"
+D=$(call GET "/api/orders/$OID" "$SUP")
+expect "$(echo "$D" | py 'str(d["priceSuggestion"]["pending"])+"/"+str(float(d["priceSuggestion"]["amount"]))')" "True/1500.0" "主管看到待处理的价格建议"
+D=$(call GET "/api/orders/$OID" "$ENG")
+expect "$(echo "$D" | py 'str(d["price"])+"/"+str(d["priceSuggestion"])+"/"+str(len([l for l in d["logs"] if l["kind"]=="Price"]))')" "None/None/0" "工程师看不到价格、建议与价格记录"
+D=$(call POST "/api/orders/$OID/price" "$SUP" '{"price":1800}')
+expect "$(echo "$D" | py 'd["logs"][-1]["text"]')" "赵主管 定价 ¥1,800" "主管定价"
+expect "$(echo "$D" | py 'str(float(d["price"]))+"/"+str(d["priceSet"])+"/"+str(d["priceSuggestion"]["pending"])')" "1800.0/True/False" "定价后 price/priceSet/建议已处理"
+expect "$(echo "$D" | py '",".join(d["actions"])')" "reject,close,setPrice" "主管 actions（待验收、已定价）"
+expect "$(call GET "/api/orders/$OID" "$SALES" | py 'float(d["price"])')" "1800.0" "销售能看到价格"
 D=$(call POST "/api/orders/$OID/close" "$SUP")
 expect "$(echo "$D" | py 'd["status"]')" "Closed" "确认闭环 → Closed"
-expect "$(echo "$D" | py 'd["actions"]')" "[]" "闭环后主管无动作"
+expect "$(echo "$D" | py '",".join(d["actions"])')" "setPrice" "闭环后主管仅可改价"
 LOGS=$(echo "$D" | py '" | ".join(l["text"] for l in d["logs"])')
-expect "$(echo "$D" | py 'len(d["logs"])')" "5" "状态记录 5 条：$LOGS"
+expect "$(echo "$D" | py 'len(d["logs"])')" "7" "状态记录 7 条：$LOGS"
 expect "$(echo "$D" | py 'd["punches"][1]["pairMinutes"] is not None')" "True" "离场有 pairMinutes"
 expect "$(echo "$D" | py 'd["issues"]')" '["DistanceAbnormal"]' "issues 含距离异常"
 expect "$(call GET "/api/orders/$OID" "$SALES" | py 'd["actions"]')" "[]" "销售 actions 为空"
@@ -144,6 +165,15 @@ call GET "/api/orders?page=1&pageSize=20" "$SUP" > "$TMP/h"; ok "orders total=$(
 call GET "/api/orders?issue=MissingPunch" "$SALES" > /dev/null; ok "orders?issue=MissingPunch（销售）"
 call GET /api/orders/recent-customers "$SALES" > "$TMP/h"; ok "recent-customers $(py 'len(d)' < "$TMP/h") 个"
 call GET /api/engineers "$SUP" > "$TMP/h"; ok "engineers: $(py '"; ".join(x["user"]["name"]+" "+x["loadText"] for x in d)' < "$TMP/h")"
+expect "$(call GET /api/engineers "$ENG" | py 'all("assistCount" in x for x in d)')" "True" "工程师可取工程师列表（含 assistCount）"
+expect "$(call GET "/api/orders/hall?filter=all" "$ENG" | py 'all(i["price"] is None and i["priceSet"] is None for i in d["items"])')" "True" "大厅不向工程师返回价格"
+expect "$(call GET "/api/orders/mine?group=all" "$ENG" | py 'all(i["price"] is None and i["priceSet"] is None for i in d["items"])')" "True" "我的工单不向工程师返回价格"
+curl -s "$BASE/api/home/engineer" -H "Authorization: Bearer $ENG" > "$TMP/home.json"
+expect "$(python3 -c 'import re,sys; print(len(re.findall(r"\"price\":\s*[0-9]|\"priceSet\":\s*(?:true|false)|¥", open(sys.argv[1], encoding="utf-8").read())))' "$TMP/home.json")" "0" "工程师首页 JSON 不含价格"
+expect "$(call GET "/api/orders?priceSet=false" "$SUP" | py 'all(i["priceSet"] is False and i["price"] is None for i in d["items"])')" "True" "orders?priceSet=false"
+expect "$(call GET "/api/orders?pendingRequest=true" "$SALES" | py 'all(i["pendingRequestCount"] > 0 for i in d["items"])')" "True" "orders?pendingRequest=true（销售）"
+req GET "/api/orders?priceSet=maybe" "$SUP"; expect "$(py 'd["message"]' < "$TMP/body")" "定价筛选不正确" "priceSet 非法 → 40000"
+call GET /api/admin/overview "$SUP" > "$TMP/h"; expect "$(py 'all(k in d for k in ("onHold","pendingRequests","unpriced","priceSuggestions"))' < "$TMP/h")" "True" "overview v1.1 字段"
 call GET /api/admin/overview "$SUP" > "$TMP/h"; ok "admin/overview $(cat "$TMP/h")"
 call GET /api/admin/employees "$SUP" > "$TMP/h"; ok "admin/employees $(py 'len(d)' < "$TMP/h") 人"
 
@@ -159,7 +189,7 @@ echo "== 远程单与其他主管动作"
 RO=$(call POST /api/orders "$ENG" "{\"source\":\"CustomerDirect\",\"problemType\":\"Consult\",\"urgency\":\"Consult\",\"serviceType\":\"Remote\",
  \"customerName\":\"冒烟远程客户\",\"contactName\":\"李老师\",\"contactPhone\":\"021-12345678\",\"address\":\"上海市杨浦区 [示例地址]\",
  \"deviceModel\":\"微型反应釜 HTM-100\",\"deviceSn\":\"SN-REMOTE\",\"satDate\":\"2025-02\",\"satSigned\":false,
- \"faultTime\":\"今天上午\",\"symptom\":\"压力传感器多久校准一次？\",\"customerTried\":\"查阅说明书\",\"siteEnvironment\":\"教学实验室\",\"price\":0}")
+ \"faultTime\":\"今天上午\",\"symptom\":\"压力传感器多久校准一次？\",\"customerTried\":\"查阅说明书\",\"siteEnvironment\":\"教学实验室\"}")
 RID=$(echo "$RO" | py 'd["id"]')
 expect "$(echo "$RO" | py 'd["productStage"]+"/"+d["city"]')" "新产品/上海" "工程师建远程单（新产品、直辖市解析）"
 WANG=$(call GET /api/me "$ENG" | py 'd["user"]["id"]')
@@ -168,21 +198,100 @@ D=$(call POST "/api/orders/$RID/assign" "$SUP" "{\"engineerId\":$WANG}")
 expect "$(echo "$D" | py 'd["logs"][-1]["text"]')" "赵主管 指派给 王工 → 待启动" "指派 → 待启动"
 D=$(call POST "/api/orders/$RID/appointment" "$ENG" '{"appointmentTime":"2026-11-09T10:00:00"}')
 expect "$(echo "$D" | py 'd["logs"][-1]["text"]')" "王工 预约 11月9日 10:00" "预约"
-expect "$(echo "$D" | py '",".join(d["actions"])')" "appoint,start" "远程单 actions"
+expect "$(echo "$D" | py '",".join(d["actions"])')" "appoint,start,requestHold,requestAssistant" "远程单 actions"
+
+echo "== 暂停搁置：直接暂停 / 申请与审批"
+D=$(call POST "/api/orders/$RID/hold" "$SUP" '{"reasonType":"WaitCustomer","note":"客户下周才有空"}')
+expect "$(echo "$D" | py 'd["status"]+"/"+d["hold"]["text"]+"/"+d["hold"]["fromStatus"]+"/"+str(d["progressStep"])')" "OnHold/等客户：客户下周才有空/Accepted/2" "待启动直接暂停"
+req POST "/api/orders/$RID/start" "$ENG"; expect "$(py 'd["message"]' < "$TMP/body")" "工单已暂停搁置，恢复后才能开始处理" "暂停时 start → 409"
+expect "$(call POST "/api/orders/$RID/resume" "$SUP" | py 'd["status"]')" "Accepted" "恢复 → 回到待启动"
 expect "$(call POST "/api/orders/$RID/start" "$ENG" | py 'd["status"]')" "InProgress" "开始处理 → InProgress"
-expect "$(call POST "/api/orders/$RID/hold" "$SUP" '{"reason":"等待备件"}' | py 'd["status"]+"/"+d["holdReason"]')" "OnHold/等待备件" "暂停搁置"
+req POST "/api/orders/$RID/hold" "$SUP" '{}'; expect "$(py 'd["message"]' < "$TMP/body")" "请选择暂停原因" "缺暂停原因 → 40000"
+req POST "/api/orders/$RID/hold" "$SUP" '{"reasonType":"Nope"}'; expect "$(py 'd["message"]' < "$TMP/body")" "请选择暂停原因" "非法暂停原因 → 40000"
+req POST "/api/orders/$RID/hold" "$SUP" '{"reasonType":"Other"}'; expect "$(py 'd["message"]' < "$TMP/body")" "请填写暂停说明" "其他无说明 → 40000"
+expect "$(call POST "/api/orders/$RID/hold" "$SUP" '{"reasonType":"WaitParts"}' | py 'd["status"]+"/"+d["holdReason"]')" "OnHold/等备件" "暂停搁置"
+expect "$(call POST "/api/orders/$RID/resume" "$SUP" | py 'd["status"]')" "InProgress" "恢复处理"
+expect "$(call POST "/api/orders/$RID/hold" "$SUP" '{"reason":"等待备件"}' | py 'd["status"]+"/"+d["holdReason"]+"/"+d["hold"]["reasonType"]')" "OnHold/等待备件/Other" "旧请求体 {reason} 仍可用"
+expect "$(call POST "/api/orders/$RID/resume" "$SUP" | py 'd["status"]')" "InProgress" "恢复处理"
+D=$(call POST "/api/orders/$RID/hold-requests" "$ENG" '{"reasonType":"WaitParts","note":"轴承预计周五到"}')
+HRQ=$(echo "$D" | py 'd["requests"][-1]["id"]')
+expect "$(echo "$D" | py 'd["requests"][-1]["status"]+"/"+d["requests"][-1]["text"]+"/"+str(d["requests"][-1]["canCancel"])')" "Pending/等备件：轴承预计周五到/True" "工程师申请暂停"
+req POST "/api/orders/$RID/hold-requests" "$ENG" '{"reasonType":"WaitParts"}'; expect "$(py 'd["message"]' < "$TMP/body")" "已有待审批的暂停申请" "重复申请 → 409"
+req POST "/api/orders/$RID/hold-requests" "$LI" '{"reasonType":"WaitParts"}'; expect "$(py 'd["message"]' < "$TMP/body")" "只有负责工程师可以申请暂停" "非负责人申请 → 403"
+expect "$(call GET /api/home/supervisor "$SUP" | py "len([t for t in d['todos'] if t['type']=='HoldRequest' and t['requestId']==$HRQ])")" "1" "主管待办出现暂停申请"
+D=$(call POST "/api/orders/$RID/requests/$HRQ/reject" "$SUP" '{"reply":"备件明天到，先别停"}')
+expect "$(echo "$D" | py 'd["status"]+"/"+d["requests"][-1]["status"]')" "InProgress/Rejected" "驳回暂停申请（状态不变）"
+HRQ=$(call POST "/api/orders/$RID/hold-requests" "$ENG" '{"reasonType":"WaitThirdParty"}' | py 'd["requests"][-1]["id"]')
+D=$(call POST "/api/orders/$RID/requests/$HRQ/approve" "$SUP")
+expect "$(echo "$D" | py 'd["status"]+"/"+d["hold"]["text"]+"/"+d["logs"][-1]["text"]')" "OnHold/等第三方/赵主管 同意暂停申请 → 暂停搁置（等第三方）" "同意暂停申请"
+req POST "/api/orders/$RID/requests/$HRQ/approve" "$SUP"; expect "$(py 'd["message"]' < "$TMP/body")" "该申请已处理" "重复审批 → 409"
 expect "$(call POST "/api/orders/$RID/resume" "$SUP" | py 'd["status"]')" "InProgress" "恢复处理"
 D=$(call POST "/api/orders/$RID/assign" "$SUP" "{\"engineerId\":$LIU}")
 expect "$(echo "$D" | py 'd["status"]+"/"+d["assignee"]["name"]')" "InProgress/刘工" "改派（状态不变）"
 LIUT=$(login 13900000003)
+
+echo "== 多人协作：协助人"
+req POST "/api/orders/$RID/assistants" "$SUP" "{\"engineerIds\":[$LIU]}"; expect "$(py 'd["message"]' < "$TMP/body")" "协助人不能是负责人" "负责人作协助人 → 40000"
+D=$(call POST "/api/orders/$RID/assistant-requests" "$LIUT" "{\"engineerId\":$WANG,\"note\":\"需要两人\"}")
+ARQ=$(echo "$D" | py 'd["requests"][-1]["id"]')
+expect "$(echo "$D" | py 'd["requests"][-1]["text"]')" "添加协助人 王工：需要两人" "负责人申请协助人"
+D=$(call POST "/api/orders/$RID/requests/$ARQ/approve" "$SUP")
+expect "$(echo "$D" | py '",".join(a["name"] for a in d["assistants"])+"/"+d["logs"][-1]["text"]')" "王工/赵主管 同意添加协助人 王工" "同意协助人申请"
+expect "$(echo "$D" | py '",".join(p["user"]["name"]+":"+p["role"] for p in d["participants"])')" "刘工:Lead,王工:Assistant" "participants"
+D=$(call GET "/api/orders/$RID" "$ENG")
+expect "$(echo "$D" | py 'd["myRole"]+"/"+str(d["actions"])')" "Assistant/[]" "协助人可看详情（远程单无动作）"
+expect "$(call GET "/api/orders/mine?group=all" "$ENG" | py "[i['myRole'] for i in d['items'] if i['id']==$RID][0]")" "Assistant" "协助单出现在我的工单"
+D=$(call POST "/api/orders/$RID/assistants" "$SUP" '{"engineerIds":[]}')
+expect "$(echo "$D" | py 'str(len(d["assistants"]))+"/"+d["logs"][-1]["text"]')" "0/赵主管 移除协助人 王工" "主管移除协助人"
 PP=$(upload "$LIUT" ProcessPhoto)
 BODY="{\"faultCause\":\"咨询\",\"solution\":\"远程指导校准\",\"runStatus\":\"Observe\",\"processPhotoIds\":[$PP]}"
 expect "$(call POST "/api/orders/$RID/complete" "$LIUT" "$BODY" | py 'd["status"]')" "Submitted" "远程单无签字件可提交"
 expect "$(call POST "/api/orders/$RID/reject" "$SUP" '{"reason":"缺少校准记录"}' | py 'd["status"]')" "InProgress" "退回处理中"
-VO=$(call POST /api/orders "$SALES" "{\"source\":\"SalesReferral\",\"problemType\":\"Fault\",\"urgency\":\"Normal\",\"serviceType\":\"Factory\",
- \"customerName\":\"冒烟作废客户\",\"contactName\":\"王工\",\"contactPhone\":\"13800000000\",\"address\":\"南京市玄武区\",
+FACTORY_BODY="{\"source\":\"SalesReferral\",\"problemType\":\"Fault\",\"urgency\":\"Normal\",\"serviceType\":\"Factory\",
+ \"customerName\":\"冒烟返厂客户\",\"contactName\":\"王工\",\"contactPhone\":\"13800000000\",\"address\":\"南京市玄武区\",
  \"deviceModel\":\"HTM-100\",\"deviceSn\":\"SN-V\",\"satDate\":\"2024-01\",\"satSigned\":true,
- \"faultTime\":\"昨天\",\"symptom\":\"异响\",\"customerTried\":\"无\",\"siteEnvironment\":\"实验室\",\"price\":680}" | py 'd["id"]')
+ \"faultTime\":\"昨天\",\"symptom\":\"异响\",\"customerTried\":\"无\",\"siteEnvironment\":\"实验室\"}"
+
+echo "== 返厂流程：5 节点"
+FO=$(call POST /api/orders "$SALES" "$FACTORY_BODY")
+FID=$(echo "$FO" | py 'd["id"]')
+expect "$(echo "$FO" | py 'd["factoryText"]+"/"+",".join(n["state"] for n in d["factory"]["nodes"])+"/"+",".join(d["actions"])')" "待客户寄出/current,todo,todo,todo,todo/suggestPrice,factory" "返厂单建单"
+D=$(call POST "/api/orders/$FID/claim" "$ENG")
+expect "$(echo "$D" | py '",".join(d["actions"])')" "appoint,factory,requestHold,requestAssistant" "返厂单工程师 actions（无 start）"
+req POST "/api/orders/$FID/start" "$ENG"; expect "$(py 'd["message"]' < "$TMP/body")" "返厂工单记录「工厂收货」后自动开始处理" "返厂单 start → 409"
+RP=$(upload "$ENG" FactoryReceivePhoto); ok "上传收货照片 id=$RP"
+req POST "/api/orders/$FID/factory-nodes" "$ENG" "{\"node\":\"FactoryReceived\",\"photoIds\":[$RP]}"
+expect "$(py 'd["message"]' < "$TMP/body")" "请先记录「客户寄出」" "工程师跳过客户寄出 → 409"
+req POST "/api/orders/$FID/factory-nodes" "$LI" '{"node":"CustomerShipped","courier":"顺丰","trackingNo":"SF1"}'
+expect "$(cat "$TMP/status")" "403" "无关工程师记节点 → 403"
+req POST "/api/orders/$FID/factory-nodes" "$SALES" '{"node":"Repairing"}'; expect "$(py 'd["message"]' < "$TMP/body")" "检测/维修无需记录" "Repairing → 40000"
+req POST "/api/orders/$FID/factory-nodes" "$SALES" '{"node":"Nope"}'; expect "$(py 'd["message"]' < "$TMP/body")" "请选择返厂节点" "非法节点 → 40000"
+D=$(call POST "/api/orders/$FID/factory-nodes" "$SALES" '{"node":"CustomerShipped","courier":"顺丰","trackingNo":"SF 1234 5678","note":"含电源线 1 根"}')
+expect "$(echo "$D" | py 'd["factoryText"]+"/"+d["factory"]["nodes"][0]["trackingNo"]+"/"+d["logs"][-1]["text"]')" "客户已寄出/SF12345678/王敏 记录客户寄出（顺丰 SF12345678）" "1 客户寄出（销售）"
+D=$(call POST "/api/orders/$FID/factory-nodes" "$ENG" "{\"node\":\"FactoryReceived\",\"photoIds\":[$RP]}")
+expect "$(echo "$D" | py 'd["status"]+"/"+d["factoryText"]+"/"+d["logs"][-1]["text"]')" "InProgress/检测/维修中/王工 工厂收货 → 处理中" "2 工厂收货 → 自动进入处理中"
+expect "$(echo "$D" | py '",".join(n["state"] for n in d["factory"]["nodes"])+"/"+str(len(d["files"]["factoryPhotos"]))')" "done,done,current,current,todo/1" "节点状态与返厂照片"
+req GET "/api/punches/context?orderId=$FID" "$ENG"; expect "$(py 'd["message"]' < "$TMP/body")" "远程/返厂工单无需打卡" "返厂单不打卡"
+PP=$(upload "$ENG" ProcessPhoto)
+FBODY="{\"faultCause\":\"轴承磨损\",\"solution\":\"返厂更换轴承\",\"runStatus\":\"Normal\",\"processPhotoIds\":[$PP]}"
+req POST "/api/orders/$FID/complete" "$ENG" "$FBODY"; expect "$(py 'd["message"]' < "$TMP/body")" "返厂工单请先记录「寄回客户」再提交完工" "未寄回完工 → 409"
+SP=$(upload "$ENG" FactoryShipPhoto)
+req POST "/api/orders/$FID/factory-nodes" "$ENG" '{"node":"ShippedBack","courier":"顺丰","trackingNo":"SF2"}'
+expect "$(py 'd["message"]' < "$TMP/body")" "请至少上传 1 张寄回照片" "寄回无照片 → 40000"
+D=$(call POST "/api/orders/$FID/factory-nodes" "$ENG" "{\"node\":\"ShippedBack\",\"courier\":\"顺丰\",\"trackingNo\":\"SF2\",\"photoIds\":[$SP]}")
+expect "$(echo "$D" | py 'd["factoryText"]+"/"+",".join(d["actions"])')" "已寄回客户/appoint,factory,complete,requestHold,requestAssistant" "4 寄回客户"
+D=$(call POST "/api/orders/$FID/factory-nodes" "$ENG" "{\"node\":\"ShippedBack\",\"courier\":\"顺丰\",\"trackingNo\":\"SF3\",\"photoIds\":[$SP]}")
+expect "$(echo "$D" | py 'd["logs"][-1]["text"]+"/"+d["status"]')" "王工 更正寄回客户（顺丰 SF3）/InProgress" "更正寄回单号（状态不变）"
+expect "$(call POST "/api/orders/$FID/complete" "$ENG" "$FBODY" | py 'd["status"]+"/"+",".join(d["actions"])')" "Submitted/factory" "返厂单提交完工"
+D=$(call POST "/api/orders/$FID/price" "$SUP" '{"price":0}')
+expect "$(echo "$D" | py 'd["logs"][-1]["text"]+"/"+str(d["closeHints"])+"/"+str(d["closeBlockedReason"])')" "赵主管 定价 保内免费/['客户签收尚未记录']/None" "未签收：closeHints 提示但不拦闭环"
+D=$(call POST "/api/orders/$FID/factory-nodes" "$SALES" '{"node":"CustomerSigned"}')
+expect "$(echo "$D" | py 'd["factoryText"]+"/"+",".join(n["state"] for n in d["factory"]["nodes"])')" "客户已签收/done,done,done,done,done" "5 客户签收（销售）"
+expect "$(call POST "/api/orders/$FID/close" "$SUP" | py 'd["status"]+"/"+str(d["closeHints"])')" "Closed/[]" "返厂单闭环"
+req POST "/api/orders/$FID/factory-nodes" "$SUP" '{"node":"CustomerSigned"}'
+expect "$(py 'd["message"]' < "$TMP/body")" "工单当前为「已闭环」，不能更正返厂记录" "闭环后更正 → 409"
+
+VO=$(call POST /api/orders "$SALES" "$FACTORY_BODY" | py 'd["id"]')
 expect "$(call POST "/api/orders/$VO/void" "$SUP" '{"reason":"重复建单"}' | py 'd["status"]')" "Voided" "作废"
 req POST "/api/orders/$VO/close" "$SUP"; expect "$(cat "$TMP/status")" "409" "已作废再闭环 → 409"
 expect "$(call GET "/api/orders?status=Voided" "$SUP" | py 'd["total"] >= 1')" "True" "status=Voided 可单独查询"

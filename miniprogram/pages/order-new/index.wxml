@@ -129,18 +129,10 @@
     </view>
   </view>
 
-  <!-- ========== 价格与照片 ========== -->
-  <view class="grp-title">价格与照片</view>
+  <!-- ========== 现场照片（v1.1：建单不填价格，由主管在工单详情定价） ========== -->
+  <view class="grp-title">现场照片</view>
   <view class="grp grp-pb">
-    <view class="cell cell-price" id="f-price">
-      <view class="lbl {{errKey === 'price' ? 'err' : ''}}">服务价格 <text class="star">*</text></view>
-      <view class="flex1"></view>
-      <text class="yen">¥</text>
-      <input class="ipt-price" type="digit" value="{{form.price}}" bindinput="onPriceInput" placeholder="0" placeholder-class="placeholder" maxlength="12" />
-    </view>
-    <view class="price-tip">质保期内填 0。价格对销售、工程师和主管可见。</view>
-
-    <view class="media-title" id="f-media">现场照片 / 视频 <text class="hint-inline">选填，最多 {{maxMedia}} 个</text></view>
+    <view class="media-title media-title-first" id="f-media">现场照片 / 视频 <text class="hint-inline">选填，最多 {{maxMedia}} 个</text></view>
     <view class="media-grid">
       <view wx:for="{{media}}" wx:key="key" class="media-item" data-index="{{index}}" bindtap="onMediaTap">
         <image wx:if="{{item.thumb}}" class="media-img" src="{{item.thumb}}" mode="aspectFill" />

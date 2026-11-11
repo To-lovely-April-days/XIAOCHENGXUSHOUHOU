@@ -63,9 +63,13 @@ Page({
       const canSubmit = actions.indexOf('complete') >= 0;
       let blockText = '';
       if (!canSubmit) {
-        blockText = o.status === 'InProgress'
-          ? '你不是该工单的负责工程师，无法提交完工'
-          : '工单当前为「' + enums.label(enums.STATUS, o.status) + '」，仅「处理中」的工单可以提交完工';
+        const nodes = (o.factory && o.factory.nodes) || [];
+        const shippedBack = nodes.some((n) => n.node === 'ShippedBack' && n.recorded);
+        if (o.status === 'OnHold') blockText = '工单已暂停搁置，恢复后才能提交完工';
+        else if (o.status !== 'InProgress') blockText = '工单当前为「' + enums.label(enums.STATUS, o.status) + '」，仅「处理中」的工单可以提交完工';
+        else if (o.myRole === 'Assistant') blockText = '你是本单协助人，完工由负责工程师提交';
+        else if (o.serviceType === 'Factory' && o.myRole === 'Lead' && !shippedBack) blockText = '返厂工单请先记录「寄回客户」再提交完工';
+        else blockText = '你不是该工单的负责工程师，无法提交完工';
       }
       this.setData({
         loading: false,
@@ -74,7 +78,8 @@ Page({
         needSignature: needSignature,
         canSubmit: canSubmit,
         blockText: blockText,
-        onSite: needSignature && !!o.onSiteSince
+        // v1.1：只看本人是否在现场（他人未离场由服务端在提交时提示）
+        onSite: needSignature && !!(o.myOnSiteSince !== undefined ? o.myOnSiteSince : o.onSiteSince)
       });
       this.prefill(o);
     }).catch((err) => {
@@ -270,16 +275,18 @@ Page({
 
   onSubmitError(err) {
     const message = (err && err.message) || '提交失败，请重试';
-    if (err && err.code === 40900 && /离场/.test(message)) {
+    // 只有本人未离场（文案恰为「请先离场打卡」）才引导去打卡
+    if (err && err.code === 40900 && message === '请先离场打卡') {
       wx.showModal({
         title: '请先离场打卡',
-        content: message === '请先离场打卡' ? '你还在现场计时中，离开现场前请先打离场卡，再提交完工。' : message,
+        content: '你还在现场计时中，离开现场前请先打离场卡，再提交完工。',
         confirmText: '去打卡',
         confirmColor: '#1D1D1F',
         success: (r) => { if (r.confirm) this.goCheckin(); }
       });
       return;
     }
+    // 其他 40900（他人未离场 / 返厂未寄回 / 已暂停 …）：原样展示服务端文案
     if (err && err.code === 40900) {
       wx.showModal({ title: '无法提交', content: message, showCancel: false, confirmColor: '#1D1D1F', complete: () => this.loadDetail() });
       return;

@@ -39,9 +39,7 @@
 .order-head { display: flex; align-items: center; gap: 24rpx; }
 .oh-name { font-size: 34rpx; font-weight: 600; line-height: 48rpx; }
 .oh-sub { font-size: 26rpx; color: #6E6E73; margin-top: 4rpx; line-height: 36rpx; }
-.price { flex-shrink: 0; font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 36rpx; font-weight: 700; color: #1D1D1F; }
-.price-lg { font-size: 38rpx; }
-.price-free { flex-shrink: 0; font-size: 28rpx; font-weight: 600; color: #3A3A3C; }
+.assist-tag { background: #F0F0EE; color: #636366; }
 .order-no { font-size: 26rpx; color: #6E6E73; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
 
 /* ---------- 4 段进度 ---------- */
@@ -95,7 +93,7 @@
 .up-date { width: 88rpx; flex-shrink: 0; text-align: center; display: flex; flex-direction: column; }
 .up-week { font-size: 24rpx; color: #6E6E73; }
 .up-day { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 44rpx; line-height: 52rpx; font-weight: 700; }
-.up-name { font-size: 32rpx; font-weight: 600; }
+.up-name { font-size: 32rpx; font-weight: 600; min-width: 0; }
 
 /* ---------- 待认领 ---------- */
 .hall-item { display: flex; align-items: center; gap: 24rpx; background: #FFFFFF; border-radius: 32rpx; box-shadow: var(--shadow); padding: 28rpx 32rpx; }
@@ -106,4 +104,9 @@
 .list-card { background: #FFFFFF; border-radius: 32rpx; box-shadow: var(--shadow); padding: 0 32rpx; }
 .done-item { display: flex; align-items: center; gap: 24rpx; min-height: 120rpx; border-bottom: 2rpx solid #ECECEA; padding: 16rpx 0; }
 .done-item:last-child { border-bottom: none; }
-.done-name { font-size: 30rpx; font-weight: 600; }
+.done-name { font-size: 30rpx; font-weight: 600; min-width: 0; }
+
+/* ---------- 暂停搁置 ---------- */
+.hold-mark { width: 56rpx; height: 56rpx; border-radius: 28rpx; background: #AEAEB2; display: flex; align-items: center; justify-content: center; gap: 8rpx; flex-shrink: 0; }
+.hold-bar { width: 6rpx; height: 22rpx; border-radius: 3rpx; background: #FFFFFF; }
+.hold-line { color: #8E8E93; }

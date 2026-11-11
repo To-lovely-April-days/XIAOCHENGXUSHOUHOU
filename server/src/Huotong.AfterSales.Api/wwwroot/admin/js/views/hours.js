@@ -352,7 +352,10 @@ export default {
         </div>
         <div v-for="(x, i) in d.entries" :key="i" class="hours-entry">
           <div class="hours-entry-main">
-            <div class="hours-entry-title ellipsis" :title="x.customerName">{{ x.customerName || '—' }}</div>
+            <div class="hours-entry-title hours-entry-title-row">
+              <span class="ellipsis" :title="x.customerName">{{ x.customerName || '—' }}</span>
+              <span v-if="x.role === 'Assistant'" class="tag tag-neutral" title="该工程师在本单是协助人，工时计入本人">协助</span>
+            </div>
             <div class="hours-entry-sub">
               <button v-if="x.orderNo" type="button" class="punches-order-link hours-order mono" @click="openOrder(x.orderNo)">{{ x.orderNo }}</button>
               <span class="num">{{ x.arrive }} – <template v-if="x.leave">{{ x.leave }}</template><span v-else-if="x.missing" class="text-danger">缺离场卡</span><span v-else class="text-muted">计时中</span></span>

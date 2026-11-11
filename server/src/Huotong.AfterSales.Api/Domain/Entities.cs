@@ -55,6 +55,10 @@ public class WorkOrder
     public string? CustomerRequest { get; set; }
 
     public decimal Price { get; set; }
+    /// <summary>是否已定价（v1.1）。不要配置 HasDefaultValue；迁移里列默认值为 true（已有数据视为已定价），新建工单显式写 false</summary>
+    public bool PriceSet { get; set; }
+    /// <summary>最近一次主管定价时间</summary>
+    public DateTime? PriceSetAt { get; set; }
 
     public int CreatorId { get; set; }
     public Employee? Creator { get; set; }
@@ -69,7 +73,14 @@ public class WorkOrder
     public DateTime? SubmittedAt { get; set; }
     public DateTime? ClosedAt { get; set; }
 
+    /// <summary>暂停说明（note）</summary>
     public string? HoldReason { get; set; }
+    public HoldReasonType? HoldReasonType { get; set; }
+    /// <summary>暂停前的状态（Accepted / InProgress），恢复时回到它</summary>
+    public OrderStatus? HoldFromStatus { get; set; }
+    public DateTime? HoldAt { get; set; }
+    /// <summary>执行暂停的主管 id（普通整数列，无外键）</summary>
+    public int? HoldById { get; set; }
     public string? VoidReason { get; set; }
 
     // 完工信息
@@ -80,6 +91,7 @@ public class WorkOrder
 
     public List<Punch> Punches { get; set; } = new();
     public List<StatusLog> Logs { get; set; } = new();
+    public List<OrderAssistant> Assistants { get; set; } = new();
 }
 
 public class Punch
@@ -116,6 +128,8 @@ public class StatusLog
     public string Text { get; set; } = "";
     public DateTime Time { get; set; }
     public OrderStatus ToStatus { get; set; }
+    /// <summary>记录类别；null = Status（v1.1 之前的数据）</summary>
+    public LogKind? Kind { get; set; }
 }
 
 public class StoredFile
@@ -130,4 +144,69 @@ public class StoredFile
     public int UploaderId { get; set; }
     public int? OrderId { get; set; }
     public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>工单协助人（当前有效的；移除 = 删除行）</summary>
+public class OrderAssistant
+{
+    public int Id { get; set; }
+    public int OrderId { get; set; }
+    public WorkOrder? Order { get; set; }
+    public int EngineerId { get; set; }
+    public Employee? Engineer { get; set; }
+    public int AddedById { get; set; }
+    public Employee? AddedBy { get; set; }
+    public DateTime AddedAt { get; set; }
+}
+
+/// <summary>工程师发起、需主管审批的申请：暂停 / 添加协助人</summary>
+public class OrderRequest
+{
+    public int Id { get; set; }
+    public int OrderId { get; set; }
+    public WorkOrder? Order { get; set; }
+    public OrderRequestType Type { get; set; }
+    public RequestStatus Status { get; set; }
+    public int RequesterId { get; set; }
+    public Employee? Requester { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public HoldReasonType? HoldReasonType { get; set; }
+    public string? Note { get; set; }
+    public int? TargetEngineerId { get; set; }
+    public Employee? TargetEngineer { get; set; }
+    public int? DeciderId { get; set; }
+    public Employee? Decider { get; set; }
+    public DateTime? DecidedAt { get; set; }
+    public string? Reply { get; set; }
+}
+
+/// <summary>销售的价格建议（保留历史，详情只展示最新一条）</summary>
+public class PriceSuggestion
+{
+    public int Id { get; set; }
+    public int OrderId { get; set; }
+    public WorkOrder? Order { get; set; }
+    public int SalesId { get; set; }
+    public Employee? Sales { get; set; }
+    public decimal Amount { get; set; }
+    public string? Note { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>返厂节点记录，每单每节点最多 1 行</summary>
+public class FactoryRecord
+{
+    public int Id { get; set; }
+    public int OrderId { get; set; }
+    public WorkOrder? Order { get; set; }
+    public FactoryNode Node { get; set; }
+    public int OperatorId { get; set; }
+    public Employee? Operator { get; set; }
+    public DateTime Time { get; set; }
+    /// <summary>最近更正人（普通整数列，无外键）</summary>
+    public int? UpdatedById { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+    public string? Courier { get; set; }
+    public string? TrackingNo { get; set; }
+    public string? Note { get; set; }
 }

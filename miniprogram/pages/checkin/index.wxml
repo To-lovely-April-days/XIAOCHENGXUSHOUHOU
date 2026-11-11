@@ -39,6 +39,9 @@
         <text>{{distanceText}}</text>
       </view>
 
+      <!-- v1.1：协助人打卡时标明身份（工时按本人计算） -->
+      <view wx:if="{{ctx.myRole === 'Assistant'}}" class="ck-assist" aria-label="你是本单协助人">协助</view>
+
       <view wx:if="{{ctx.blockedReason}}" class="ck-blocked">
         <ui-icon name="warning" color="#FFFFFF" size="18" stroke="2" />
         <text class="flex1">{{ctx.blockedReason}}</text>
