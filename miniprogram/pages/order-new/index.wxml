@@ -129,24 +129,33 @@
     </view>
   </view>
 
-  <!-- ========== 现场照片（v1.1：建单不填价格，由主管在工单详情定价） ========== -->
-  <view class="grp-title">现场照片</view>
+  <!-- ========== 附件（v1.2：照片 / 视频 / 文件；v1.1 起建单不填价格，由主管在工单详情定价） ========== -->
+  <view class="grp-title">附件</view>
   <view class="grp grp-pb">
-    <view class="media-title media-title-first" id="f-media">现场照片 / 视频 <text class="hint-inline">选填，最多 {{maxMedia}} 个</text></view>
+    <view class="media-title media-title-first {{errKey === 'media' ? 'err' : ''}}" id="f-media">附件（照片 / 视频 / 文件） <text class="hint-inline">选填，最多 {{maxMedia}} 个</text></view>
     <view class="media-grid">
-      <view wx:for="{{media}}" wx:key="key" class="media-item" data-index="{{index}}" bindtap="onMediaTap">
+      <view wx:for="{{media}}" wx:key="key" class="media-item" data-index="{{index}}" bindtap="onMediaTap" bindlongpress="onMediaLongPress">
         <image wx:if="{{item.thumb}}" class="media-img" src="{{item.thumb}}" mode="aspectFill" />
-        <view wx:if="{{item.type === 'video'}}" class="media-video">▶<text wx:if="{{item.duration}}"> {{item.duration}}″</text></view>
-        <view wx:if="{{item.status === 'uploading'}}" class="media-mask">上传中</view>
+        <view wx:if="{{item.kind === 'Video'}}" class="media-video">▶<text wx:if="{{item.duration}}"> {{item.duration}}″</text></view>
+        <view wx:if="{{item.kind === 'Document'}}" class="media-doc">
+          <view class="media-badge" style="background: {{item.badgeColor}};">{{item.badgeText}}</view>
+          <view class="media-name">{{item.name}}</view>
+        </view>
+        <view wx:if="{{item.restricted}}" class="media-lock" aria-label="仅销售和主管可见">
+          <ui-icon name="lock" color="#FFFFFF" size="11" stroke="2.4" />
+        </view>
+        <view wx:if="{{item.status === 'uploading'}}" class="media-mask num-font">{{item.percent}}%</view>
+        <view wx:elif="{{item.status === 'fail' && item.fatal}}" class="media-mask media-fail media-fatal">{{item.error}}</view>
         <view wx:elif="{{item.status === 'fail'}}" class="media-mask media-fail">点击重试</view>
         <view class="media-del" data-index="{{index}}" catchtap="onMediaRemove" aria-role="button" aria-label="删除">
           <ui-icon name="close" color="#FFFFFF" size="10" stroke="3" />
         </view>
       </view>
-      <view wx:if="{{media.length < maxMedia}}" class="media-add" hover-class="cell-hover" bindtap="onAddMedia" aria-role="button" aria-label="添加照片或视频">
+      <view wx:if="{{media.length < maxMedia}}" class="media-add" hover-class="cell-hover" bindtap="onAddMedia" aria-role="button" aria-label="添加照片、视频或文件">
         <ui-icon name="plus" color="#6E6E73" size="24" stroke="2" />
       </view>
     </view>
+    <view class="hint media-hint">{{mediaHint}}<text wx:if="{{canRestrict}}">{{mediaHintRestrict}}</text></view>
   </view>
 
   <view class="footer-space"></view>

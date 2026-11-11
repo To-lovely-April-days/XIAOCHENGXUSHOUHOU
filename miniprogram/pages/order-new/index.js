@@ -1,5 +1,6 @@
 /**
  * 新建工单（原型 15）。字段与 API.md POST /api/orders 一一对应。
+ * v1.2：「现场照片 / 视频」改为「附件（照片 / 视频 / 文件）」，最多 20 个，提交用 attachments（见 utils/attachments.js）。
  * 预填：getApp().globalData.prefillCustomer（销售首页「最近客户」chip 设置，结构同 /api/orders/recent-customers 的一项），读取后清空。
  */
 const api = require('../../api/index.js');
@@ -8,9 +9,9 @@ const format = require('../../utils/format.js');
 const enums = require('../../utils/enums.js');
 const location = require('../../utils/location.js');
 const system = require('../../utils/system.js');
+const attachments = require('../../utils/attachments.js');
 
-const MAX_MEDIA = 9;
-const MAX_SIZE = 20 * 1024 * 1024;
+const MAX_MEDIA = attachments.MAX_COUNT;
 const PERIODS = ['上午', '下午', '晚上'];
 
 /** 校验顺序 = 页面从上到下的顺序 */
@@ -40,8 +41,6 @@ function trim(v) {
 function hasCoords(lat, lng) {
   return lat !== null && lat !== undefined && lng !== null && lng !== undefined && !(Number(lat) === 0 && Number(lng) === 0);
 }
-
-let mediaSeq = 0;
 
 Page({
   data: {
@@ -85,6 +84,9 @@ Page({
     periodIndex: -1,
     media: [],
     maxMedia: MAX_MEDIA,
+    mediaHint: attachments.HINT,
+    mediaHintRestrict: attachments.HINT_RESTRICT,
+    canRestrict: false, // 当前用户不是工程师时可长按设为「仅销售和主管可见」
     errKey: '',
     submitting: false
   },
@@ -101,6 +103,8 @@ Page({
   },
 
   onUnload() {
+    this.unloaded = true;
+    this.data.media.forEach((m) => attachments.cancel(m.key));
     this.disableAlert();
   },
 
@@ -110,6 +114,7 @@ Page({
     const role = user && user.role;
     const source = role === 'Engineer' ? 'CustomerDirect' : 'SalesReferral';
     this.setData({
+      canRestrict: role === 'Sales' || role === 'Supervisor',
       'form.source': source,
       'form.problemType': 'Fault',
       'form.urgency': 'Normal',
@@ -253,70 +258,46 @@ Page({
     return this.data.faultDateText + ' ' + PERIODS[this.data.periodIndex];
   },
 
-  /* ---------- 照片 / 视频 ---------- */
+  /* ---------- 附件（照片 / 视频 / 文件） ---------- */
+
+  mediaIndex(key) {
+    return this.data.media.findIndex((m) => m.key === key);
+  },
+
+  /** 更新某个附件格子的若干字段（按 key 定位，条目可能已被删除） */
+  patchMedia(key, patch) {
+    if (this.unloaded) return;
+    const i = this.mediaIndex(key);
+    if (i < 0) return;
+    const p = {};
+    Object.keys(patch).forEach((k) => { p['media[' + i + '].' + k] = patch[k]; });
+    this.setData(p);
+  },
 
   onAddMedia() {
     const left = MAX_MEDIA - this.data.media.length;
     if (left <= 0) {
-      wx.showToast({ title: '最多 ' + MAX_MEDIA + ' 个', icon: 'none' });
+      wx.showToast({ title: '附件最多 ' + MAX_MEDIA + ' 个', icon: 'none' });
       return;
     }
-    wx.chooseMedia({
-      count: left,
-      mediaType: ['mix'],
-      sourceType: ['album', 'camera'],
-      sizeType: ['compressed'],
-      maxDuration: 60,
-      success: (res) => {
-        const files = res.tempFiles || [];
-        const tooBig = files.filter((f) => f.size && f.size > MAX_SIZE).length;
-        if (tooBig) wx.showToast({ title: '有 ' + tooBig + ' 个文件超过 20MB，已忽略', icon: 'none' });
-        const add = files.filter((f) => !(f.size && f.size > MAX_SIZE)).slice(0, left).map((f) => {
-          const isVideo = f.fileType === 'video' || res.type === 'video';
-          mediaSeq += 1;
-          return {
-            key: 'm' + Date.now() + '_' + mediaSeq,
-            path: f.tempFilePath,
-            thumb: isVideo ? (f.thumbTempFilePath || '') : f.tempFilePath,
-            type: isVideo ? 'video' : 'image',
-            duration: isVideo && f.duration ? Math.round(f.duration) : 0,
-            status: 'uploading',
-            fileId: 0
-          };
-        });
-        if (!add.length) return;
-        this.setData({ media: this.data.media.concat(add) });
-        this.markDirty();
-        add.forEach((m) => this.uploadMedia(m.key));
-      }
+    attachments.pick(left).then((items) => {
+      if (this.unloaded || !items.length) return;
+      const room = MAX_MEDIA - this.data.media.length;
+      const add = items.slice(0, Math.max(0, room));
+      if (!add.length) return;
+      this.setData({ media: this.data.media.concat(add) });
+      this.clearErr('media');
+      this.markDirty();
+      const bad = add.filter((m) => m.fatal);
+      if (bad.length) wx.showToast({ title: bad.length === 1 ? bad[0].error : '有 ' + bad.length + ' 个文件不符合要求', icon: 'none' });
+      // 选完立即排队上传（同一时间只传 1 个）
+      add.filter((m) => !m.fatal).forEach((m) => this.uploadMedia(m));
     });
   },
 
-  uploadMedia(key) {
-    const idx = () => this.data.media.findIndex((m) => m.key === key);
-    const i = idx();
-    if (i < 0) return;
-    const item = this.data.media[i];
-    const p = {};
-    p['media[' + i + '].status'] = 'uploading';
-    this.setData(p);
-    api.files.upload(item.path, 'OrderPhoto', { silent: true })
-      .then((file) => {
-        const j = idx();
-        if (j < 0) return;
-        const q = {};
-        q['media[' + j + '].status'] = 'done';
-        q['media[' + j + '].fileId'] = file.id;
-        this.setData(q);
-      })
-      .catch((err) => {
-        const j = idx();
-        if (j < 0) return;
-        const q = {};
-        q['media[' + j + '].status'] = 'fail';
-        this.setData(q);
-        wx.showToast({ title: (err && err.message) || '上传失败，点击重试', icon: 'none' });
-      });
+  uploadMedia(item) {
+    // 传副本：上传模块会直接修改条目，页面数据只通过 setData 更新
+    attachments.upload(Object.assign({}, item), (it, patch) => this.patchMedia(it.key, patch));
   },
 
   onMediaTap(e) {
@@ -324,22 +305,38 @@ Page({
     const item = this.data.media[i];
     if (!item) return;
     if (item.status === 'fail') {
-      this.uploadMedia(item.key);
+      if (item.fatal) wx.showToast({ title: (item.error || '该文件不能上传') + '，请删除', icon: 'none' });
+      else this.uploadMedia(item);
       return;
     }
-    const sources = this.data.media.map((m) => ({ url: m.path, type: m.type, poster: m.type === 'video' ? m.thumb : undefined }));
-    if (wx.previewMedia) {
-      wx.previewMedia({ sources: sources, current: i });
-    } else if (item.type === 'image') {
-      wx.previewImage({ current: item.path, urls: this.data.media.filter((m) => m.type === 'image').map((m) => m.path) });
-    }
+    attachments.openLocal(item, this.data.media);
+  },
+
+  /** 长按：设为 / 取消「仅销售和主管可见」（工程师没有这个入口） */
+  onMediaLongPress(e) {
+    if (!this.data.canRestrict) return;
+    const i = e.currentTarget.dataset.index;
+    const item = this.data.media[i];
+    if (!item || item.fatal) return;
+    const key = item.key;
+    const next = !item.restricted;
+    wx.showActionSheet({
+      itemList: [next ? '设为仅销售和主管可见' : '取消仅销售和主管可见'],
+      success: () => {
+        this.patchMedia(key, { restricted: next });
+        this.markDirty();
+      },
+      fail() {}
+    });
   },
 
   onMediaRemove(e) {
     const i = e.currentTarget.dataset.index;
     const media = this.data.media.slice();
-    media.splice(i, 1);
+    const removed = media.splice(i, 1)[0];
+    if (removed) attachments.cancel(removed.key);
     this.setData({ media: media });
+    this.clearErr('media');
   },
 
   /* ---------- 提交 ---------- */
@@ -357,8 +354,8 @@ Page({
         return { key: 'address', msg: '现场工单需要在地图上选点' };
       }
     }
-    if (this.data.media.some((m) => m.status === 'uploading')) return { key: 'media', msg: '照片还在上传，请稍候' };
-    if (this.data.media.some((m) => m.status === 'fail')) return { key: 'media', msg: '有照片上传失败，请点击重试或删除' };
+    if (this.data.media.some((m) => m.status === 'uploading')) return { key: 'media', msg: '附件还在上传，请稍候' };
+    if (this.data.media.some((m) => m.status === 'fail')) return { key: 'media', msg: '有附件上传失败，请点击重试或删除' };
     return null;
   },
 
@@ -395,7 +392,7 @@ Page({
       customerTried: trim(f.customerTried),
       siteEnvironment: trim(f.siteEnvironment),
       customerRequest: opt(f.customerRequest),
-      photoFileIds: this.data.media.filter((m) => m.fileId).map((m) => m.fileId)
+      attachments: this.data.media.filter((m) => m.fileId).map((m) => ({ fileId: m.fileId, restricted: !!m.restricted }))
     };
   },
 

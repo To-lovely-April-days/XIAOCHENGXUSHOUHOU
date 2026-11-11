@@ -25,7 +25,7 @@ admin/
     ├── router.js         hash 路由：route / navigate / updateQuery / onRouteChange
     ├── store.js          store.user、store.counts（侧栏数字）、loadMe / refreshCounts / logout
     ├── api.js            fetch 封装 + 所有接口函数 + download
-    ├── format.js         时间 / 时长 / 价格 / 距离 / 手机号格式化
+    ├── format.js         时间 / 时长 / 价格 / 距离 / 手机号 / 文件大小格式化、文件类型角标
     ├── enums.js          枚举中文 + 原型 16 配色、STATUS_TABS、QUICK_FILTERS、ORDER_ACTIONS
     ├── ui.js             toast / confirm / preview + 公共组件（已全局注册）
     └── views/
@@ -36,10 +36,12 @@ admin/
         ├── orders-hold.js     暂停搁置弹窗（原因 + 说明）
         ├── orders-price.js    定价 / 改价弹窗（展示销售的价格建议）
         ├── orders-factory.js  返厂节点记录 / 更正弹窗（快递、照片上传）
-        ├── orders-create.js   新建工单（不含价格）
+        ├── orders-create.js   新建工单（不含价格；v1.2 起带附件）
+        ├── attachments-upload.js  附件上传组件（v1.2，新建工单与抽屉共用）
         ├── orders-export.js   导出台账
         ├── punches.js    打卡记录
         ├── hours.js      工时统计
+        ├── files.js      工单文件中心（v1.2）
         └── accounts.js   账号管理
 ```
 
@@ -55,6 +57,19 @@ PC 后台只有主管能登录，只实现主管视角的动作。所有可执�
 - **概况条第二行**：暂停搁置 / 待审批申请 / 未定价 / 价格建议（来自 `GET /api/admin/overview`），前三项可点击跳到对应筛选。
 - **导出**：台账末尾新增 5 列（协助人、人员工时、暂停原因、返厂进度、寄回单号），未定价显示「未定价」；工时导出新增第 10 列「本单角色」。导出由后端生成，前端无逻辑改动。
 
+## v1.2 功能（契约见 `docs/CHANGES-v1.2.md`）
+
+附件相关权限只看服务端返回的 `canAddAttachment`、`canRestrictAttachment`、`attachments[].canDelete / canToggleRestricted`，前端不推导规则。
+
+- **工单附件**：工单除图片、视频外可以带文档（Word / Excel / PPT / PDF / TXT / CSV）。图片单个 ≤ 20MB，视频和文档 ≤ 100MB，每单最多 20 个（建单照片也算在内）。
+  - 上传分两步：先 `api.files.upload(file, 'Attachment', { onProgress })`（带原始文件名与进度，XHR 超时 15 分钟），再 `api.orders.create({ attachments })` 或 `api.orders.addAttachments(id, [{ fileId, restricted }])` 挂到工单。
+  - 公共组件 `views/attachments-upload.js`：`<AttachmentsUpload v-model="items" :limit :can-restrict :disabled />`，支持多选和拖入，上传前按扩展名 / 大小 / 数量预检，同时最多上传 2 个，每项有进度条、错误文字 + 重试、移除、「仅销售和主管可见」复选框。父组件用导出的 `attUploading(items)` / `attHasError(items)` / `attDone(items)`（→ `[{ fileId, restricted }]`）判断与取值（组件实例上也有同名的 `uploading` / `hasError` / `done`）。
+  - 新建工单：原「现场照片」区块改为「附件」，提交体用 `attachments`，不再传 `photoFileIds`。
+  - 工单抽屉：「返厂流程」与「打卡记录」之间新增「附件」区。点名称：图片 / 视频在 lightbox 里预览（同单可左右切换），文档直接下载；行内按钮「下载」「设为仅销售和主管可见 / 设为所有人可见」「删除」；「添加附件」在区内展开上传组件；「全部文件」跳到 `#/files?orderId={id}`。
+  - 下载一律走 `api.files.download(id, name)`（`GET /api/files/{id}/download`，带 Authorization，文件名取响应头里的原始文件名）。
+- **工单文件中心**（`#/files`，`views/files.js`）：汇总所有工单名下的文件（附件、建单照片、完工照片、签字件、打卡照片、返厂照片）。类型 tab（全部 / 图片 / 视频 / 文档，带数量）、搜索（文件名 / 工单号 / 客户）、来源、上传人、上传日期范围、`orderId` 筛选标签；汇总「共 N 个文件 · 总大小」；每页 30 条。≤ 2MB 的图片显示缩略图，其余显示类型角标。点工单号在本页打开工单抽屉。附件行可删除、切换可见范围（直接调工单的附件接口）。不做批量下载。
+- **上线注意**：超过 30MB 的上传需要把站点 nginx 的 `client_max_body_size` 提到 `110m`（见 `deploy/README.md`），否则会被 nginx 直接返回 413，页面提示「文件不能超过 100MB」。
+
 ## 路由
 
 | hash | 视图 |
@@ -63,6 +78,7 @@ PC 后台只有主管能登录，只实现主管视角的动作。所有可执�
 | `#/orders` | 工单。`?quick=missing|distance|submitted|requests|unpriced` 对应侧栏「待处理」快捷筛选 |
 | `#/punches` | 打卡记录 |
 | `#/hours` | 工时统计 |
+| `#/files` | 工单文件中心（v1.2）。`?keyword=&type=Image|Video|Document&source=&uploaderId=&orderId=&from=&to=&page=`，`&id=` 为打开的工单抽屉 |
 | `#/accounts` | 账号管理 |
 
 - 没有 token 时跳 `#/login?redirect=<原地址>`。登录后先 `GET /api/me`，角色不是 Supervisor 就清掉 token。
@@ -119,11 +135,12 @@ export default {
   - `admin.punches({from, to, engineerId, abnormal, page, pageSize})`、`admin.hours(year, month)`
   - `admin.employees()`、`admin.createEmployee(body)`、`admin.updateEmployee(id, body)`、`admin.unbind(id)`、`admin.setPassword(id, password)`
   - `admin.exportOrders({from, to, status}, filename?)`、`admin.exportHours(year, month, filename?)`
-  - `files.upload(file, category)`（FormData）
+  - `files.upload(file, category, { fileName?, onProgress?, signal? })`（FormData；传 `onProgress` 时用 XHR 并回调 0–100，`signal`（AbortSignal）可取消上传——上传组件在移除条目 / 卸载时会取消；`Attachment` 自动带 `fileName = file.name`）、`files.download(id, name?)`
+  - v1.2：`orders.addAttachments(id, [{fileId, restricted}])`、`orders.deleteAttachment(id, fileId)`、`orders.setAttachmentRestricted(id, fileId, restricted)`、`admin.files({keyword, type, source, uploaderId, orderId, restricted, from, to, page, pageSize})`；`orders.create(body)` 的附件字段为 `attachments`
 
 ### format.js
 
-`parseTime(s)`（按本地时间解析 `yyyy-MM-ddTHH:mm:ss` / `yyyy-MM-dd`）、`toApiDate(d)`、`toApiDateTime(d)`、`fmtTime` → `HH:mm`、`fmtMD` → `M月D日`、`fmtMDHM` → `M月D日 HH:mm`、`fmtDateTime` → `yyyy-MM-dd HH:mm`、`fmtWeekday`、`fmtHM(minutes)` → `H:mm`（空值为 `—`）、`fmtHours(minutes)` → 1 位小数、`fmtNumber`、`fmtPrice(p, {free, priceSet})` → `¥1,800` / `保内`（`free: true` 时为 `保内免费`；`priceSet === false` 时为 `未定价`）、`isWarranty(p, priceSet)`、`fmtRelative`、`fmtDistance(m)` → `86 m` / `2.4 km`、`maskPhone`、`thisWeekRange()`、`lastDaysRange(n)`、`monthRange(y, m)`。
+`parseTime(s)`（按本地时间解析 `yyyy-MM-ddTHH:mm:ss` / `yyyy-MM-dd`）、`toApiDate(d)`、`toApiDateTime(d)`、`fmtTime` → `HH:mm`、`fmtMD` → `M月D日`、`fmtMDHM` → `M月D日 HH:mm`、`fmtDateTime` → `yyyy-MM-dd HH:mm`、`fmtWeekday`、`fmtHM(minutes)` → `H:mm`（空值为 `—`）、`fmtHours(minutes)` → 1 位小数、`fmtNumber`、`fmtPrice(p, {free, priceSet})` → `¥1,800` / `保内`（`free: true` 时为 `保内免费`；`priceSet === false` 时为 `未定价`）、`isWarranty(p, priceSet)`、`fmtRelative`、`fmtDistance(m)` → `86 m` / `2.4 km`、`maskPhone`、`thisWeekRange()`、`lastDaysRange(n)`、`monthRange(y, m)`。v1.2：`fmtSize(bytes)` → `812 B` / `35 KB` / `2.4 MB` / `1.25 GB`、`fileBadge({kind, ext})` → `{ text, color }`（W / X / P / PDF / TXT / 图 / 视频）。
 
 ### enums.js
 
@@ -131,6 +148,7 @@ export default {
 - `STATUS_TABS`（原型顺序，`countKey` 对应 `orders.list().counts`）。
 - `QUICK_FILTERS`（`key` 对应 `?quick=`，`query` 是 orders.list 参数；v1.1 加了 `requests`、`unpriced`）。
 - v1.1：`PROGRESS_STEPS`（5 段进度条文字）、`HOLD_REASON`、`REQUEST_TYPE`、`REQUEST_STATUS`、`FACTORY_NODE`（`label` / `action` 按钮文案 / `courier` / `photo` / `category`）、`PARTICIPANT_ROLE`；`FILE_CATEGORY` 加了 3 类返厂照片。
+- v1.2：`FILE_CATEGORY` 加了 `Attachment`；`FILE_KIND`（图片 / 视频 / 文档）、`FILE_SOURCE`（文件中心的 6 种来源）。
 - `ORDER_ACTIONS`：action → 按钮文案和样式。
 - `label(map, v)`、`options(map)`。
 
@@ -141,9 +159,9 @@ export default {
   - 没有输入框时，确定为 `true`，取消为 `false`。
   - `opts.input` 为 true 时，确定返回 trim 过的字符串，取消返回 `null`。
   - 其他 opts：`required`、`placeholder`、`inputLabel`、`multiline`、`defaultValue`、`okText`、`cancelText`、`danger`、`maxLength`。
-- `preview(urls, index)`：图片预览，支持左右键和 Esc。
+- `preview(items, index)`：图片 / 视频预览，支持左右键和 Esc。条目可以是地址字符串、`{ url }`，或 `{ url, type: 'image'|'video' }`（video 渲染为 `<video controls autoplay>`）。
 - 组件：
-  - `<Icon name size stroke>`，可用图标名：orders、camera、clock、users、settings、search、download、plus、chevronDown/Left/Right、close、alert、check、info、logout、key、image、refresh
+  - `<Icon name size stroke>`，可用图标名：orders、camera、clock、users、settings、search、download、plus、chevronDown/Left/Right、close、alert、check、info、logout、key、image、refresh、folder、file、video、lock、trash、paperclip
   - `<Avatar :user :size>`：有 `avatarUrl` 显示图片，没有就显示姓氏圆
   - `<StatusDot :status :label>`
   - `<Tag tone|bg|fg>`
@@ -172,6 +190,7 @@ export default {
 - 打卡行：`punch-row` > `thumb(.thumb-missing)` + `punch-main` > `punch-title` / `punch-note(.warn|.danger)` + `punch-dur`；缩略图网格：`thumb-grid`
 - 状态记录：`log-list` > `log-item` > `dot` + `log-text` + `log-time`
 - v1.1：5 段进度条 `progress5` > `progress5-seg(.on|.current|.paused)`；价格建议 `orders-suggest(.pending)`；申请卡片 `alert alert-warn orders-dr-req`；人员行 `orders-dr-person`；返厂时间线 `factory-line` > `factory-node.is-done|is-current|is-todo|is-skipped`
+- v1.2：类型角标 `att-badge`（背景色用 `fileBadge().color`）、文字操作链接 `btn-link att-link(.att-link-danger)`；上传组件 `att-up-*`；抽屉附件区 `att-list` > `att-row`；文件中心 `files-*`。v1.2 新增的类一律以 `att-` / `files-` 为前缀
 - 表单：`field` > `field-label`（`<span class="req">*</span>`）+ `input` / `select` / `textarea`（`.invalid`）+ `field-hint` / `field-error`；布局用 `form-stack` / `form-grid`（`.span-2`）/ `form-section-title`；选项用 `radio-group` > `radio-chip(.active)`，复选用 `checkbox`
 - 菜单：`dropdown` > `menu` > `menu-item`
 - 工具类：`num`、`mono`、`text-muted` / `text-faint` / `text-danger` / `text-warn` / `text-success`、`text-right`、`ellipsis`、`nowrap`

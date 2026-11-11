@@ -360,6 +360,16 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("DeletedById")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("MimeType")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -377,6 +387,9 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                         .HasMaxLength(260)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("Restricted")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("Size")
                         .HasColumnType("INTEGER");
 
@@ -384,6 +397,8 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
 
                     b.HasIndex("OrderId");
 

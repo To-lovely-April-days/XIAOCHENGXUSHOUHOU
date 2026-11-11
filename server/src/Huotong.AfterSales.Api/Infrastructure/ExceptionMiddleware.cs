@@ -29,7 +29,7 @@ public class ExceptionMiddleware
         }
         catch (BadHttpRequestException ex)
         {
-            await Write(ctx, ex.StatusCode == 413 ? 400 : 400, 40000, ex.StatusCode == 413 ? "文件不能超过 20MB" : "请求格式错误");
+            await Write(ctx, ex.StatusCode == 413 ? 400 : 400, 40000, ex.StatusCode == 413 ? "文件不能超过 100MB" : "请求格式错误");
         }
         catch (Exception ex)
         {

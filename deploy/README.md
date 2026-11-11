@@ -35,7 +35,7 @@ tar -xzf /tmp/huotong-aftersales-linux-x64.tar.gz -C /tmp && bash /tmp/huotong-a
 
 填好后再执行一次 `bash /tmp/huotong-aftersales/install.sh`，最后一行应显示 `本机自检 /admin/ → HTTP 200`。
 
-程序在 `/www/wwwroot/huotong-aftersales`，数据库 `data/aftersales.db`、上传文件 `uploads/` 都在该目录下，**更新时会保留**。请在宝塔「计划任务」里给这个目录加每日备份。
+程序在 `/www/wwwroot/huotong-aftersales`，数据库 `data/aftersales.db`、上传文件 `uploads/` 都在该目录下，**更新时会保留**。请在宝塔「计划任务」里给这个目录加每日备份。v1.2 起工单附件按原图 / 原文件保存（单个最大 100MB），`uploads/` 增长会明显变快，**请关注磁盘空间**（`df -h`、`du -sh /www/wwwroot/huotong-aftersales/uploads`）。
 
 ## 3. 宝塔建站 + HTTPS
 
@@ -44,7 +44,7 @@ tar -xzf /tmp/huotong-aftersales-linux-x64.tar.gz -C /tmp && bash /tmp/huotong-a
 3. **不要用宝塔「反向代理」菜单**：宝塔站点默认带 `location ~ .*\.(js|css)?$` 这类正则规则（`?` 使它匹配所有地址），会抢在普通 `location /` 前面，导致后台的 js、上传的照片 404。
    改为新建文件 `/www/server/panel/vhost/nginx/extension/shouhou.sh-htlab.com/huotong-proxy.conf`（站点主配置已 include 该目录，宝塔改主配置也不会覆盖它）：
    ```nginx
-   client_max_body_size 30m;
+   client_max_body_size 110m;
 
    location ^~ /.well-known/ {
        root /www/wwwroot/shouhou.sh-htlab.com;
@@ -58,10 +58,14 @@ tar -xzf /tmp/huotong-aftersales-linux-x64.tar.gz -C /tmp && bash /tmp/huotong-a
        proxy_set_header X-Real-IP $remote_addr;
        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
        proxy_set_header X-Forwarded-Proto $scheme;
-       proxy_read_timeout 120s;
+       proxy_read_timeout 300s;
+       proxy_send_timeout 300s;
    }
    ```
    然后 `nginx -t && nginx -s reload`。
+
+   > **从 v1.1 升级到 v1.2 必须手工改这个文件**（更新程序包不会动 nginx 配置）：把 `client_max_body_size 30m;` 改为 `client_max_body_size 110m;`，把 `proxy_read_timeout 120s;` 改为 `300s`，并新增一行 `proxy_send_timeout 300s;`，然后执行 `nginx -t && nginx -s reload`。
+   > v1.2 的工单附件单个最大 100MB；不改的话，超过 30MB 的上传会被 nginx 直接返回 413，小程序和电脑后台会提示「文件不能超过 100MB」。可用 `grep -n client_max_body_size /www/server/panel/vhost/nginx/extension/shouhou.sh-htlab.com/huotong-proxy.conf` 确认已生效。
 
 ## 4. 验证
 

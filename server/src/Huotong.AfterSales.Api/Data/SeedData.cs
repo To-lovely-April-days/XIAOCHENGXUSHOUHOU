@@ -15,6 +15,9 @@ public class SeedData
     private static readonly byte[] Png = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==");
 
+    // 最小合法 PDF，作为演示附件占位（v1.2）
+    private static readonly byte[] Pdf = System.Text.Encoding.ASCII.GetBytes("%PDF-1.4\n%%EOF\n");
+
     private readonly AppDbContext _db;
     private readonly string _uploadRoot;
     private readonly int _offset;
@@ -144,6 +147,9 @@ public class SeedData
 
         // 建单照片（江苏 3 张）
         for (var i = 0; i < 3; i++) AddFile(wm, o1, FileCategory.OrderPhoto, D(11, 5, 9, 20));
+        // v1.2：销售上传的附件（江苏）：一个公开、一个仅销售和主管可见
+        AddDoc(wm, o1, "现场情况说明.pdf", false, D(11, 5, 9, 22));
+        AddDoc(wm, o1, "报价单.pdf", true, D(11, 5, 9, 23));
 
         // 打卡
         Punch(o1, li, PunchKind.Arrive, D(11, 5, 15, 40), 90);
@@ -291,6 +297,21 @@ public class SeedData
         {
             Path = rel, OriginalName = "seed.png", Category = cat, MimeType = "image/png", Size = Png.Length,
             UploaderId = uploader.Id, OrderId = o.Id, CreatedAt = at
+        };
+        _db.Files.Add(f);
+        return f;
+    }
+
+    private StoredFile AddDoc(Employee uploader, WorkOrder o, string name, bool restricted, DateTime at)
+    {
+        var rel = $"{at:yyyy}/{at:MM}/seed-{Guid.NewGuid():N}.pdf";
+        var full = Path.Combine(_uploadRoot, rel.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllBytes(full, Pdf);
+        var f = new StoredFile
+        {
+            Path = rel, OriginalName = name, DisplayName = name, Category = FileCategory.Attachment, MimeType = "application/pdf",
+            Size = Pdf.Length, UploaderId = uploader.Id, OrderId = o.Id, CreatedAt = at, Restricted = restricted
         };
         _db.Files.Add(f);
         return f;

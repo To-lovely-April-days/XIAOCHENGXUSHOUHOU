@@ -6,7 +6,9 @@
  * 常用类型（详见 API.md「公共 DTO」）：
  * @typedef {{id:number,name:string,surname:string,avatarUrl:?string,role:'Engineer'|'Sales'|'Supervisor'}} UserBrief
  * @typedef {UserBrief & {roleName:string,department:string,phoneMasked:string,phone:string}} User
- * @typedef {{id:number,url:string,category:string,mimeType:string,createdAt:string}} FileDto
+ * @typedef {{id:number,url:string,category:string,mimeType:string,createdAt:string,name:string,size:number,kind:'Image'|'Video'|'Document',ext:string}} FileDto
+ * @typedef {FileDto & {source:'Attachment'|'OrderPhoto',sourceLabel:string,restricted:boolean,uploader:?UserBrief,canDelete:boolean,canToggleRestricted:boolean}} AttachmentDto
+ *   v1.2 工单附件；restricted = 仅销售和主管可见（工程师从任何接口都拿不到）
  * @typedef {Object} OrderListItem  id, orderNo, status, urgency, serviceType, problemType, customerName, city, region,
  *   deviceModel, deviceSn, symptom, price:?number, priceSet:?boolean（工程师恒为 null）, assignee:?UserBrief（负责人）,
  *   assistants:UserBrief[], myRole:?('Lead'|'Assistant'), myMinutes:?number, myOnSiteSince:?string, creator:UserBrief,
@@ -17,7 +19,9 @@
  *   priceSetAt, priceSuggestion:?{id,amount,note,by:UserBrief,createdAt,pending}, hold:?{reasonType,reasonText,note,text,fromStatus,at,by},
  *   requests:RequestDto[], participants:ParticipantDto[], factory:?{nodes:FactoryNodeDto[]}, closeBlockedReason:?string,
  *   closeHints:string[], completion, files{orderPhotos,punchPhotos,processPhotos,signatures,factoryPhotos},
- *   punches:PunchDto[], logs:StatusLogDto[]（含 kind）, issueDetails[]（含 engineer）, actions:string[]
+ *   punches:PunchDto[], logs:StatusLogDto[]（含 kind）, issueDetails[]（含 engineer）, actions:string[],
+ *   v1.2：attachments:AttachmentDto[]（当前用户可见的附件）, canAddAttachment:boolean, canRestrictAttachment:boolean,
+ *   attachmentLimit:number(20), attachmentRemaining:number（files.orderPhotos 仅保留给 v1.1 客户端，v1.2 不再读）
  * @typedef {Object} RequestDto  id, orderId, type:'Hold'|'AddAssistant', status, requester:UserBrief, createdAt, reasonType,
  *   reasonText, note, text, engineer:?UserBrief, decider, decidedAt, reply, canDecide:boolean, canCancel:boolean
  * @typedef {{user:UserBrief,role:'Lead'|'Assistant'|'Former',totalMinutes:number,onSiteSince:?string,missingPunch:boolean}} ParticipantDto
@@ -78,11 +82,22 @@ const files = {
   /**
    * POST /api/files（multipart）
    * @param {string} filePath 本地临时文件
-   * @param {'OrderPhoto'|'PunchPhoto'|'ProcessPhoto'|'Signature'|'Avatar'|'FactoryReceivePhoto'|'FactoryShipPhoto'|'FactorySignPhoto'} category
+   * @param {'OrderPhoto'|'PunchPhoto'|'ProcessPhoto'|'Signature'|'Avatar'|'FactoryReceivePhoto'|'FactoryShipPhoto'|'FactorySignPhoto'|'Attachment'} category
+   *   工单附件（建单时与建单后）一律传 'Attachment'
+   * @param {{silent?:boolean,loading?:boolean|string,fileName?:string,timeout?:number,onProgress?:function(number):void,onTask?:function(Object):void}} [opts]
+   *   v1.2：fileName 原始文件名（wx.chooseMessageFile 的 name；相册 / 相机选的不传）、timeout（默认 60000）、onProgress(percent)
    * @returns {Promise<FileDto>}
    */
   upload(filePath, category, opts) {
     return http.uploadFile(filePath, category, opts);
+  },
+  /**
+   * GET /api/files/{id}/download 的路径（需 Authorization 头；配合 http.download 使用）
+   * @param {number} id 文件 id
+   * @returns {string}
+   */
+  downloadPath(id) {
+    return '/api/files/' + id + '/download';
   }
 };
 
@@ -142,7 +157,8 @@ const orders = {
    * POST /api/orders 新建工单
    * @param {Object} body 字段见 API.md：source, problemType, urgency, serviceType, customerName, contactName, contactPhone,
    *   address, latitude, longitude, deviceModel, deviceSn, satDate('yyyy-MM'), satSigned, projectNo, faultTime, symptom,
-   *   customerTried, siteEnvironment, customerRequest, photoFileIds:number[]（v1.1 起不含 price，定价由主管在详情操作）
+   *   customerTried, siteEnvironment, customerRequest, attachments:[{fileId:number,restricted?:boolean}]
+   *   （v1.2 起用 attachments，不再传 photoFileIds；v1.1 起不含 price，定价由主管在详情操作）
    * @returns {Promise<OrderDetail>}
    */
   create(body, opts) {
@@ -320,6 +336,32 @@ const orders = {
    */
   close(id, opts) {
     return post('/api/orders/' + id + '/close', {}, opts);
+  },
+  /**
+   * POST /api/orders/{id}/attachments 添加附件（v1.2；服务端按建单人 / 负责人 / 协助人 / 主管判权）
+   * @param {number} id
+   * @param {Array<{fileId:number,restricted?:boolean}>} attachments 先用 files.upload(path,'Attachment') 上传得到 fileId
+   * @returns {Promise<OrderDetail>}
+   */
+  addAttachments(id, attachments, opts) {
+    return post('/api/orders/' + id + '/attachments', { attachments: attachments || [] }, opts);
+  },
+  /**
+   * POST /api/orders/{id}/attachments/{fileId}/delete 删除附件（v1.2；上传人本人或主管）
+   * @returns {Promise<OrderDetail>}
+   */
+  deleteAttachment(id, fileId, opts) {
+    return post('/api/orders/' + id + '/attachments/' + fileId + '/delete', {}, opts);
+  },
+  /**
+   * POST /api/orders/{id}/attachments/{fileId}/restricted 切换「仅销售和主管可见」（v1.2；Supervisor）
+   * @param {number} id
+   * @param {number} fileId
+   * @param {boolean} restricted
+   * @returns {Promise<OrderDetail>}
+   */
+  setAttachmentRestricted(id, fileId, restricted, opts) {
+    return post('/api/orders/' + id + '/attachments/' + fileId + '/restricted', { restricted: !!restricted }, opts);
   }
 };
 /** orders.void 的别名（避免部分编辑器对保留字属性报警） */

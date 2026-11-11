@@ -279,10 +279,24 @@ public class OrderViewBuilder
 
         d.Requests = requests.Select(r => RequestToDto(r, user)).ToList();
 
+        // 已软删除的文件被全局查询过滤器排除
         var files = await _db.Files.Where(f => f.OrderId == id).OrderBy(f => f.CreatedAt).ThenBy(f => f.Id).ToListAsync();
+
+        // v1.2 附件 = 建单照片 + 新附件。可见性在此统一处理：Engineer 永远拿不到受限附件（CHANGES-v1.2 §4.2 硬规则）
+        var allAttachments = files.Where(f => AttachmentRules.IsAttachment(f.Category)).ToList();
+        var visible = allAttachments.Where(f => AttachmentRules.Visible(f, user)).ToList();
+        var uploaders = await UploaderMap(visible.Select(f => f.UploaderId));
+        d.Attachments = visible.Select(f => FillAttachment(new AttachmentDto(), f, o, uploaders.GetValueOrDefault(f.UploaderId), user)).ToList();
+        d.CanAddAttachment = AttachmentRules.CanAdd(o, user);
+        d.CanRestrictAttachment = AttachmentRules.CanRestrict(user);
+        d.AttachmentLimit = AttachmentRules.Limit;
+        // 唯一包含受限附件的量：剩余名额
+        d.AttachmentRemaining = Math.Max(0, AttachmentRules.Limit - allAttachments.Count);
+
         d.Files = new OrderFilesDto
         {
-            OrderPhotos = files.Where(f => f.Category == FileCategory.OrderPhoto).Select(_files.ToDto).ToList(),
+            // 旧字段（v1.1 小程序）：可见附件里的图片 / 视频
+            OrderPhotos = visible.Where(f => FileService.KindOf(f) != FileKind.Document).Select(_files.ToDto).ToList(),
             PunchPhotos = files.Where(f => f.Category == FileCategory.PunchPhoto).Select(_files.ToDto).ToList(),
             ProcessPhotos = files.Where(f => f.Category == FileCategory.ProcessPhoto).Select(_files.ToDto).ToList(),
             Signatures = files.Where(f => f.Category == FileCategory.Signature).Select(_files.ToDto).ToList(),
@@ -293,7 +307,7 @@ public class OrderViewBuilder
 
         var logs = await _db.StatusLogs.Include(l => l.Actor).ThenInclude(e => e!.AvatarFile)
             .Where(l => l.OrderId == id).OrderBy(l => l.Time).ThenBy(l => l.Id).ToListAsync();
-        d.Logs = logs.Where(l => !isEngineer || l.Kind != LogKind.Price).Select(l => new StatusLogDto
+        d.Logs = logs.Where(l => !isEngineer || (l.Kind != LogKind.Price && l.Kind != LogKind.AttachmentPrivate)).Select(l => new StatusLogDto
         {
             Id = l.Id, Text = l.Text, Time = l.Time, Actor = l.Actor == null ? new UserBrief() : Brief(l.Actor), ToStatus = l.ToStatus,
             Kind = l.Kind ?? LogKind.Status
@@ -320,6 +334,30 @@ public class OrderViewBuilder
                 d.CloseHints.Add("客户签收尚未记录");
         }
         return d;
+    }
+
+    /// <summary>批量加载上传人（带头像）</summary>
+    public async Task<Dictionary<int, Employee>> UploaderMap(IEnumerable<int> ids)
+    {
+        var list = ids.Distinct().ToList();
+        if (list.Count == 0) return new();
+        return await Employees().Where(e => list.Contains(e.Id)).ToDictionaryAsync(e => e.Id);
+    }
+
+    /// <summary>
+    /// 文件 → AttachmentDto（工单详情与文件中心共用）。调用方负责只传当前用户可见的文件；
+    /// can* 只对附件来源按 AttachmentRules 计算，其余来源恒为 false。
+    /// </summary>
+    public T FillAttachment<T>(T dto, StoredFile f, WorkOrder o, Employee? uploader, CurrentUser user) where T : AttachmentDto
+    {
+        _files.Fill(dto, f);
+        dto.Source = AttachmentRules.SourceOf(f.Category) ?? "";
+        dto.SourceLabel = AttachmentRules.SourceLabel(f.Category);
+        dto.Restricted = AttachmentRules.IsAttachment(f.Category) && f.Restricted;
+        dto.Uploader = uploader == null ? null : Brief(uploader);
+        dto.CanDelete = AttachmentRules.CanDelete(f, o, user);
+        dto.CanToggleRestricted = AttachmentRules.CanToggleRestricted(f, user);
+        return dto;
     }
 
     private FactoryDto BuildFactory(WorkOrder o, List<FactoryRecord> records, List<StoredFile> files, CurrentUser user)

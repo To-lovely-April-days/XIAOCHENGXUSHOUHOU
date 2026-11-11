@@ -79,7 +79,11 @@ public class AppDbContext : DbContext
             e.Property(x => x.Category).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.Path).HasMaxLength(260);
             e.Property(x => x.MimeType).HasMaxLength(100);
+            e.Property(x => x.DisplayName).HasMaxLength(200);
             e.HasIndex(x => x.OrderId);
+            e.HasIndex(x => x.CreatedAt);
+            // v1.2 软删除：已删除的文件对所有读取路径都视为不存在（需要看到时用 IgnoreQueryFilters）
+            e.HasQueryFilter(x => x.DeletedAt == null);
         });
 
         b.Entity<OrderAssistant>(e =>

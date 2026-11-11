@@ -29,7 +29,9 @@ const PATHS = {
   flash: '<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>',
   switch: '<path d="M4 9a8 8 0 0 1 14-3l2 2M20 15a8 8 0 0 1-14 3l-2-2"/><path d="M20 4v4h-4M4 20v-4h4"/>',
   shield: '<path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>',
-  wechat: '<path d="M9.5 4.5C5.4 4.5 2.5 7.1 2.5 10.2c0 1.8 1 3.3 2.5 4.4L4.5 17l2.8-1.4c.7.2 1.4.3 2.2.3"/><path d="M15 9c3.6 0 6.5 2.3 6.5 5.2 0 1.5-.8 2.9-2.1 3.8l.4 2-2.4-1.2c-.8.2-1.6.4-2.4.4-3.6 0-6.5-2.3-6.5-5.1S11.4 9 15 9z"/>'
+  wechat: '<path d="M9.5 4.5C5.4 4.5 2.5 7.1 2.5 10.2c0 1.8 1 3.3 2.5 4.4L4.5 17l2.8-1.4c.7.2 1.4.3 2.2.3"/><path d="M15 9c3.6 0 6.5 2.3 6.5 5.2 0 1.5-.8 2.9-2.1 3.8l.4 2-2.4-1.2c-.8.2-1.6.4-2.4.4-3.6 0-6.5-2.3-6.5-5.1S11.4 9 15 9z"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>',
+  more: '<path d="M5.5 12h.01M12 12h.01M18.5 12h.01"/>'
 };
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -53,7 +55,7 @@ const cache = {};
 
 /**
  * 取图标 data URI。
- * @param {string} name PATHS 中的名字（home/orders/camera/clock/user/plus/plus-square/back/right/down/check/close/phone/location/search/image/edit/warning/info/flash/switch/shield/wechat）
+ * @param {string} name PATHS 中的名字（home/orders/camera/clock/user/plus/plus-square/back/right/down/check/close/phone/location/search/image/edit/warning/info/flash/switch/shield/wechat/lock/more）
  * @param {string} [color='#1D1D1F']
  * @param {number} [strokeWidth=1.8]
  * @returns {string}

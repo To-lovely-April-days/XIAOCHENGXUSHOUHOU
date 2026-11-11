@@ -144,6 +144,14 @@ public class StoredFile
     public int UploaderId { get; set; }
     public int? OrderId { get; set; }
     public DateTime CreatedAt { get; set; }
+    /// <summary>客户端明确给出的原始文件名（已清洗）；null = 展示名由服务端生成（v1.2）</summary>
+    public string? DisplayName { get; set; }
+    /// <summary>仅销售和主管可见（只对附件有意义）。不要配置 HasDefaultValue；列默认值 false 只写在迁移里</summary>
+    public bool Restricted { get; set; }
+    /// <summary>软删除时间；非 null = 已删除（磁盘文件保留）。AppDbContext 的全局查询过滤器让已删除文件对所有读取路径不可见</summary>
+    public DateTime? DeletedAt { get; set; }
+    /// <summary>删除人 id（普通整数列，无外键）</summary>
+    public int? DeletedById { get; set; }
 }
 
 /// <summary>工单协助人（当前有效的；移除 = 删除行）</summary>

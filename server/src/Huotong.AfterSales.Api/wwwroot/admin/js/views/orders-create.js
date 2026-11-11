@@ -1,12 +1,11 @@
 // 新建工单弹窗：字段按 API.md POST /api/orders（v1.1 起建单不填价格，建单后在详情里定价）。PC 端没有地图选点，手工填写地址与经纬度（现场单必填）。
-// 照片/视频先 POST /api/files（category=OrderPhoto）上传，最多 9 个，提交时带 photoFileIds。
+// v1.2：附件（照片 / 视频 / 文件）用 attachments-upload.js 先 POST /api/files（category=Attachment）上传，最多 20 个，提交时带 attachments: [{ fileId, restricted }]。
 import * as api from '../api.js';
 import { confirm } from '../ui.js';
 import { ORDER_SOURCE, PROBLEM_TYPE, URGENCY, SERVICE_TYPE, options } from '../enums.js';
 import { toApiDate, parseTime } from '../format.js';
+import AttachmentsUpload, { MAX_COUNT, attUploading, attHasError, attDone } from './attachments-upload.js';
 
-const MAX_PHOTOS = 9;
-const MAX_SIZE = 20 * 1024 * 1024;
 const PERIODS = ['凌晨', '上午', '中午', '下午', '晚上'];
 const PHONE_RE = /^[0-9-]{7,20}$/;
 const PICKER_URL = 'https://lbs.qq.com/getPoint/';
@@ -26,12 +25,13 @@ const trim = (v) => (v === null || v === undefined ? '' : String(v).trim());
 
 export default {
   name: 'OrdersCreateModal',
+  components: { AttachmentsUpload },
   emits: ['close', 'created'],
   data() {
     return {
       f: emptyForm(),
       errors: {},
-      photos: [], // { key, file, name, previewUrl, isVideo, status: 'uploading'|'done'|'error', id, url, error }
+      atts: [], // 附件条目，结构见 attachments-upload.js
       saving: false,
       submitError: '',
       opts: {
@@ -42,7 +42,7 @@ export default {
       },
       periods: PERIODS,
       pickerUrl: PICKER_URL,
-      maxPhotos: MAX_PHOTOS,
+      maxAtts: MAX_COUNT,
     };
   },
   computed: {
@@ -52,14 +52,11 @@ export default {
       if (!d || !this.f.faultPeriod) return '';
       return `${d.getMonth() + 1}月${d.getDate()}日 ${this.f.faultPeriod}`;
     },
-    uploading() { return this.photos.some(p => p.status === 'uploading'); },
+    uploading() { return attUploading(this.atts); },
     dirty() {
       const e = emptyForm();
-      return this.photos.length > 0 || Object.keys(e).some(k => k !== 'faultDate' && this.f[k] !== e[k]);
+      return this.atts.length > 0 || Object.keys(e).some(k => k !== 'faultDate' && this.f[k] !== e[k]);
     },
-  },
-  beforeUnmount() {
-    this.photos.forEach(p => { if (p.previewUrl) URL.revokeObjectURL(p.previewUrl); });
   },
   methods: {
     set(key, v) { this.f[key] = v; this.clearErr(key); },
@@ -76,45 +73,8 @@ export default {
       this.clearErr('latitude');
     },
 
-    // ------------------------------------------------ 照片
-    pickFiles() { const el = this.$refs.file; if (el) { el.value = ''; el.click(); } },
-    onFiles(e) {
-      const files = Array.from(e.target.files || []);
-      const room = MAX_PHOTOS - this.photos.length;
-      if (files.length > room) this.errors = Object.assign({}, this.errors, { photos: `最多上传 ${MAX_PHOTOS} 个，已忽略多余的 ${files.length - Math.max(0, room)} 个` });
-      else this.clearErr('photos');
-      files.slice(0, Math.max(0, room)).forEach(file => {
-        const isVideo = /^video\//.test(file.type);
-        const isImage = /^image\//.test(file.type);
-        const item = {
-          key: Math.random().toString(36).slice(2), file, name: file.name, isVideo,
-          previewUrl: isImage ? URL.createObjectURL(file) : '', status: 'uploading', id: null, url: '', error: '', fatal: false,
-        };
-        if (!isVideo && !isImage) { item.status = 'error'; item.error = '只支持图片或视频'; item.fatal = true; }
-        else if (file.size > MAX_SIZE) { item.status = 'error'; item.error = '文件超过 20MB'; item.fatal = true; }
-        this.photos.push(item);
-        if (item.status === 'uploading') this.upload(this.photos[this.photos.length - 1]);
-      });
-    },
-    async upload(item) {
-      item.status = 'uploading';
-      item.error = '';
-      try {
-        const res = await api.files.upload(item.file, 'OrderPhoto');
-        item.id = res.id;
-        item.url = res.url;
-        item.status = 'done';
-      } catch (e) {
-        item.status = 'error';
-        item.error = e.message || '上传失败';
-      }
-    },
-    removePhoto(i) {
-      const p = this.photos[i];
-      if (p && p.previewUrl) URL.revokeObjectURL(p.previewUrl);
-      this.photos.splice(i, 1);
-      this.clearErr('photos');
-    },
+    // ------------------------------------------------ 附件
+    onAtts(list) { this.atts = list; this.clearErr('attachments'); },
 
     // ------------------------------------------------ 校验 / 提交
     validate() {
@@ -148,7 +108,7 @@ export default {
       req('symptom', '请按客户原话填写故障现象/报错');
       req('customerTried', '请填写客户已尝试的操作');
       req('siteEnvironment', '请填写现场环境条件');
-      if (this.photos.some(p => p.status === 'error')) e.photos = '有文件未上传成功，请重试或移除';
+      if (attHasError(this.atts)) e.attachments = '有附件未上传成功，请重试或移除';
       this.errors = e;
       return Object.keys(e).length === 0;
     },
@@ -168,13 +128,13 @@ export default {
         faultTime: this.faultTimeText,
         symptom: trim(f.symptom), customerTried: trim(f.customerTried), siteEnvironment: trim(f.siteEnvironment),
         customerRequest: opt(f.customerRequest),
-        photoFileIds: this.photos.filter(p => p.status === 'done').map(p => p.id),
+        attachments: attDone(this.atts),
       };
     },
     async submit() {
       if (this.saving) return;
       this.submitError = '';
-      if (this.uploading) { this.submitError = '文件仍在上传，请稍候'; return; }
+      if (this.uploading) { this.submitError = '附件仍在上传，请稍候'; return; }
       if (!this.validate()) {
         this.submitError = '请检查标红的字段';
         this.$nextTick(() => {
@@ -294,25 +254,11 @@ export default {
       <label class="field span-2"><span class="field-label">客户诉求与限制</span>
         <textarea class="textarea" v-model="f.customerRequest" rows="2" maxlength="500" placeholder="选填，如：希望本周内上门，周末不方便"></textarea></label>
 
-      <div class="form-section-title">现场照片</div>
-      <div class="field span-2"><span class="field-label">现场照片/视频（选填，最多 {{ maxPhotos }} 个）</span>
-        <div class="orders-create-photos">
-          <div v-for="(p, i) in photos" :key="p.key" class="orders-create-photo" :class="'is-' + p.status" :title="p.error || p.name">
-            <img v-if="p.previewUrl" :src="p.previewUrl" alt="">
-            <span v-else class="orders-create-photo-ph">{{ p.isVideo ? '视频' : '文件' }}</span>
-            <span v-if="p.status === 'uploading'" class="orders-create-photo-mask"><span class="spinner"></span></span>
-            <span v-else-if="p.status === 'error' && p.fatal" class="orders-create-photo-mask orders-create-photo-bad">{{ p.error }}</span>
-            <button v-else-if="p.status === 'error'" type="button" class="orders-create-photo-mask orders-create-photo-retry"
-                    @click="upload(p)">上传失败<br>点击重试</button>
-            <button type="button" class="orders-create-photo-del" :aria-label="'移除 ' + p.name" @click="removePhoto(i)">
-              <Icon name="close" :size="12" :stroke="2.4" /></button>
-          </div>
-          <button v-if="photos.length < maxPhotos" type="button" class="orders-create-add" @click="pickFiles">
-            <Icon name="plus" :size="18" /><span>添加</span></button>
-          <input ref="file" type="file" accept="image/*,video/*" multiple hidden @change="onFiles">
-        </div>
-        <span v-if="errors.photos" class="field-error">{{ errors.photos }}</span>
-        <span v-else class="field-hint">支持图片或视频，单个不超过 20MB。服务价格不在建单时填写，建单后由主管在工单详情中定价。</span>
+      <div class="form-section-title">附件</div>
+      <div class="field span-2"><span class="field-label">附件（照片 / 视频 / 文件，选填，最多 {{ maxAtts }} 个）</span>
+        <AttachmentsUpload :model-value="atts" :limit="maxAtts" :can-restrict="true" :disabled="saving" @update:model-value="onAtts" />
+        <span v-if="errors.attachments" class="field-error">{{ errors.attachments }}</span>
+        <span class="field-hint">支持图片、视频、Word、Excel、PPT、PDF、TXT、CSV；图片单个不超过 20MB，其他不超过 100MB。服务价格不在建单时填写，建单后由主管在工单详情中定价。</span>
       </div>
       <button type="submit" hidden></button>
     </form>

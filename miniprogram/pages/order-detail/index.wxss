@@ -218,3 +218,30 @@
 .od-amount-label { margin-top: 0; }
 .od-yen { font-size: 36rpx; font-weight: 600; color: var(--text-2); }
 .od-amount-input { width: 280rpx; height: 96rpx; font-size: 44rpx; font-weight: 600; color: var(--text); text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+
+/* ========== v1.2 附件 ========== */
+.od-atts { padding-bottom: 8rpx; }
+.od-att { display: flex; align-items: center; gap: 24rpx; min-height: 128rpx; padding: 20rpx 0; border-top: 2rpx solid var(--divider); }
+.od-att.first { border-top: none; }
+.od-att-badge { flex-shrink: 0; width: 80rpx; height: 80rpx; border-radius: 16rpx; display: flex; align-items: center; justify-content: center; color: #FFFFFF; font-size: 24rpx; font-weight: 700; }
+.od-att-badge.sm { width: 64rpx; height: 64rpx; border-radius: 14rpx; font-size: 22rpx; }
+.od-att-name { font-size: 30rpx; line-height: 42rpx; font-weight: 600; }
+.od-att-sub { margin-top: 2rpx; font-size: 24rpx; line-height: 34rpx; color: var(--text-2); }
+.od-att-tags { display: flex; margin-top: 8rpx; }
+.od-att-more { flex-shrink: 0; width: 72rpx; height: 72rpx; border-radius: 36rpx; display: flex; align-items: center; justify-content: center; }
+.od-sub-title { margin: 36rpx 8rpx 16rpx; font-size: 26rpx; font-weight: 600; color: var(--text-2); }
+
+/* 添加附件弹层 */
+.od-att-switch { gap: 24rpx; margin-top: 16rpx; min-height: 112rpx; border-bottom: 2rpx solid var(--divider); }
+.od-att-switch-title { font-size: 30rpx; font-weight: 600; }
+.od-att-switch-sub { margin-top: 2rpx; font-size: 24rpx; color: var(--text-2); }
+.od-att-picks { gap: 20rpx; margin-top: 28rpx; }
+.od-att-pick { flex: 1; min-width: 0; height: 92rpx; border-radius: 20rpx; background: var(--soft); display: flex; align-items: center; justify-content: center; font-size: 28rpx; font-weight: 600; color: var(--text); }
+.od-att-hint { margin-top: 20rpx; font-size: 24rpx; line-height: 36rpx; color: var(--text-2); }
+.od-att-picked { margin-top: 16rpx; max-height: 34vh; }
+.od-att-item { display: flex; align-items: center; gap: 20rpx; padding: 18rpx 0; border-top: 2rpx solid var(--divider); }
+.od-att-item.first { border-top: none; }
+.od-att-err { font-size: 24rpx; line-height: 34rpx; color: var(--red); word-break: break-all; }
+.od-att-op { flex-shrink: 0; padding: 16rpx 0 16rpx 20rpx; font-size: 26rpx; font-weight: 600; color: var(--text); text-decoration: underline; }
+.od-att-op.muted { color: var(--text-2); }
+.od-att-btn { margin-top: 28rpx; }

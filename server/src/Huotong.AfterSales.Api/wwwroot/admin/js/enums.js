@@ -138,6 +138,24 @@ export const FILE_CATEGORY = {
   FactoryReceivePhoto: { label: '收货照片' },
   FactoryShipPhoto: { label: '寄回照片' },
   FactorySignPhoto: { label: '签收凭证' },
+  Attachment: { label: '附件' },
+};
+
+/** 文件类型（v1.2，FileDto.kind；文件中心的 type 筛选值） */
+export const FILE_KIND = {
+  Image: { label: '图片' },
+  Video: { label: '视频' },
+  Document: { label: '文档' },
+};
+
+/** 文件来源（v1.2，文件中心的 source 筛选值；行上的具体文字用服务端的 sourceLabel） */
+export const FILE_SOURCE = {
+  Attachment: { label: '附件' },
+  OrderPhoto: { label: '建单照片' },
+  ProcessPhoto: { label: '完工照片' },
+  Signature: { label: '签字件' },
+  PunchPhoto: { label: '打卡照片' },
+  Factory: { label: '返厂照片' },
 };
 
 /**

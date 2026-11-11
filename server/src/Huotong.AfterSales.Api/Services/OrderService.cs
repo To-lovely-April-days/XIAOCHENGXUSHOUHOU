@@ -262,8 +262,13 @@ public partial class OrderService
         var symptom = Req(r.Symptom, "故障现象/报错", 1000);
         var tried = Req(r.CustomerTried, "客户已尝试的操作", 500);
         var env = Req(r.SiteEnvironment, "现场环境条件", 500);
-        var photoIds = r.PhotoFileIds ?? new List<int>();
-        if (photoIds.Distinct().Count() > 9) throw BizException.BadRequest("现场照片/视频最多 9 个");
+        // v1.2：attachments（新）与 photoFileIds（v1.1 客户端）并存；同一 fileId 两处都有时按 attachments 处理
+        var attItems = NormalizeAttachments(r.Attachments) ?? throw BizException.BadRequest("附件不存在，请重新上传");
+        var attIds = attItems.Select(x => x.FileId).ToHashSet();
+        var photoIds = (r.PhotoFileIds ?? new List<int>()).Distinct().Where(x => !attIds.Contains(x)).ToList();
+        if (photoIds.Count > 9) throw BizException.BadRequest("现场照片/视频最多 9 个");
+        if (attItems.Count + photoIds.Count > AttachmentRules.Limit) throw BizException.BadRequest("附件最多 20 个");
+        if (attItems.Any(x => x.Restricted) && !AttachmentRules.CanRestrict(user)) throw BizException.Forbidden(AttachmentRules.RestrictDenied);
 
         var me = await _view.LoadEmployee(user.Id);
         var now = _clock.Now;
@@ -295,6 +300,8 @@ public partial class OrderService
                 _db.Orders.Add(order);
                 await _db.SaveChangesAsync();
                 await _files.Attach(photoIds, order.Id, FileCategory.OrderPhoto, user, "现场照片");
+                // 建单时的附件不另写状态记录（已有「建单」记录）
+                Mount(await LoadNewAttachments(attItems, user), attItems, order.Id);
                 AddLog(order, me, order.Urgency == Urgency.Urgent ? $"{me.Name} 建单 · 紧急" : $"{me.Name} 建单", OrderStatus.Pending, now);
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();

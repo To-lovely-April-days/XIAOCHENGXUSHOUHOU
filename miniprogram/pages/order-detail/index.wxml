@@ -304,8 +304,30 @@
         </view>
       </block>
 
-      <!-- 资料 -->
+      <!-- 附件资料（v1.2：附件 + 流程资料） -->
       <block wx:if="{{tab === 'files'}}">
+        <view class="od-card od-atts">
+          <view class="row-between od-h3">
+            <text>附件（{{attachments.length}}）</text>
+            <text wx:if="{{canAddAttachment}}" class="od-link" bindtap="openAttachSheet" aria-role="button">添加</text>
+          </view>
+          <view wx:for="{{attachments}}" wx:key="id" class="od-att {{index === 0 ? 'first' : ''}}" hover-class="od-file-hover"
+                data-id="{{item.id}}" bindtap="onAttachmentTap" aria-role="button" aria-label="打开附件 {{item.name}}">
+            <view class="od-att-badge" style="background: {{item.badgeColor}};">{{item.badgeText}}</view>
+            <view class="flex1">
+              <view class="od-att-name ellipsis">{{item.name}}</view>
+              <view class="od-att-sub num-font ellipsis">{{item.sub}}</view>
+              <view wx:if="{{item.restricted}}" class="od-att-tags"><text class="tag tag-sm tag-amber">仅销售和主管可见</text></view>
+            </view>
+            <view wx:if="{{item.hasMenu}}" class="od-att-more" hover-class="btn-hover" hover-stop-propagation data-id="{{item.id}}" catchtap="onAttachmentMore"
+                  aria-role="button" aria-label="更多操作">
+              <ui-icon name="more" color="#6E6E73" size="22" stroke="3" />
+            </view>
+          </view>
+          <view wx:if="{{!attachments.length}}" class="od-empty-line muted">暂无附件</view>
+        </view>
+
+        <view class="od-sub-title">流程资料</view>
         <view class="od-card od-files">
           <view wx:for="{{files}}" wx:key="key" class="od-file" hover-class="od-file-hover" data-key="{{item.key}}" bindtap="onPreviewFiles">
             <view class="flex1">
@@ -380,6 +402,53 @@
              placeholder="如：老客户，建议优惠" placeholder-class="placeholder" />
     </block>
     <view class="btn-primary od-appt-btn {{busy ? 'btn-disabled' : ''}}" hover-class="btn-hover" bindtap="savePrice">{{priceSheet.mode === 'suggest' ? '提交建议' : '确定'}}</view>
+  </view>
+</block>
+
+<!-- 添加附件（v1.2）。只在非滚动区域拦截 touchmove，已选列表 scroll-view 不拦截 -->
+<block wx:if="{{attachSheet.show}}">
+  <view class="mask" bindtap="closeAttachSheet" catchtouchmove="noop"></view>
+  <view class="sheet od-appt" aria-role="dialog" aria-label="添加附件">
+    <view catchtouchmove="noop">
+      <view class="sheet-handle"></view>
+      <view class="row-between od-appt-head">
+        <text class="od-appt-title">添加附件</text>
+        <text class="muted od-appt-cancel" bindtap="closeAttachSheet">取消</text>
+      </view>
+      <view wx:if="{{attachSheet.canRestrict}}" class="row od-att-switch">
+        <view class="flex1">
+          <view class="od-att-switch-title">仅销售和主管可见</view>
+          <view class="od-att-switch-sub">打开后本次添加的附件工程师看不到</view>
+        </view>
+        <switch checked="{{attachSheet.restricted}}" color="#1D1D1F" bindchange="onAttachRestricted" />
+      </view>
+      <view class="row od-att-picks">
+        <view class="od-att-pick" hover-class="btn-hover" data-type="media" bindtap="onAttachPick" aria-role="button">拍照或从相册选择</view>
+        <view class="od-att-pick" hover-class="btn-hover" data-type="chat" bindtap="onAttachPick" aria-role="button">从微信聊天选择文件</view>
+      </view>
+      <view class="od-att-hint">{{attachHint}}</view>
+    </view>
+    <scroll-view wx:if="{{attachSheet.items.length}}" scroll-y class="od-att-picked" aria-label="已选附件">
+      <view wx:for="{{attachSheet.items}}" wx:key="key" class="od-att-item {{index === 0 ? 'first' : ''}}">
+        <view class="od-att-badge sm" style="background: {{item.badgeColor}};" data-key="{{item.key}}" bindtap="onAttachPreview">{{item.badgeText}}</view>
+        <view class="flex1" data-key="{{item.key}}" bindtap="onAttachPreview">
+          <view class="od-att-name ellipsis">{{item.name}}</view>
+          <view class="od-att-sub num-font">
+            <text>{{item.sizeText}}</text>
+            <text wx:if="{{item.status === 'uploading'}}"> · 上传中 {{item.percent}}%</text>
+            <text wx:elif="{{item.status === 'done'}}"> · 已上传</text>
+          </view>
+          <view wx:if="{{item.status === 'fail'}}" class="od-att-err">{{item.error || '上传失败'}}</view>
+        </view>
+        <text wx:if="{{item.status === 'fail' && !item.fatal}}" class="od-att-op" data-key="{{item.key}}" bindtap="onAttachRetry" aria-role="button">重试</text>
+        <text class="od-att-op muted" data-key="{{item.key}}" bindtap="onAttachRemove" aria-role="button">移除</text>
+      </view>
+    </scroll-view>
+    <view catchtouchmove="noop">
+      <view class="btn-primary od-appt-btn od-att-btn {{attachSheet.uploading || busy || !attachSheet.doneCount ? 'btn-disabled' : ''}}"
+            hover-class="{{attachSheet.uploading || busy ? 'none' : 'btn-hover'}}" bindtap="saveAttachments" aria-role="button"
+            aria-disabled="{{attachSheet.uploading || busy}}">{{attachSheet.uploading ? '上传中…' : '确定添加（' + attachSheet.doneCount + '）'}}</view>
+    </view>
   </view>
 </block>
 

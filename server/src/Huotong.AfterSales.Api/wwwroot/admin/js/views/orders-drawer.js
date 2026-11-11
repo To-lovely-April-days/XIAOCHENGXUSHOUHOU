@@ -1,14 +1,17 @@
 // 工单详情抽屉（原型 16 右侧）：进度条、基本信息与定价、暂停提示、待审批申请、异常警示框 + 补录、
-// 处理人员（按人工时）、返厂流程时间线、打卡记录、状态记录、底部操作。
-// 所有可执行动作都由服务端计算：detail.actions、requests[].canDecide、factory.nodes[].canRecord / canEdit，这里不推导规则。
+// 处理人员（按人工时）、返厂流程时间线、附件（v1.2）、打卡记录、状态记录、底部操作。
+// 所有可执行动作都由服务端计算：detail.actions、requests[].canDecide、factory.nodes[].canRecord / canEdit、
+// canAddAttachment / canRestrictAttachment / attachments[].canDelete / canToggleRestricted，这里不推导规则。
 import * as api from '../api.js';
 import { toast, toastError, confirm, preview } from '../ui.js';
-import { fmtHM, fmtPrice, fmtMD, fmtMDHM, fmtTime, fmtDistance, isWarranty, parseTime, toApiDate, pad2 } from '../format.js';
+import { fmtHM, fmtPrice, fmtMD, fmtMDHM, fmtTime, fmtDistance, isWarranty, parseTime, toApiDate, pad2, fmtSize, fileBadge } from '../format.js';
 import { ORDER_STATUS, SERVICE_TYPE, PUNCH_KIND, ORDER_ACTIONS, PROGRESS_STEPS, REQUEST_TYPE, FACTORY_NODE, PARTICIPANT_ROLE, label } from '../enums.js';
 import OrdersAssignModal from './orders-assign.js';
 import OrdersHoldModal from './orders-hold.js';
 import OrdersPriceModal from './orders-price.js';
 import OrdersFactoryModal from './orders-factory.js';
+import AttachmentsUpload, { attUploading, attHasError, attDone } from './attachments-upload.js';
+import { navigate } from '../router.js';
 
 /**
  * 原型按状态的按钮映射。每项：
@@ -43,7 +46,7 @@ const LAYOUT = {
 
 export default {
   name: 'OrdersDrawer',
-  components: { OrdersAssignModal, OrdersHoldModal, OrdersPriceModal, OrdersFactoryModal },
+  components: { OrdersAssignModal, OrdersHoldModal, OrdersPriceModal, OrdersFactoryModal, AttachmentsUpload },
   props: {
     orderId: { type: Number, required: true },
     serverOffset: { type: Number, default: 0 },
@@ -65,6 +68,10 @@ export default {
       closeAfterPrice: false, // 「定价并闭环」：定价成功后继续确认闭环
       priceInitial: null, // 打开定价弹窗时预填的金额（采用建议）
       factoryNode: null, // 正在记录 / 更正的返厂节点（FactoryDto.nodes 项）
+      attOpen: false, // 「添加附件」面板是否展开
+      attItems: [], // 待添加的附件条目（attachments-upload.js）
+      attSaving: false,
+      attBusy: 0, // 正在下载 / 删除 / 切换的附件 id
     };
   },
   computed: {
@@ -212,6 +219,39 @@ export default {
     },
     /** 下一个可记录的返厂节点（底部「返厂」按钮用） */
     nextFactory() { return this.factoryNodes.find(x => x.canRecord) || null; },
+    /** 附件列表（服务端已按当前用户过滤，createdAt 正序） */
+    attRows() {
+      const list = (this.d && this.d.attachments) || [];
+      return list.map(a => {
+        const t = parseTime(a.createdAt);
+        const meta = [fmtSize(a.size), a.uploader && a.uploader.name, t ? `${t.getMonth() + 1}-${t.getDate()} ${fmtTime(t)}` : ''].filter(Boolean).join(' · ');
+        return {
+          a,
+          key: a.id,
+          name: a.name || '未命名',
+          badge: fileBadge(a),
+          media: a.kind === 'Image' || a.kind === 'Video',
+          meta,
+          fromOrderPhoto: a.source === 'OrderPhoto',
+          restricted: !!a.restricted,
+          canDelete: !!a.canDelete,
+          canToggle: !!a.canToggleRestricted,
+          toggleLabel: a.restricted ? '设为所有人可见' : '设为仅销售和主管可见',
+          busy: this.attBusy === a.id,
+        };
+      });
+    },
+    /** 本单全部图片 / 视频附件（预览时左右切换） */
+    attMedia() {
+      return ((this.d && this.d.attachments) || []).filter(a => (a.kind === 'Image' || a.kind === 'Video') && a.url)
+        .map(a => ({ id: a.id, url: a.url, type: a.kind === 'Video' ? 'video' : 'image' }));
+    },
+    attRemaining() {
+      const n = this.d ? Number(this.d.attachmentRemaining) : 0;
+      return isFinite(n) ? Math.max(0, n) : 0;
+    },
+    attUploading() { return attUploading(this.attItems); },
+    attReady() { return attDone(this.attItems); },
     creatorLabel() {
       const c = this.d && this.d.creator;
       return c && c.role && c.role !== 'Sales' ? '建单人' : '销售';
@@ -442,6 +482,84 @@ export default {
       }
       toast(ok ? '已复制单号 ' + text : '复制失败，请手动选择单号', ok ? 'success' : 'error');
     },
+
+    // ------------------------------------------------ 附件（v1.2）
+    /** 点名称：图片 / 视频 → 预览（同单全部图片视频可左右切换）；文档 → 下载 */
+    openAtt(row) {
+      if (row.media && row.a.url) {
+        const i = this.attMedia.findIndex(m => m.id === row.a.id);
+        preview(this.attMedia, Math.max(0, i));
+      } else {
+        this.downloadAtt(row);
+      }
+    },
+    async downloadAtt(row) {
+      if (this.attBusy) return;
+      this.attBusy = row.a.id;
+      try {
+        await api.files.download(row.a.id, row.name);
+      } catch (e) {
+        this.failed(e);
+      } finally {
+        this.attBusy = 0;
+      }
+    },
+    async toggleAtt(row) {
+      if (this.attBusy) return;
+      this.attBusy = row.a.id;
+      try {
+        const res = await api.orders.setAttachmentRestricted(this.d.id, row.a.id, !row.restricted);
+        this.applied(res, '已更新');
+      } catch (e) {
+        this.failed(e);
+      } finally {
+        this.attBusy = 0;
+      }
+    },
+    async deleteAtt(row) {
+      if (this.attBusy) return;
+      if (!(await confirm('删除附件', `确定删除「${row.name}」？删除后不可恢复。`, { danger: true, okText: '删除' }))) return;
+      this.attBusy = row.a.id;
+      try {
+        const res = await api.orders.deleteAttachment(this.d.id, row.a.id);
+        this.applied(res, '已删除');
+      } catch (e) {
+        this.failed(e);
+      } finally {
+        this.attBusy = 0;
+      }
+    },
+    openAttAdd() {
+      if (this.attOpen) return;
+      if (this.attRemaining <= 0) { toast('附件最多 20 个，本单已达上限', 'error'); return; }
+      this.attItems = [];
+      this.attOpen = true;
+    },
+    cancelAttAdd() {
+      if (this.attSaving) return;
+      // 已上传未提交的文件直接丢弃（服务端留作未挂载文件）
+      this.attOpen = false;
+      this.attItems = [];
+    },
+    async submitAtt() {
+      if (this.attSaving) return;
+      if (this.attUploading) { toast('附件仍在上传，请稍候'); return; }
+      if (attHasError(this.attItems)) { toast('有附件未上传成功，请重试或移除', 'error'); return; }
+      const list = this.attReady;
+      if (!list.length) { toast('请选择要添加的附件'); return; }
+      this.attSaving = true;
+      try {
+        const res = await api.orders.addAttachments(this.d.id, list);
+        this.attOpen = false;
+        this.attItems = [];
+        this.applied(res, `已添加 ${list.length} 个附件`);
+      } catch (e) {
+        this.failed(e);
+      } finally {
+        this.attSaving = false;
+      }
+    },
+    openAllFiles() { navigate('/files', { orderId: this.d.id }); },
 
     // ------------------------------------------------ 补录
     formFor(a) { return this.forms[a.punchId]; },
@@ -676,6 +794,40 @@ export default {
           </li>
         </ol>
       </template>
+
+      <h3 class="section-title orders-dr-sec"><span>附件<span class="att-count num">（{{ attRows.length }}）</span></span>
+        <span class="att-head-links">
+          <button v-if="d.canAddAttachment" type="button" class="btn-link orders-dr-link" @click="openAttAdd">添加附件</button>
+          <button type="button" class="btn-link orders-dr-link" title="查看本单的全部文件（含完工照片、签字件等）" @click="openAllFiles">全部文件</button>
+        </span></h3>
+      <div v-if="attOpen" class="att-add">
+        <AttachmentsUpload v-model="attItems" :limit="attRemaining" :can-restrict="!!d.canRestrictAttachment" :disabled="attSaving" />
+        <div class="field-hint">支持图片、视频、Word、Excel、PPT、PDF、TXT、CSV；图片单个不超过 20MB，其他不超过 100MB。</div>
+        <div class="att-add-actions">
+          <button type="button" class="btn btn-primary" :disabled="attSaving || attUploading || !attReady.length" @click="submitAtt">
+            {{ attSaving ? '提交中…' : (attUploading ? '上传中…' : '确定添加') }}</button>
+          <button type="button" class="btn btn-secondary" :disabled="attSaving" @click="cancelAttAdd">取消</button>
+        </div>
+      </div>
+      <div v-if="!attRows.length" class="orders-dr-empty">暂无附件</div>
+      <ul v-else class="att-list">
+        <li v-for="r in attRows" :key="r.key" class="att-row" :class="{ 'att-row-busy': r.busy }">
+          <span class="att-badge" :style="{ background: r.badge.color }" aria-hidden="true">{{ r.badge.text }}</span>
+          <div class="att-main">
+            <div class="att-name-line">
+              <button type="button" class="att-name ellipsis" :title="(r.media ? '预览 ' : '下载 ') + r.name" @click="openAtt(r)">{{ r.name }}</button>
+              <Tag v-if="r.fromOrderPhoto" tone="neutral">建单照片</Tag>
+              <Tag v-if="r.restricted" tone="warn">仅销售和主管可见</Tag>
+            </div>
+            <div class="att-meta num">{{ r.meta }}</div>
+            <div class="att-actions">
+              <button type="button" class="btn-link att-link" :disabled="!!attBusy" @click="downloadAtt(r)">下载</button>
+              <button v-if="r.canToggle" type="button" class="btn-link att-link" :disabled="!!attBusy" @click="toggleAtt(r)">{{ r.toggleLabel }}</button>
+              <button v-if="r.canDelete" type="button" class="btn-link att-link att-link-danger" :disabled="!!attBusy" @click="deleteAtt(r)">删除</button>
+            </div>
+          </div>
+        </li>
+      </ul>
 
       <h3 class="section-title">打卡记录</h3>
       <div v-if="!punchRows.length" class="orders-dr-empty">{{ emptyPunchText }}</div>

@@ -64,6 +64,7 @@ builder.Services.AddScoped<HoursService>();
 builder.Services.AddScoped<HomeService>();
 builder.Services.AddScoped<AdminService>();
 builder.Services.AddScoped<AdminReportService>();
+builder.Services.AddScoped<FileCenterService>();
 builder.Services.AddScoped<PasswordService>();
 builder.Services.AddSingleton<LoginThrottle>();
 
@@ -193,10 +194,37 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 app.UseCors();
+// 受限 / 已删除的「文档」不再能通过静态地址取到（文档一律走 /api/files/{id}/download）；图片、视频不受影响
+app.Use(async (ctx, next) =>
+{
+    if (ctx.Request.Path.StartsWithSegments("/uploads", out var rest) && rest.HasValue
+        && await ctx.RequestServices.GetRequiredService<FileService>().StaticBlocked(rest.Value))
+    {
+        ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+    await next();
+});
+// 默认的扩展名表不认识 .heic / .heif（静态文件中间件对未知类型直接 404）：补上所有允许落盘的扩展名
+var uploadTypes = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+foreach (var (ext, mime) in FileService.StoredTypes) uploadTypes.Mappings[ext] = mime;
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(uploadRoot),
-    RequestPath = "/uploads"
+    RequestPath = "/uploads",
+    ContentTypeProvider = uploadTypes,
+    OnPrepareResponse = c =>
+    {
+        // 上传文件按存储的类型原样输出，禁止浏览器猜测类型（v1.2）
+        var h = c.Context.Response.Headers;
+        h["X-Content-Type-Options"] = "nosniff";
+        // 只有位图图片和视频允许在浏览器里直接展示；其余（文档，以及 v1.1 时代按客户端声明类型存下来的 .html / .svg 等）
+        // 一律作为下载输出，不在本站源下渲染
+        var ct = c.Context.Response.ContentType ?? "";
+        var inline = (ct.StartsWith("image/", StringComparison.OrdinalIgnoreCase) && !ct.StartsWith("image/svg", StringComparison.OrdinalIgnoreCase))
+                     || ct.StartsWith("video/", StringComparison.OrdinalIgnoreCase);
+        if (!inline) h.ContentDisposition = "attachment";
+    }
 });
 
 // PC 主管后台静态页面：wwwroot/admin/ → /admin/（匿名访问，位于认证中间件之前；页面内的 /api 调用自带 token）

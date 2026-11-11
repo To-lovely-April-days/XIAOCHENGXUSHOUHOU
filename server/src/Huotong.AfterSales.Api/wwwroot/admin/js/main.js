@@ -8,6 +8,7 @@ import LoginView from './views/login.js';
 import OrdersView from './views/orders.js';
 import PunchesView from './views/punches.js';
 import HoursView from './views/hours.js';
+import FilesView from './views/files.js';
 import AccountsView from './views/accounts.js';
 
 const { createApp } = window.Vue;
@@ -17,6 +18,7 @@ export const ROUTES = {
   '/orders': { title: '工单', icon: 'orders', component: OrdersView },
   '/punches': { title: '打卡记录', icon: 'camera', component: PunchesView },
   '/hours': { title: '工时统计', icon: 'clock', component: HoursView },
+  '/files': { title: '文件', icon: 'folder', component: FilesView },
   '/accounts': { title: '账号管理', icon: 'users', component: AccountsView },
 };
 const DEFAULT_PATH = '/orders';

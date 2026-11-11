@@ -55,6 +55,8 @@ public class HomeService
         var file = await _db.Files.FirstOrDefaultAsync(f => f.Id == fileId) ?? throw BizException.BadRequest("头像文件不存在，请重新上传");
         if (file.UploaderId != user.Id) throw BizException.BadRequest("头像文件不是本人上传");
         if (!file.MimeType.StartsWith("image/")) throw BizException.BadRequest("头像必须是图片");
+        // 已挂到工单的文件（附件、打卡照片、完工照片…）不能改作头像：否则类别被改成 Avatar，文件会从工单资料里消失
+        if (file.OrderId != null) throw BizException.BadRequest("头像文件已用于工单，请重新上传");
         file.Category = FileCategory.Avatar;
         me.AvatarFileId = file.Id;
         await _db.SaveChangesAsync();

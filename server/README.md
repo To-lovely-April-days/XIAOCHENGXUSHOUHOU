@@ -99,7 +99,27 @@ PC 后台（`http://localhost:5080/admin/`）用赵主管 `13900000001` / `Huoto
 
 ## 文件
 
-`POST /api/files`（multipart：`file` + `category`）存到 `<项目目录>/uploads/yyyy/MM/{guid}{ext}`，通过 `/uploads/...` 静态访问（无需认证）。只允许 `image/*`、`video/*`，单个 ≤ 20MB。小程序 `wx.uploadFile` 的 Content-Type 可能是 `application/octet-stream`，这时按扩展名推断类型。
+`POST /api/files`（multipart：`file` + `category` + 可选 `fileName`）存到 `<项目目录>/uploads/yyyy/MM/{guid}{ext}`，通过 `/uploads/...` 静态访问（无需认证，文件名是随机 GUID；响应带 `X-Content-Type-Options: nosniff`）。
+
+- **类型按内容识别**（`FileService`，契约见 `docs/CHANGES-v1.2.md` §3.2），不信任客户端的 Content-Type：所有类别都接受图片 / 视频（JPEG、PNG、GIF、BMP、WebP、HEIC、MP4 / MOV / M4V / 3GP，读文件头，扩展名缺失或不对时用规范扩展名）；只有 `category=Attachment`（v1.2 工单附件）另外接受文档：`.pdf`、`.doc/.docx`、`.xls/.xlsx`、`.ppt/.pptx`、`.txt`、`.csv`（扩展名 + 内容都要过：PDF 头、OLE 头或含 `[Content_Types].xml` 的 ZIP、文本不含 NUL）。可执行文件、脚本、HTML、SVG、压缩包等一律拒绝。
+- **大小**：图片与非附件类别 ≤ 20MB（`FileService.MaxBytes`）；附件里的视频、文档 ≤ 100MB（`FileService.MaxAttachmentBytes`）。上传接口用 `[RequestSizeLimit]` 把请求体上限单独提到 101MB，其他接口仍受 `appsettings.json` 里 Kestrel 30MB 的全局上限约束。**nginx 的 `client_max_body_size` 必须 ≥ 110m**（见 `deploy/README.md`），否则大文件在 nginx 就被 413 拒掉。
+- **文件名**：`fileName` 清洗后存到 `StoredFiles.DisplayName`，作为展示名 / 下载名；没有时由服务端生成（如 `打卡照片_20261106-100500.jpg`）。`FileDto` 带 `name / size / kind / ext`。
+- **鉴权下载**：`GET /api/files/{id}/download`（`Authorization: Bearer`，不支持 query token）返回原文件，`Content-Disposition: attachment` 带 UTF-8 原始文件名，支持 Range。权限：能查看所属工单；受限附件对工程师一律 404；未挂工单的文件只有上传人能取；头像不走这个接口。
+
+### 工单附件与文件中心（v1.2）
+
+- 「附件」= 挂在工单上、`Category` 为 `OrderPhoto`（建单照片 / v1.1 客户端）或 `Attachment` 的未删除文件，每单最多 20 个。接口：建单请求体的 `attachments`、`POST /api/orders/{id}/attachments`、`.../attachments/{fileId}/delete`、`.../attachments/{fileId}/restricted`（主管）。权限规则集中在 `Services/AttachmentRules.cs`（接口校验与详情里的 `canAddAttachment / canDelete / canToggleRestricted` 共用），实现在 `Services/AttachmentService.cs`（`partial class OrderService`）。
+- **「仅销售和主管可见」（`Restricted`）与价格同等严格**：工程师从详情（`attachments`、`files.orderPhotos`、`logs` 里的 `AttachmentPrivate` 记录）、下载、删除、文件中心都拿不到受限附件；过滤在 `OrderViewBuilder.BuildDetail`、`FileService.ResolveDownload`、`FileCenterService.Query`、`AttachmentService.LoadAttachment` 四处。静态地址 `/uploads/...` 本身不鉴权，保护手段是工程师拿不到记录与地址。
+- **软删除**：`DeletedAt / DeletedById`，磁盘文件保留。`AppDbContext` 给 `StoredFile` 配了全局查询过滤器（`DeletedAt == null`），已删除文件对所有读取路径都不存在；要看到它们用 `IgnoreQueryFilters()`。
+- **文件中心**：`GET /api/admin/files`（主管）= `StoredFiles` 与 `WorkOrders` 按 `OrderId` 关联的查询（`Services/FileCenterService.cs`），覆盖附件、建单照片、完工照片、签字件、打卡照片、返厂照片，不含头像与未挂工单的文件；支持 keyword / type / source / uploaderId / orderId / restricted / from / to 与分页，返回 `total`、`totalSize`、按类型的 `counts`。查询带当前用户，已按工程师可见性过滤，以后开放给其他角色不用改。
+- 迁移 `V12_Attachments` 只加列（`DisplayName / Restricted / DeletedAt / DeletedById`）和索引 `IX_StoredFiles_CreatedAt`，可直接在 v1.1 的库上升级，启动时自动执行。
+
+### v1.2 安全审查后的补充（与 CHANGES-v1.2 的差异）
+
+- **`/uploads` 静态地址**：图片、视频匿名可访问（预览 / 缩略图 / v1.1 小程序依赖，受限图片也一样，见 CHANGES-v1.2 §12.1）；**受限或已删除的文档**（pdf / Office / txt / csv）静态地址返回 404，只能走 `GET /api/files/{id}/download`；非图片视频的内容一律带 `Content-Disposition: attachment` 输出（不在本站源下渲染）；`.heic` / `.heif` 已补进静态类型表。
+- **设为受限会收起旧记录**：把附件设为「仅销售和主管可见」时，本单此前带该文件名的 `Attachment` 状态记录一并改为 `AttachmentPrivate`（工程师不再看到文件名；同一条记录里的其他文件名一起隐藏；取消受限后不恢复）。
+- **头像与工单文件互斥**：已挂工单的文件不能设为头像（`头像文件已用于工单，请重新上传`）；`Avatar` 类别的文件不能当附件 / 照片挂到工单（`…不存在，请重新上传`）。
+- **类型识别收紧**：BMP 还要求保留字段为 0；ISO-BMFF / QuickTime 要求首字节 ≤ 0x08（避免把「The free…」之类的文本误判成视频）；AVIF（`ftyp avif/avis`）拒绝；`category` 不接受数字；文件名清洗额外去掉不可见的格式字符（零宽字符、RLO 等）。
 
 ## 导出
 

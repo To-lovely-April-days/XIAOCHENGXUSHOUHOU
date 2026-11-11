@@ -18,7 +18,10 @@ public enum RunStatus { Normal, Observe, NotRecovered }
 
 public enum IssueType { MissingPunch, DistanceAbnormal }
 
-public enum FileCategory { OrderPhoto, PunchPhoto, ProcessPhoto, Signature, Avatar, FactoryReceivePhoto, FactoryShipPhoto, FactorySignPhoto }
+public enum FileCategory { OrderPhoto, PunchPhoto, ProcessPhoto, Signature, Avatar, FactoryReceivePhoto, FactoryShipPhoto, FactorySignPhoto, Attachment }
+
+/// <summary>文件大类（v1.2，不落库）：由 MimeType 推导</summary>
+public enum FileKind { Image, Video, Document }
 
 /// <summary>暂停原因类型（v1.1）</summary>
 public enum HoldReasonType { WaitCustomer, WaitParts, WaitThirdParty, Other }
@@ -34,7 +37,8 @@ public enum FactoryNode { CustomerShipped, FactoryReceived, Repairing, ShippedBa
 public enum ParticipantRole { Lead, Assistant, Former }
 
 /// <summary>状态记录类别；库中 null = Status</summary>
-public enum LogKind { Status, Price, Hold, Assist, Factory }
+/// <remarks>AttachmentPrivate（受限附件的记录）与 Price 一样不返回给 Engineer</remarks>
+public enum LogKind { Status, Price, Hold, Assist, Factory, Attachment, AttachmentPrivate }
 
 /// <summary>工单动作（状态机输入）</summary>
 public enum OrderAction { Claim, Assign, Reassign, Start, FirstArrive, Complete, Void, Hold, Resume, Reject, Close }

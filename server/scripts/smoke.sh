@@ -385,5 +385,216 @@ RD=$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" "$BASE/admin")
 expect "$(echo "$RD" | cut -d' ' -f1 | cut -c1)" "3" "GET /admin → 重定向"
 expect "$(echo "$RD" | cut -d' ' -f2 | sed 's#^.*://[^/]*##')" "/admin/" "重定向到 /admin/"
 
+# ============================== v1.2：工单附件 + 文件中心 ==============================
+echo "== v1.2 附件：上传校验"
+# 前面的账号用例可能让旧 token 失效，这里重新登录
+SUP=$(login 13900000001); ENG=$(login 13900000004); SALES=$(login 13900000010); LI=$(login 13900000000)
+
+# upf TOKEN 本地文件 CATEGORY 上传用文件名 [fileName 字段] → 写 $TMP/body 与 $TMP/status
+upf() {
+  local args=(-s -o "$TMP/body" -w "%{http_code}" -X POST "$BASE/api/files" -H "Authorization: Bearer $1" -H "Expect:"
+    -F "file=@$2;filename=$4;type=application/octet-stream" -F "category=$3")
+  [ -n "${5:-}" ] && args+=(-F "fileName=$5")
+  curl "${args[@]}" > "$TMP/status" || echo "000" > "$TMP/status"
+}
+# upok ... → 断言成功并输出 data
+upok() {
+  upf "$@"
+  if [ "$(cat "$TMP/status")" != "200" ]; then echo "上传失败: $4 → HTTP $(cat "$TMP/status")" >&2; cat "$TMP/body" >&2; kill -TERM "$MAIN_PID"; exit 1; fi
+  py 'd["data"]' < "$TMP/body"
+}
+upmsg() { echo "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body" 2>/dev/null || echo '?')"; }
+
+python3 - "$TMP" <<'PY'
+import sys, zipfile, os
+t = sys.argv[1]
+open(t + '/a.pdf', 'wb').write(b'%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n')
+open(t + '/b.pdf', 'wb').write(b'%PDF-1.4\n%%EOF\n')
+open(t + '/c.pdf', 'wb').write(b'%PDF-1.4\n% engineer\n%%EOF\n')
+with zipfile.ZipFile(t + '/a.docx', 'w') as z:
+    z.writestr('[Content_Types].xml', '<Types/>')
+    z.writestr('word/document.xml', '<w/>')
+open(t + '/a.txt', 'wb').write('现场情况说明\n'.encode('utf-8'))
+open(t + '/a.exe', 'wb').write(b'MZ\x90\x00' + b'\x00' * 60)
+open(t + '/fake.pdf', 'wb').write(b'MZ\x90\x00' + b'\x00' * 60)
+head = b'\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2'
+for name, mb in (('v21.mp4', 21), ('v32.mp4', 32), ('v101.mp4', 101)):
+    with open(t + '/' + name, 'wb') as f:
+        f.write(head)
+        f.truncate(mb * 1024 * 1024)
+PY
+
+F=$(upok "$SALES" "$TMP/a.pdf" Attachment a.pdf "报价单.pdf")
+expect "$(echo "$F" | py 'd["kind"]+"/"+d["name"]+"/"+d["ext"]+"/"+d["mimeType"]+"/"+d["category"]')" "Document/报价单.pdf/pdf/application/pdf/Attachment" "上传 PDF 附件（带 fileName）"
+expect "$(echo "$F" | py 'd["size"]')" "$(wc -c < "$TMP/a.pdf" | tr -d ' ')" "FileDto.size = 字节数"
+SECRET=$(echo "$F" | py 'd["id"]')
+SECRETURL=$(echo "$F" | py 'd["url"]')
+F=$(upok "$SALES" "$TMP/b.pdf" Attachment b.pdf "现场说明.pdf"); OPEN=$(echo "$F" | py 'd["id"]'); OPENURL=$(echo "$F" | py 'd["url"]')
+expect "$(upok "$SALES" "$TMP/a.docx" Attachment a.docx "验收报告.docx" | py 'd["kind"]+"/"+d["ext"]')" "Document/docx" "上传 docx"
+expect "$(upok "$SALES" "$TMP/a.txt" Attachment a.txt "说明.txt" | py 'd["mimeType"]')" "text/plain" "上传 txt"
+F=$(upok "$SALES" "$TMP/p.png" Attachment p.png)
+expect "$(echo "$F" | py 'd["kind"]+"/"+d["ext"]+"/"+str(d["name"].startswith("图片_"))')" "Image/png/True" "上传 PNG 附件（无 fileName → 生成名）"
+upf "$SALES" "$TMP/a.exe" Attachment setup.exe setup.exe
+expect "$(upmsg)" "400/不支持的文件类型，仅支持图片、视频、Word、Excel、PPT、PDF、TXT、CSV" ".exe → 400"
+upf "$SALES" "$TMP/fake.pdf" Attachment fake.pdf fake.pdf
+expect "$(upmsg)" "400/文件内容与扩展名不符，请确认文件未损坏" "伪装成 PDF 的可执行文件 → 400"
+upf "$SALES" "$TMP/a.pdf" OrderPhoto a.pdf
+expect "$(upmsg)" "400/只能上传图片或视频" "PDF 以 category=OrderPhoto 上传 → 400"
+expect "$(upok "$SALES" "$TMP/v21.mp4" Attachment v21.mp4 | py 'd["kind"]+"/"+str(d["size"])')" "Video/22020096" "21MB 视频以 Attachment 上传 → 200"
+upf "$SALES" "$TMP/v21.mp4" OrderPhoto v21.mp4
+expect "$(upmsg)" "400/文件不能超过 20MB" "21MB 视频以 OrderPhoto 上传 → 400"
+expect "$(upok "$SALES" "$TMP/v32.mp4" Attachment v32.mp4 "现场视频.mp4" | py 'd["name"]+"/"+str(d["size"])')" "现场视频.mp4/33554432" "32MB 视频（超过 Kestrel 全局 30MB 上限）以 Attachment 上传 → 200"
+upf "$SALES" "$TMP/v101.mp4" Attachment v101.mp4
+expect "$(upmsg)" "400/文件不能超过 100MB" "101MB 以 Attachment 上传 → 400"
+rm -f "$TMP/v21.mp4" "$TMP/v32.mp4" "$TMP/v101.mp4"
+
+echo "== v1.2 附件：建单 / 可见性 / 添加"
+ORDER_BODY() { # ORDER_BODY 客户名 额外字段
+  echo "{\"source\":\"SalesReferral\",\"problemType\":\"Fault\",\"urgency\":\"Normal\",\"serviceType\":\"Onsite\",
+ \"customerName\":\"$1\",\"contactName\":\"张工\",\"contactPhone\":\"13800000000\",\"address\":\"江苏省苏州市工业园区星湖街 1 号\",
+ \"latitude\":31.30,\"longitude\":120.72,\"deviceModel\":\"HTR-500\",\"deviceSn\":\"SN-V12\",\"satDate\":\"2024-08\",\"satSigned\":true,
+ \"faultTime\":\"昨天\",\"symptom\":\"不加热\",\"customerTried\":\"重启\",\"siteEnvironment\":\"通风橱\",$2}"
+}
+# 先拼到变量里：macOS 自带的 bash 3.2 在嵌套的 $(...) 中会对花括号做展开
+EXTRA="\"attachments\":[{\"fileId\":$OPEN},{\"fileId\":$SECRET,\"restricted\":true}]"
+BODY=$(ORDER_BODY "附件冒烟客户" "$EXTRA")
+D=$(call POST /api/orders "$SALES" "$BODY")
+AID=$(echo "$D" | py 'd["id"]')
+expect "$(echo "$D" | py 'str(len(d["attachments"]))+"/"+str(d["attachmentRemaining"])+"/"+str(d["canRestrictAttachment"])+"/"+str(d["canAddAttachment"])')" "2/18/True/True" "销售建单带 2 个附件（1 受限）"
+expect "$(echo "$D" | py '[a["name"] for a in d["attachments"] if a["restricted"]]')" '["报价单.pdf"]' "restricted 标记正确"
+expect "$(echo "$D" | py 'len(d["logs"])')" "1" "建单时的附件不另写状态记录"
+
+call POST "/api/orders/$AID/claim" "$ENG" > /dev/null
+call GET "/api/orders/$AID" "$ENG" > "$TMP/eng.json"
+expect "$(py 'str(len(d["attachments"]))+"/"+str(d["canAddAttachment"])+"/"+str(d["canRestrictAttachment"])+"/"+str(d["attachmentRemaining"])' < "$TMP/eng.json")" "1/True/False/18" "工程师详情：只见 1 个附件，名额仍为 18"
+expect "$(grep -c '报价单' "$TMP/eng.json" || true)" "0" "工程师详情全文不含受限文件名"
+expect "$(py 'any(l["kind"]=="AttachmentPrivate" for l in d["logs"])' < "$TMP/eng.json")" "False" "工程师 logs 不含 AttachmentPrivate"
+
+EF=$(upok "$ENG" "$TMP/c.pdf" Attachment c.pdf "现场记录.pdf" | py 'd["id"]')
+D=$(call POST "/api/orders/$AID/attachments" "$ENG" "{\"attachments\":[{\"fileId\":$EF}]}")
+expect "$(echo "$D" | py 'str(len(d["attachments"]))+"/"+d["logs"][-1]["text"]+"/"+d["logs"][-1]["kind"]')" "2/王工 上传附件 现场记录.pdf/Attachment" "工程师添加附件 + 状态记录"
+EF2=$(upok "$ENG" "$TMP/c.pdf" Attachment c.pdf "x.pdf" | py 'd["id"]')
+req POST "/api/orders/$AID/attachments" "$ENG" "{\"attachments\":[{\"fileId\":$EF2,\"restricted\":true}]}"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "403/只有销售和主管可以设置「仅销售和主管可见」" "工程师设受限 → 403"
+LF=$(upok "$LI" "$TMP/c.pdf" Attachment c.pdf "y.pdf" | py 'd["id"]')
+req POST "/api/orders/$AID/attachments" "$LI" "{\"attachments\":[{\"fileId\":$LF}]}"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "403/无权查看该工单" "无关工程师添加 → 403"
+req POST "/api/orders/$AID/attachments" "$ENG" '{"attachments":[]}'
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "400/请选择要添加的附件" "空附件列表 → 400"
+
+echo "== v1.2 附件：下载"
+ST=$(curl -s -D "$TMP/hdr" -o "$TMP/dl" -w "%{http_code}" -H "Authorization: Bearer $ENG" "$BASE/api/files/$OPEN/download")
+expect "$ST" "200" "工程师下载公开附件 → 200"
+expect "$(grep -i '^content-disposition:' "$TMP/hdr" | grep -c "filename\*=UTF-8''%E7%8E%B0%E5%9C%BA%E8%AF%B4%E6%98%8E.pdf")" "1" "Content-Disposition 含 filename*=UTF-8'' 原始文件名"
+expect "$(grep -i '^content-disposition:' "$TMP/hdr" | grep -c '^[Cc]ontent-[Dd]isposition: attachment')" "1" "Content-Disposition: attachment"
+expect "$(grep -i '^content-type:' "$TMP/hdr" | tr -d '\r' | cut -d' ' -f2)" "application/pdf" "下载 Content-Type = 存储的 MIME"
+expect "$(cmp -s "$TMP/dl" "$TMP/b.pdf" && echo same)" "same" "下载内容与上传一致"
+ST=$(curl -s -o "$TMP/part" -w "%{http_code}" -H "Authorization: Bearer $ENG" -H "Range: bytes=0-4" "$BASE/api/files/$OPEN/download")
+expect "$ST/$(cat "$TMP/part")" "206/%PDF-" "下载支持 Range"
+req GET "/api/files/$SECRET/download" "$ENG"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "404/文件不存在" "工程师下载受限附件 → 404"
+req GET "/api/files/$OPEN/download" ""
+expect "$(cat "$TMP/status")/$(py 'd["code"]' < "$TMP/body")" "401/40100" "未带 token 下载 → 401"
+req GET "/api/files/$OPEN/download?token=$ENG" ""
+expect "$(cat "$TMP/status")" "401" "query token 不被接受 → 401"
+req GET "/api/files/$OPEN/download" "$LI"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "403/无权查看该工单" "无关工程师下载 → 403"
+ST=$(curl -s -o "$TMP/dl" -w "%{http_code}" -H "Authorization: Bearer $SALES" "$BASE/api/files/$SECRET/download")
+expect "$ST/$(cmp -s "$TMP/dl" "$TMP/a.pdf" && echo same)" "200/same" "销售下载受限附件 → 200"
+
+echo "== v1.2 附件：切换受限 / 删除"
+D=$(call POST "/api/orders/$AID/attachments/$EF/restricted" "$SUP" '{"restricted":true}')
+expect "$(echo "$D" | py '[a["restricted"] for a in d["attachments"] if a["id"]=='"$EF"'][0]')" "True" "主管把工程师的附件设为受限"
+expect "$(echo "$D" | py 'd["logs"][-1]["text"]+"/"+d["logs"][-1]["kind"]')" "赵主管 将附件 现场记录.pdf 设为仅销售和主管可见/AttachmentPrivate" "设为受限的状态记录"
+expect "$(call GET "/api/orders/$AID" "$ENG" | py 'any(a["id"]=='"$EF"' for a in d["attachments"])')" "False" "工程师详情里该附件消失"
+req POST "/api/orders/$AID/attachments/$EF/delete" "$ENG"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "404/附件不存在" "工程师删除已受限的自己的附件 → 404"
+req POST "/api/orders/$AID/attachments/$EF/restricted" "$SALES" '{"restricted":false}'
+expect "$(cat "$TMP/status")" "403" "销售切换受限 → 403"
+D=$(call POST "/api/orders/$AID/attachments/$EF/restricted" "$SUP" '{"restricted":false}')
+expect "$(echo "$D" | py 'd["logs"][-1]["text"]')" "赵主管 将附件 现场记录.pdf 设为所有人可见" "再设回公开"
+expect "$(call GET "/api/orders/$AID" "$ENG" | py '[a["canDelete"] for a in d["attachments"] if a["id"]=='"$EF"']')" "[true]" "工程师又能看到并可删除"
+req POST "/api/orders/$AID/attachments/$OPEN/delete" "$ENG"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "403/只能删除自己上传的附件" "工程师删除销售的附件 → 403"
+D=$(call POST "/api/orders/$AID/attachments/$EF/delete" "$ENG")
+expect "$(echo "$D" | py 'str(len(d["attachments"]))+"/"+d["logs"][-1]["text"]')" "1/王工 删除附件 现场记录.pdf" "工程师删除自己的附件"
+D=$(call POST "/api/orders/$AID/attachments/$OPEN/delete" "$SUP")
+expect "$(echo "$D" | py 'str(len(d["attachments"]))+"/"+str(d["attachmentRemaining"])')" "1/19" "主管删除销售的附件，名额释放"
+req POST "/api/orders/$AID/attachments/$OPEN/delete" "$SUP"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "404/附件不存在" "再次删除 → 404"
+req GET "/api/files/$OPEN/download" "$SUP"
+expect "$(cat "$TMP/status")" "404" "已删除的附件不能下载"
+
+echo "== v1.2 附件：旧请求体兼容"
+OLDP=$(upload "$SALES" OrderPhoto)
+EXTRA="\"photoFileIds\":[$OLDP]"
+BODY=$(ORDER_BODY "旧版建单客户" "$EXTRA")
+D=$(call POST /api/orders "$SALES" "$BODY")
+OLDID=$(echo "$D" | py 'd["id"]')
+expect "$(echo "$D" | py 'str(len(d["files"]["orderPhotos"]))+"/"+str(len(d["attachments"]))+"/"+d["attachments"][0]["source"]+"/"+d["attachments"][0]["category"]')" "1/1/OrderPhoto/OrderPhoto" "photoFileIds 建单：orderPhotos 1 个且 attachments 1 个"
+
+echo "== v1.2 文件中心"
+FC=$(call GET "/api/admin/files" "$SUP")
+expect "$(echo "$FC" | py 'all(k in d for k in ("items","total","totalSize","page","pageSize","counts")) and d["pageSize"]==30 and d["total"]>0 and d["totalSize"]>0')" "True" "文件中心：total / totalSize / counts"
+expect "$(echo "$FC" | py 'sorted(d["counts"].keys())')" '["Document", "Image", "Video", "all"]' "counts 键"
+expect "$(echo "$FC" | py 'd["counts"]["all"]==d["total"]==d["counts"]["Image"]+d["counts"]["Video"]+d["counts"]["Document"]')" "True" "counts.all = total = 三类之和"
+expect "$(echo "$FC" | py '[i["createdAt"] for i in d["items"]]==sorted([i["createdAt"] for i in d["items"]], reverse=True)')" "True" "文件中心按时间倒序"
+expect "$(echo "$FC" | py 'all(k in d["items"][0] for k in ("name","size","kind","ext","source","sourceLabel","restricted","uploader","canDelete","canToggleRestricted","orderId","orderNo","customerName","orderStatus"))')" "True" "FileCenterItem 字段"
+R=$(call GET "/api/admin/files?type=Document&pageSize=200" "$SUP")
+expect "$(echo "$R" | py 'd["total"]>=1 and all(i["kind"]=="Document" for i in d["items"]) and d["total"]==d["counts"]["Document"]')" "True" "type=Document"
+R=$(call GET "/api/admin/files?source=PunchPhoto&pageSize=200" "$SUP")
+expect "$(echo "$R" | py 'd["total"]>=1 and all(i["source"]=="PunchPhoto" and i["sourceLabel"]=="打卡照片" and not i["canDelete"] for i in d["items"])')" "True" "source=PunchPhoto"
+R=$(call GET "/api/admin/files?orderId=$AID" "$SUP")
+expect "$(echo "$R" | py 'str(d["total"])+"/"+d["items"][0]["name"]+"/"+str(d["items"][0]["restricted"])+"/"+str(d["items"][0]["canDelete"])+"/"+str(d["items"][0]["canToggleRestricted"])')" "1/报价单.pdf/True/True/True" "orderId 筛选（已删除的不出现）"
+R=$(call GET "/api/admin/files?keyword=%E6%8A%A5%E4%BB%B7" "$SUP")
+expect "$(echo "$R" | py 'd["total"]>=1 and all("报价" in i["name"] for i in d["items"])')" "True" "keyword=报价"
+R=$(call GET "/api/admin/files?restricted=true&pageSize=200" "$SUP")
+expect "$(echo "$R" | py 'd["total"]>=1 and all(i["restricted"] for i in d["items"])')" "True" "restricted=true"
+R=$(call GET "/api/admin/files?source=OrderPhoto&orderId=$OLDID" "$SUP")
+expect "$(echo "$R" | py 'str(d["total"])+"/"+d["items"][0]["sourceLabel"]')" "1/建单照片" "旧建单照片出现在文件中心"
+req GET "/api/admin/files?type=Nope" "$SUP"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "400/文件类型不正确" "type 非法 → 400"
+req GET "/api/admin/files?source=Nope" "$SUP"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "400/文件来源不正确" "source 非法 → 400"
+req GET /api/admin/files "$ENG"; expect "$(cat "$TMP/status")" "403" "工程师访问文件中心 → 403"
+req GET /api/admin/files "$SALES"; expect "$(cat "$TMP/status")" "403" "销售访问文件中心 → 403"
+
+echo "== v1.2 静态资源"
+upath() { echo "$1" | sed 's#^.*://[^/]*##'; }
+shead() { curl -s -D - -o /dev/null "$BASE$1" | tr -d '\r'; }   # 匿名访问静态地址，只看响应头
+scode() { curl -s -o /dev/null -w "%{http_code}" "$BASE$1"; }
+# 图片：匿名可访问、nosniff、不强制下载
+F=$(upok "$SALES" "$TMP/p.png" Attachment p.png "静态图.png"); IMGID=$(echo "$F" | py 'd["id"]'); IMGPATH=$(upath "$(echo "$F" | py 'd["url"]')")
+expect "$(shead "$IMGPATH" | grep -ci '^x-content-type-options: nosniff')" "1" "/uploads 响应头含 X-Content-Type-Options: nosniff"
+expect "$(shead "$IMGPATH" | grep -ci '^content-disposition')" "0" "/uploads 图片不带 Content-Disposition（可直接预览）"
+# 文档：公开的可取但强制下载；受限 / 已删除的静态地址 404
+F=$(upok "$SALES" "$TMP/a.pdf" Attachment a.pdf "静态公开.pdf"); PUBID=$(echo "$F" | py 'd["id"]'); PUBPATH=$(upath "$(echo "$F" | py 'd["url"]')")
+call POST "/api/orders/$AID/attachments" "$SALES" "{\"attachments\":[{\"fileId\":$PUBID},{\"fileId\":$IMGID,\"restricted\":true}]}" > /dev/null
+expect "$(scode "$PUBPATH")" "200" "/uploads 公开文档 → 200"
+expect "$(shead "$PUBPATH" | grep -ci '^content-disposition: attachment')" "1" "/uploads 文档以 attachment 输出（不在本站源下渲染）"
+expect "$(shead "$PUBPATH" | grep -ci '^x-content-type-options: nosniff')" "1" "/uploads 文档响应头含 nosniff"
+expect "$(scode "$(upath "$SECRETURL")")" "404" "/uploads 受限文档的静态地址 → 404"
+expect "$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $SALES" "$BASE/api/files/$SECRET/download")" "200" "受限文档仍可经鉴权下载接口取得"
+expect "$(scode "$(upath "$OPENURL")")" "404" "/uploads 已删除文档的静态地址 → 404"
+expect "$(scode "$IMGPATH")" "200" "/uploads 受限图片的静态地址仍可访问（预览依赖，契约 §12.1）"
+call POST "/api/orders/$AID/attachments/$PUBID/restricted" "$SUP" '{"restricted":true}' > /dev/null
+expect "$(scode "$PUBPATH")" "404" "文档设为受限后静态地址立即 404"
+D=$(call GET "/api/orders/$AID" "$ENG")
+expect "$(echo "$D" | grep -c '静态公开' || true)" "0" "文档设为受限后，工程师的详情（含状态记录）不再出现其文件名"
+call POST "/api/orders/$AID/attachments/$PUBID/restricted" "$SUP" '{"restricted":false}' > /dev/null
+expect "$(scode "$PUBPATH")" "200" "取消受限后静态地址恢复"
+# 头像与工单文件不能互相挪用
+req PUT /api/me/avatar "$SALES" "{\"fileId\":$IMGID}"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "400/头像文件已用于工单，请重新上传" "工单附件不能设为头像"
+# HEIC（ftyp heic）上传后静态地址可访问
+python3 -c "import sys; open(sys.argv[1],'wb').write(b'\x00\x00\x00\x18ftypheic'+b'\x00'*64)" "$TMP/h.heic"
+F=$(upok "$SALES" "$TMP/h.heic" Attachment h.heic)
+expect "$(echo "$F" | py 'd["mimeType"]')" "image/heic" "HEIC 上传 → image/heic"
+expect "$(scode "$(upath "$(echo "$F" | py 'd["url"]')")")" "200" "/uploads HEIC 静态地址 → 200"
+# 以可见字符开头、偏移 4 恰为 free 的文本不被误判为视频
+printf 'The free trial ends tomorrow\n' > "$TMP/free.txt"
+expect "$(upok "$SALES" "$TMP/free.txt" Attachment free.txt "free.txt" | py 'd["mimeType"]')" "text/plain" "「The free…」文本作为 txt 上传成功"
+expect "$(curl -s -o /dev/null -w "%{http_code}" "$BASE/admin/js/views/files.js")" "200" "GET /admin/js/views/files.js → 200"
+
 echo
 echo "全部通过：$PASS 项"

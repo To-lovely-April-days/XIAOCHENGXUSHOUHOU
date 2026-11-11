@@ -2,13 +2,13 @@
 
 Base URL：`{host}/api`。JSON 使用 **camelCase**；枚举一律以**字符串**传输（如 `"Pending"`）。
 
-> 当前版本 **v1.1**（价格由主管定、暂停搁置原因与审批、多人协作、返厂流程）。本文件即 v1.1 的现行契约；
-> 逐条校验文案、状态记录文字、通知、测试清单与各端改动清单见 `docs/CHANGES-v1.1.md`（两者冲突时以 CHANGES-v1.1.md 为准）。
+> 当前版本 **v1.2**（在 v1.1 的价格 / 暂停 / 多人协作 / 返厂流程之上，新增工单附件与工单文件中心）。本文件即现行契约；
+> 逐条校验文案、状态记录文字、通知、测试清单与各端改动清单见 `docs/CHANGES-v1.1.md` 与 `docs/CHANGES-v1.2.md`（与本文件冲突时以 CHANGES 文档为准，v1.2 的内容以 CHANGES-v1.2.md 为准）。
 
 ## 0. 通用约定
 
 ### 响应包装
-所有接口（除文件下载/导出）返回：
+所有接口（除文件下载 `GET /api/files/{id}/download` 与导出）返回：
 ```json
 { "code": 0, "message": "ok", "data": { } }
 ```
@@ -43,13 +43,16 @@ Base URL：`{host}/api`。JSON 使用 **camelCase**；枚举一律以**字符串
 | PunchKind | `Arrive` 到场, `Leave` 离场 |
 | RunStatus | `Normal` 正常, `Observe` 待观察, `NotRecovered` 未恢复 |
 | IssueType | `MissingPunch` 缺卡, `DistanceAbnormal` 距离异常 |
-| FileCategory | `OrderPhoto` 建单照片, `PunchPhoto` 打卡照片, `ProcessPhoto` 处理照片, `Signature` 客户签字件, `Avatar` 头像, `FactoryReceivePhoto` 收货照片, `FactoryShipPhoto` 寄回照片, `FactorySignPhoto` 签收凭证 |
+| FileCategory | `OrderPhoto` 建单照片, `PunchPhoto` 打卡照片, `ProcessPhoto` 处理照片, `Signature` 客户签字件, `Avatar` 头像, `FactoryReceivePhoto` 收货照片, `FactoryShipPhoto` 寄回照片, `FactorySignPhoto` 签收凭证, `Attachment` 附件（v1.2） |
+| FileKind | `Image` 图片, `Video` 视频, `Document` 文档（由 mimeType 推导：`image/*`、`video/*`、其余） |
 | HoldReasonType | `WaitCustomer` 等客户, `WaitParts` 等备件, `WaitThirdParty` 等第三方, `Other` 其他 |
 | OrderRequestType | `Hold` 暂停申请, `AddAssistant` 协助人申请 |
 | RequestStatus | `Pending` 待审批, `Approved` 已同意, `Rejected` 已驳回, `Cancelled` 已撤销 |
 | FactoryNode | `CustomerShipped` 客户寄出, `FactoryReceived` 工厂收货, `Repairing` 检测/维修（隐含节点）, `ShippedBack` 寄回客户, `CustomerSigned` 客户签收 |
 | ParticipantRole | `Lead` 负责人, `Assistant` 协助人, `Former` 已退出（在本单有打卡但已不是负责人/协助人） |
-| LogKind | `Status` 状态流转, `Price` 价格, `Hold` 暂停, `Assist` 人员, `Factory` 返厂 |
+| LogKind | `Status` 状态流转, `Price` 价格（工程师不可见）, `Hold` 暂停, `Assist` 人员, `Factory` 返厂, `Attachment` 附件, `AttachmentPrivate` 受限附件（工程师不可见） |
+
+**文件来源 source**（字符串，由 FileCategory 推导）：`Attachment` 附件、`OrderPhoto` 建单照片、`ProcessPhoto` 完工照片、`Signature` 签字件、`PunchPhoto` 打卡照片、`Factory` 返厂照片（收货 / 寄回 / 签收三类）。
 
 **暂停原因文字 holdText**：`Other` → 只用说明；其余 → `{类型中文}`，有说明时 `{类型中文}：{说明}`（如 `等备件：轴承预计周五到`）。
 
@@ -68,9 +71,24 @@ Base URL：`{host}/api`。JSON 使用 **camelCase**；枚举一律以**字符串
 
 **FileDto**
 ```json
-{ "id": 12, "url": "https://host/uploads/2026/11/xxx.jpg", "category": "PunchPhoto", "mimeType": "image/jpeg", "createdAt": "2026-11-06T10:05:00" }
+{ "id": 12, "url": "https://host/uploads/2026/11/xxx.jpg", "category": "PunchPhoto", "mimeType": "image/jpeg", "createdAt": "2026-11-06T10:05:00",
+  "name": "打卡照片_20261106-100500.jpg", "size": 345678, "kind": "Image", "ext": "jpg" }
 ```
-`url` 为绝对地址（后端用 `PublicBaseUrl` 配置或请求 Host 拼接）。
+`url` 为绝对地址（后端用 `PublicBaseUrl` 配置或请求 Host 拼接），静态访问、无需认证；图片 / 视频的预览用它。
+`name`：展示名与下载名——上传时客户端给了原始文件名（`fileName`）就用它，否则服务端生成 `{类别前缀}_{yyyyMMdd-HHmmss}{扩展名}`。`size` 字节数；`kind` 为 FileKind；`ext` 小写不带点。
+
+**AttachmentDto**（v1.2；= FileDto 全部字段 +）
+```json
+{ "source": "Attachment" | "OrderPhoto", "sourceLabel": "附件",
+  "restricted": false,                 // 仅销售和主管可见
+  "uploader": { UserBrief } | null,
+  "canDelete": true,                   // 当前用户现在可以删除
+  "canToggleRestricted": false }       // 当前用户可以切换「仅销售和主管可见」（仅 Supervisor）
+```
+「附件」= 挂在工单上、category 为 `OrderPhoto`（建单照片，旧数据）或 `Attachment` 且未删除的文件；每单最多 20 个。
+
+**附件可见性（硬规则，与价格同等严格）**：当前用户为 `Engineer` 时，任何接口都不返回 `restricted = true` 的附件（详情的 `attachments`、`files.orderPhotos`、下载、文件中心），
+`logs` 不含 `kind = "AttachmentPrivate"` 的记录。
 
 **OrderListItem**
 ```json
@@ -169,7 +187,7 @@ Base URL：`{host}/api`。JSON 使用 **camelCase**；枚举一律以**字符串
 ```json
 { "id": 1, "text": "李工 认领 → 待启动", "time": "2026-11-05T09:48:00", "actor": { UserBrief }, "toStatus": "Accepted", "kind": "Status" }
 ```
-`kind` 为 LogKind；`Price` 类记录不返回给 Engineer。
+`kind` 为 LogKind；`Price`、`AttachmentPrivate` 类记录不返回给 Engineer。
 
 ---
 
@@ -206,11 +224,28 @@ MockMode 下 `login` 的 code 直接当作 openid 使用（`mock-` 前缀），`
 ## 3. 文件 `/api/files`
 
 ### POST /api/files（multipart/form-data）
-字段：`file`（必填，图片或视频，≤ 20MB），`category`（FileCategory 字符串）
-→ `{ FileDto }`
+字段：`file`（必填）、`category`（FileCategory 字符串）、`fileName`（选填：原始文件名；客户端有真实文件名时必须传——小程序聊天文件、PC 文件选择）。
+→ `{ FileDto }`（只上传，不挂工单）
 （小程序用 `wx.uploadFile`，返回的 `res.data` 为 JSON 字符串，需要 `JSON.parse`）
 
-静态访问：`GET /uploads/...`（无需认证）。
+| category | 允许的类型 | 大小上限 |
+|---|---|---|
+| `Attachment`（工单附件） | 图片、视频、Word（.doc/.docx）、Excel（.xls/.xlsx）、PPT（.ppt/.pptx）、PDF、.txt、.csv | 图片 20 MB；视频、文档 100 MB |
+| 其他 | 图片、视频 | 20 MB |
+
+类型按**扩展名 + 文件内容**双重校验（服务端不信任客户端声明的 Content-Type）：图片 jpg/png/gif/bmp/webp/heic、视频 mp4/m4v/mov/3gp 以文件头识别；PDF 须含 `%PDF-`；
+Office 六种扩展名须为 OLE 复合文档或含 `[Content_Types].xml` 的 ZIP；txt/csv 不得是二进制。可执行文件、脚本、HTML、SVG、压缩包等一律拒绝。完整表见 CHANGES-v1.2 §3.2。
+错误（40000）：「请选择要上传的文件」「文件类别不正确」「不支持的文件类型，仅支持图片、视频、Word、Excel、PPT、PDF、TXT、CSV」「文件内容与扩展名不符，请确认文件未损坏」
+「只能上传图片或视频」（非 Attachment 类别）「文件不能超过 20MB」「图片不能超过 20MB」「文件不能超过 100MB」。
+
+### GET /api/files/{id}/download（v1.2；任何已登录角色）
+用 `Authorization` 头鉴权，返回文件原始内容：`Content-Type` 为文件的 mimeType，
+`Content-Disposition: attachment; filename="…"; filename*=UTF-8''<百分号编码的 FileDto.name>`，支持 Range。
+权限：文件须已挂工单且当前用户能查看该工单（否则 40300「无权查看该工单」）；受限附件对 Engineer 返回 40400「文件不存在」；已删除 / 头像 → 40400「文件不存在」；
+未挂工单的文件只有上传人可下载；磁盘文件缺失 → 40400「文件已丢失，请联系管理员」。失败时返回 JSON 包装体。
+PC 后台用 fetch → blob 下载；小程序用 `wx.downloadFile`（带 `header.Authorization`）后 `wx.openDocument({ filePath, fileType, showMenu: true })`。
+
+静态访问：`GET /uploads/...`（无需认证，文件名为随机串；响应带 `X-Content-Type-Options: nosniff`）。
 
 ---
 
@@ -274,8 +309,13 @@ MockMode 下 `login` 的 code 直接当作 openid 使用（`mock-` 前缀），`
     "faultCause": "", "solution": "", "partsReplaced": "", "runStatus": "Normal",
     "submittedAt": "2026-11-06T13:50:00"
   },
+  "attachments": [ AttachmentDto ],   // v1.2：当前用户可见的附件（建单照片 + 附件），时间正序
+  "canAddAttachment": true,           // v1.2：当前用户现在可以添加附件
+  "canRestrictAttachment": false,     // v1.2：上传时可勾选「仅销售和主管可见」（Sales / Supervisor）
+  "attachmentLimit": 20,
+  "attachmentRemaining": 17,          // 还能再加几个
   "files": {
-    "orderPhotos":   [FileDto],
+    "orderPhotos":   [FileDto],      // 旧客户端兼容：可见附件中的图片 / 视频；v1.2 客户端读 attachments
     "punchPhotos":   [FileDto],
     "processPhotos": [FileDto],
     "signatures":    [FileDto],
@@ -294,6 +334,7 @@ MockMode 下 `login` 的 code 直接当作 openid 使用（`mock-` 前缀），`
   `close`（Submitted 且无 MissingPunch 且已定价）、`supplement`（存在 MissingPunch）、`setPrice`（非 Voided）、`factory`
 - Sales：`suggestPrice`（非 Closed/Voided）、`factory`
 - 审批看 `requests[].canDecide / canCancel`；返厂节点更正看 `factory.nodes[].canEdit`。
+- 附件不进 `actions`：看 `canAddAttachment`、`canRestrictAttachment`、`attachments[].canDelete / canToggleRestricted`。
 
 ### POST /api/orders
 任何角色可建单。
@@ -309,11 +350,13 @@ MockMode 下 `login` 的 code 直接当作 openid 使用（`mock-` 前缀），`
   "customerTried": "断电重启、检查电源线",
   "siteEnvironment": "通风橱内，220V 单相电",
   "customerRequest": null,
-  "photoFileIds": [12, 13]
+  "attachments": [ { "fileId": 12, "restricted": false }, { "fileId": 13, "restricted": true } ]
 }
 ```
 **没有价格字段**：新单一律「未定价」（`priceSet=false`），由主管在详情里定价。旧客户端若仍传 `price`，服务端忽略、不报错。
-校验：带 * 字段必填；Onsite 必须有经纬度；photoFileIds ≤ 9；contactPhone 去空格后校验 7–20 位数字/横杠。
+`attachments`（v1.2）：先用 `POST /api/files`（`category=Attachment`）上传；`restricted` 省略 = false，Engineer 传 true → 40300「只有销售和主管可以设置「仅销售和主管可见」」。
+旧字段 `photoFileIds`（v1.1 客户端，≤ 9，挂为建单照片）继续可用；两者合计 ≤ 20，否则 40000「附件最多 20 个」。建单时的附件不单独写状态记录。
+校验：带 * 字段必填；Onsite 必须有经纬度；contactPhone 去空格后校验 7–20 位数字/横杠。
 → `{ OrderDetail }`
 
 ### POST /api/orders/{id}/claim（Engineer）
@@ -390,6 +433,29 @@ Pending → Accepted，assignee = 自己。已被认领 → 40900「工单已被
 - 照片先用 `POST /api/files` 上传，category：节点 2 `FactoryReceivePhoto`、节点 4 `FactoryShipPhoto`、节点 5 `FactorySignPhoto`；`photoIds` 为该节点照片的最终全集，每节点最多 9 张。
 - 每个节点写状态记录（kind=Factory），如 `王敏 记录客户寄出（顺丰 SF1234567890）`、`陈工 工厂收货 → 处理中`、`陈工 寄回客户（顺丰 SF…）`、`王敏 记录客户签收`。
 - 全部错误文案见 CHANGES-v1.1 §3.4。→ `{ OrderDetail }`
+
+### 附件（v1.2；规则与全部文案见 CHANGES-v1.2 §4）
+
+| 规则 | 条件 |
+|---|---|
+| 可添加 | 工单不是 Voided，且：Supervisor；或工单不是 Closed 且当前用户是建单人 / 负责人 / 协助人 |
+| 上传时可设「仅销售和主管可见」 | Sales、Supervisor |
+| 可删除（软删除） | Supervisor（任何状态）；或上传人本人且工单不是 Closed / Voided |
+| 可切换「仅销售和主管可见」 | Supervisor |
+| 可见 | Sales / Supervisor 全部；Engineer 只有未受限的 |
+
+#### POST /api/orders/{id}/attachments
+`{ "attachments": [ { "fileId": 31, "restricted": false } ] }`（文件须为本人上传、尚未挂到任何工单）。每单最多 20 个（40000「附件最多 20 个，本单还可添加 N 个」/「附件最多 20 个，本单已达上限」）。
+错误：40900「工单已作废，不能添加附件」「工单已闭环，只有主管可以添加附件」；40300「只有建单人、负责工程师、协助人或主管可以添加附件」「只有销售和主管可以设置「仅销售和主管可见」」；
+40000「请选择要添加的附件」「附件不存在，请重新上传」「附件不是本人上传，请重新上传」「附件已被使用，请重新上传」。
+状态记录（kind=Attachment；受限的为 AttachmentPrivate 并在末尾加「（仅销售和主管可见）」）：`王敏 上传附件 现场铭牌.jpg、故障视频.mp4`、超过 3 个 `… 等 5 个`。→ `{ OrderDetail }`
+
+#### POST /api/orders/{id}/attachments/{fileId}/delete
+软删除。错误：40400「附件不存在」（含对当前用户不可见的受限附件）；40300「只能删除自己上传的附件」；40900「工单已闭环，只有主管可以删除附件」「工单已作废，不能删除附件」。
+状态记录 `王敏 删除附件 报价单.pdf`。→ `{ OrderDetail }`
+
+#### POST /api/orders/{id}/attachments/{fileId}/restricted（Supervisor）
+`{ "restricted": true }`。状态记录 `赵主管 将附件 报价单.pdf 设为仅销售和主管可见`（AttachmentPrivate）/ `赵主管 将附件 报价单.pdf 设为所有人可见`（Attachment）；值未变化不写记录。→ `{ OrderDetail }`
 
 ---
 
@@ -584,8 +650,22 @@ PC 后台为纯静态网页，由后端托管在 `GET /admin/`（`wwwroot/admin/
 单个工程师的每日明细用已有的 `GET /api/hours/month?year=&month=&engineerId=`。
 `running` 的时长不计入 totalMinutes（与导出一致）。
 
+### GET /api/admin/files?keyword=&type=&source=&uploaderId=&orderId=&restricted=&from=&to=&page=1&pageSize=30（v1.2，Supervisor）
+工单文件中心：所有挂在工单上的文件（附件、建单照片、完工照片、签字件、打卡照片、返厂照片；不含头像、未挂工单的文件、已删除的附件；含已作废工单的文件）。上传时间倒序。
+`keyword` 模糊匹配文件名 / 工单号 / 客户；`type` 为 FileKind；`source` 为文件来源；`from`/`to` 为上传日期 yyyy-MM-dd（含两端，默认不限）；`restricted=true|false`。
+→
+```json
+{ "items": [ { AttachmentDto 全部字段（source 可为 6 种来源之一；非附件行 restricted / canDelete / canToggleRestricted 均为 false）,
+               "orderId": 3, "orderNo": "SH-20261105-003", "customerName": "江苏某化工研究院", "orderStatus": "InProgress" } ],
+  "total": 128, "totalSize": 734003200, "page": 1, "pageSize": 30,
+  "counts": { "all": 128, "Image": 100, "Video": 8, "Document": 20 } }
+```
+`total` / `totalSize` 为符合筛选的全部文件数与字节数；`counts` 受除 `type` 外的筛选影响。错误：40000「文件类型不正确」「文件来源不正确」「可见范围筛选不正确」「开始日期不能晚于结束日期」。
+删除 / 切换受限直接用工单附件接口（行里有 `orderId`）；下载用 `GET /api/files/{id}/download`。Engineer、Sales 本期无权访问（403）。
+
 ### 已有接口在后台的用法（无需新增）
 - 工单列表：`GET /api/orders`（status/keyword/issue/assigneeId/priceSet/pendingRequest/from/to/page/pageSize），`issue=MissingPunch|DistanceAbnormal`；「本周」= from 本周一 to 今天；快捷筛选「待审批申请」= `pendingRequest=true`，「未定价」= `priceSet=false`。
 - 概况：`GET /api/admin/overview`；详情抽屉：`GET /api/orders/{id}`；操作：assign（含协助人）/assistants/void/hold/resume/reject/close/price、申请审批 `requests/{requestId}/approve|reject`、返厂节点 `factory-nodes`、`POST /api/admin/punches/supplement`。
-- 新建工单：`POST /api/orders`（PC 端没有地图选点，手工填写地址与经纬度，现场单经纬度必填；没有价格字段）。
+- 新建工单：`POST /api/orders`（PC 端没有地图选点，手工填写地址与经纬度，现场单经纬度必填；没有价格字段；附件用普通文件选择，`attachments` 字段）。
+- 附件：抽屉里的「附件」区用 `attachments` 接口；上传 `POST /api/files`（`category=Attachment`，带 `fileName`）；下载 `GET /api/files/{id}/download`。
 - 工程师列表：`GET /api/engineers`；账号：`/api/admin/employees*`；导出：`/api/admin/export/orders|hours`（需带 Authorization，前端用 fetch → blob 下载）。

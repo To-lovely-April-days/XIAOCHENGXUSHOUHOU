@@ -46,5 +46,14 @@ page { background: var(--bg); }
 .media-fail { background: rgba(200, 30, 43, 0.75); }
 .media-del { position: absolute; top: 0; right: 0; width: 44rpx; height: 44rpx; border-bottom-left-radius: 12rpx; background: rgba(0, 0, 0, 0.55); display: flex; align-items: center; justify-content: center; }
 .media-add { height: 144rpx; border-radius: 12rpx; border: 2rpx solid #D1D1CF; background: var(--card); display: flex; align-items: center; justify-content: center; }
+.media-title.err { color: var(--red); }
+/* v1.2 附件：文档格子（类型角标 + 文件名）、受限锁标、上传进度、提示 */
+.media-doc { position: absolute; left: 0; top: 0; right: 0; bottom: 0; padding: 20rpx 10rpx 0; display: flex; flex-direction: column; align-items: center; gap: 10rpx; background: var(--soft); }
+.media-badge { flex-shrink: 0; min-width: 64rpx; height: 56rpx; padding: 0 10rpx; border-radius: 12rpx; display: flex; align-items: center; justify-content: center; color: #FFFFFF; font-size: 22rpx; font-weight: 700; }
+.media-name { width: 100%; text-align: center; font-size: 20rpx; line-height: 28rpx; color: var(--text-body); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.media-lock { position: absolute; top: 0; left: 0; z-index: 2; width: 44rpx; height: 44rpx; border-bottom-right-radius: 12rpx; background: var(--amber); display: flex; align-items: center; justify-content: center; }
+.media-del { z-index: 2; }
+.media-fatal { padding: 0 8rpx; text-align: center; font-size: 20rpx; line-height: 28rpx; }
+.media-hint { margin-top: 20rpx; font-size: 24rpx; line-height: 36rpx; }
 
 .submit { height: 100rpx; border-radius: 24rpx; font-size: 32rpx; }

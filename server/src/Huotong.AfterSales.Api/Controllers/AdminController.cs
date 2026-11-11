@@ -61,6 +61,11 @@ public class AdminController : ApiControllerBase
         return File(bytes, Xlsx, $"工时统计_{y}{m:00}.xlsx");
     }
 
+    /// <summary>工单文件中心（v1.2）</summary>
+    [HttpGet("files")]
+    public async Task<ApiResponse<FileCenterPage>> Files([FromServices] FileCenterService center, [FromQuery] FileCenterQuery q) =>
+        Ok(await center.Query(q, Me));
+
     [HttpGet("employees")]
     public async Task<ApiResponse<List<EmployeeDto>>> Employees() => Ok(await _admin.Employees());
 

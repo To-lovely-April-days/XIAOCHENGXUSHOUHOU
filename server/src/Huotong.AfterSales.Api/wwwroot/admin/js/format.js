@@ -153,3 +153,37 @@ export function lastDaysRange(n, now = new Date()) {
 export function monthRange(year, month) {
   return { from: toApiDate(new Date(year, month - 1, 1)), to: toApiDate(new Date(year, month, 0)) };
 }
+
+/**
+ * 文件大小：< 1024 → 'N B'；< 1 MB → 'N KB'（取整）；< 1 GB → 'N.N MB'；否则 'N.NN GB'。空值 → ''。
+ * @param {number|null|undefined} bytes
+ */
+export function fmtSize(bytes) {
+  if (bytes === null || bytes === undefined || bytes === '' || isNaN(bytes)) return '';
+  const n = Math.max(0, Number(bytes));
+  if (n < 1024) return `${Math.round(n)} B`;
+  if (n < 1048576) return `${Math.round(n / 1024)} KB`;
+  if (n < 1073741824) return `${(n / 1048576).toFixed(1)} MB`;
+  return `${(n / 1073741824).toFixed(2)} GB`;
+}
+
+const BADGE_GRAY = '#636366';
+const BADGE_BY_EXT = {
+  doc: { text: 'W', color: '#2B579A' }, docx: { text: 'W', color: '#2B579A' },
+  xls: { text: 'X', color: '#217346' }, xlsx: { text: 'X', color: '#217346' }, csv: { text: 'X', color: '#217346' },
+  ppt: { text: 'P', color: '#D24726' }, pptx: { text: 'P', color: '#D24726' },
+  pdf: { text: 'PDF', color: '#C81E2B' },
+  txt: { text: 'TXT', color: BADGE_GRAY },
+};
+
+/**
+ * 文件类型角标：{ text, color }。按 kind（Image / Video / Document）与 ext（小写、不带点）。
+ * @param {{kind?:string, ext?:string}} item FileDto / 上传条目
+ * @returns {{text:string,color:string}}
+ */
+export function fileBadge(item) {
+  const it = item || {};
+  if (it.kind === 'Image') return { text: '图', color: BADGE_GRAY };
+  if (it.kind === 'Video') return { text: '视频', color: BADGE_GRAY };
+  return BADGE_BY_EXT[String(it.ext || '').toLowerCase()] || { text: '文件', color: BADGE_GRAY };
+}

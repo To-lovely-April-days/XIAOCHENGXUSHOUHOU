@@ -46,7 +46,13 @@ public class CreateOrderRequest
     /// <summary>v1.1 起忽略（旧客户端仍会传）；用 object 接收，任何形态都不报错</summary>
     public object? Price { get; set; }
     public List<int>? PhotoFileIds { get; set; }
+    /// <summary>v1.2：附件（文件先以 category=Attachment 上传）</summary>
+    public List<AttachmentItem>? Attachments { get; set; }
 }
+
+public class AttachmentItem { public int? FileId { get; set; } public bool? Restricted { get; set; } }
+public class AttachmentsRequest { public List<AttachmentItem>? Attachments { get; set; } }
+public class RestrictedRequest { public bool? Restricted { get; set; } }
 
 public class AppointmentRequest { public DateTime? AppointmentTime { get; set; } }
 

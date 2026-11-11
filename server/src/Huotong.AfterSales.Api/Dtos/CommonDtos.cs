@@ -26,6 +26,42 @@ public class FileDto
     public FileCategory Category { get; set; }
     public string MimeType { get; set; } = "";
     public DateTime CreatedAt { get; set; }
+    /// <summary>展示名与下载名（v1.2）</summary>
+    public string Name { get; set; } = "";
+    public long Size { get; set; }
+    public FileKind Kind { get; set; }
+    /// <summary>存储扩展名，小写不带点</summary>
+    public string Ext { get; set; } = "";
+}
+
+/// <summary>工单附件（v1.2）：建单照片 + 新附件</summary>
+public class AttachmentDto : FileDto
+{
+    public string Source { get; set; } = "";
+    public string SourceLabel { get; set; } = "";
+    public bool Restricted { get; set; }
+    public UserBrief? Uploader { get; set; }
+    public bool CanDelete { get; set; }
+    public bool CanToggleRestricted { get; set; }
+}
+
+/// <summary>文件中心的统一行（v1.2）</summary>
+public class FileCenterItem : AttachmentDto
+{
+    public int OrderId { get; set; }
+    public string OrderNo { get; set; } = "";
+    public string CustomerName { get; set; } = "";
+    public OrderStatus OrderStatus { get; set; }
+}
+
+public class FileCenterPage
+{
+    public List<FileCenterItem> Items { get; set; } = new();
+    public int Total { get; set; }
+    public long TotalSize { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public Dictionary<string, int> Counts { get; set; } = new();
 }
 
 public class OrderListItem
@@ -211,6 +247,14 @@ public class OrderDetail : OrderListItem
     public List<StatusLogDto> Logs { get; set; } = new();
     public List<IssueDetailDto> IssueDetails { get; set; } = new();
     public List<string> Actions { get; set; } = new();
+    // ---------- v1.2：附件 ----------
+    /// <summary>当前用户可见的附件，按 createdAt、id 正序</summary>
+    public List<AttachmentDto> Attachments { get; set; } = new();
+    public bool CanAddAttachment { get; set; }
+    public bool CanRestrictAttachment { get; set; }
+    public int AttachmentLimit { get; set; } = 20;
+    /// <summary>还能再加几个（含当前用户看不到的受限附件）</summary>
+    public int AttachmentRemaining { get; set; }
 }
 
 public class PunchDto

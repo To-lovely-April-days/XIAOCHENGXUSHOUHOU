@@ -140,6 +140,56 @@ export async function download(url, filename) {
   setTimeout(() => URL.revokeObjectURL(href), 10000);
 }
 
+/** 上传超时（毫秒）：100 MB 的附件在慢网络下需要较长时间 */
+export const UPLOAD_TIMEOUT = 900000;
+
+/**
+ * 带进度的 multipart 上传（XMLHttpRequest）。结果与错误处理同 request：解包、40100 跳登录、ApiError。
+ * @param {string} path 以 / 开头，相对 /api
+ * @param {FormData} form
+ * @param {(percent:number)=>void} onProgress 0–100
+ * @param {AbortSignal} [signal] 取消上传（移除条目 / 关闭面板时），取消后以 ApiError('上传已取消', -1) 拒绝
+ * @returns {Promise<any>}
+ */
+function xhrUpload(path, form, onProgress, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal && signal.aborted) { reject(new ApiError('上传已取消', -1)); return; }
+    const xhr = new XMLHttpRequest();
+    if (signal) signal.addEventListener('abort', () => { try { xhr.abort(); } catch (e) { /* ignore */ } }, { once: true });
+    xhr.open('POST', BASE + path);
+    xhr.setRequestHeader('Accept', 'application/json');
+    const t = getToken();
+    if (t) xhr.setRequestHeader('Authorization', 'Bearer ' + t);
+    xhr.timeout = UPLOAD_TIMEOUT;
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable || !e.total) return;
+      try { onProgress(Math.max(0, Math.min(100, Math.round((e.loaded / e.total) * 100)))); } catch (err) { /* 回调出错不影响上传 */ }
+    };
+    xhr.onerror = () => reject(new ApiError('网络异常，请检查网络后重试', -1));
+    xhr.onabort = () => reject(new ApiError('上传已取消', -1));
+    xhr.ontimeout = () => reject(new ApiError('上传超时，请检查网络后重试', -1));
+    xhr.onload = () => {
+      const status = xhr.status;
+      let body = null;
+      try { body = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch (e) { body = null; }
+      if (!body || typeof body.code !== 'number') {
+        // nginx 直接拒绝超大请求体时返回的是 HTML
+        if (status === 413) { reject(new ApiError('文件不能超过 100MB', 40000, 413)); return; }
+        if (status === 401) body = { code: 40100, message: '登录已失效，请重新登录', data: null };
+        else {
+          const ok = status >= 200 && status < 300;
+          reject(new ApiError(ok ? '服务器返回格式错误' : `服务器错误（HTTP ${status}）`, 50000, status));
+          return;
+        }
+      }
+      if (body.code === 0) { resolve(body.data); return; }
+      if (body.code === 40100) handleUnauthorized();
+      reject(new ApiError(body.message || '请求失败', body.code, status));
+    };
+    xhr.send(form);
+  });
+}
+
 // ---------------------------------------------------------------- 接口
 
 export const auth = {
@@ -172,7 +222,7 @@ export const orders = {
   list: (params) => get('/orders', params),
   /** @param {number} id @returns {Promise<object>} OrderDetail */
   detail: (id) => get(`/orders/${id}`),
-  /** @param {object} body 见 API.md POST /api/orders @returns {Promise<object>} OrderDetail */
+  /** @param {object} body 见 API.md POST /api/orders；附件用 attachments: [{ fileId, restricted }]（v1.2 起不再传 photoFileIds） @returns {Promise<object>} OrderDetail */
   create: (body) => post('/orders', body),
   /**
    * 指派/改派。assistantIds 省略 = 不调整协助人；传数组（含空数组）= 协助人最终全集。
@@ -204,6 +254,16 @@ export const orders = {
    * @param {{node:'CustomerShipped'|'FactoryReceived'|'ShippedBack'|'CustomerSigned',courier?:string,trackingNo?:string,note?:string,photoIds?:number[]}} body
    */
   factoryNode: (id, body) => post(`/orders/${id}/factory-nodes`, body),
+  /**
+   * 给工单添加附件（文件须先用 files.upload(file, 'Attachment') 上传）。
+   * @param {number} id @param {Array<{fileId:number,restricted?:boolean}>} attachments
+   * @returns {Promise<object>} OrderDetail
+   */
+  addAttachments: (id, attachments) => post(`/orders/${id}/attachments`, { attachments: attachments || [] }),
+  /** 删除附件（软删除） @param {number} id @param {number} fileId @returns {Promise<object>} OrderDetail */
+  deleteAttachment: (id, fileId) => post(`/orders/${id}/attachments/${fileId}/delete`),
+  /** 切换「仅销售和主管可见」 @param {number} id @param {number} fileId @param {boolean} restricted @returns {Promise<object>} OrderDetail */
+  setAttachmentRestricted: (id, fileId, restricted) => post(`/orders/${id}/attachments/${fileId}/restricted`, { restricted: !!restricted }),
 };
 
 export const engineers = {
@@ -246,6 +306,12 @@ export const admin = {
   /** 设置/重置密码 @param {number} id @param {string} password */
   setPassword: (id, password) => post(`/admin/employees/${id}/password`, { password }),
   /**
+   * 工单文件中心（v1.2）。
+   * @param {{keyword?:string,type?:'Image'|'Video'|'Document',source?:string,uploaderId?:number|string,orderId?:number|string,restricted?:boolean,from?:string,to?:string,page?:number,pageSize?:number}} [params]
+   * @returns {Promise<{items:object[],total:number,totalSize:number,page:number,pageSize:number,counts:{all:number,Image:number,Video:number,Document:number}}>}
+   */
+  files: (params) => get('/admin/files', params),
+  /**
    * 导出工单台账 xlsx。
    * @param {{from?:string,to?:string,status?:string}} [params]
    * @param {string} [filename]
@@ -257,16 +323,35 @@ export const admin = {
 
 export const files = {
   /**
-   * 上传文件（multipart）。
-   * @param {File|Blob} file @param {string} category FileCategory，如 'OrderPhoto'；返厂节点照片用 FactoryReceivePhoto / FactoryShipPhoto / FactorySignPhoto
-   * @returns {Promise<{id:number,url:string,category:string,mimeType:string,createdAt:string}>}
+   * 上传文件（multipart）。只落盘建记录，不挂工单。
+   * 传了 opts.onProgress 时改用 XMLHttpRequest（带进度，超时 15 分钟）。
+   * category === 'Attachment' 时始终附带原始文件名（fileName = file.name）。
+   * @param {File|Blob} file
+   * @param {string} category FileCategory：附件一律 'Attachment'；返厂节点照片用 FactoryReceivePhoto / FactoryShipPhoto / FactorySignPhoto
+   * @param {{fileName?:string,onProgress?:(percent:number)=>void,signal?:AbortSignal}} [opts] signal 只在带 onProgress 时生效
+   * @returns {Promise<{id:number,url:string,category:string,mimeType:string,createdAt:string,name:string,size:number,kind:'Image'|'Video'|'Document',ext:string}>}
    */
-  upload: (file, category) => {
+  upload: async (file, category, opts = {}) => {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('category', category);
-    return request('POST', '/files', { form: fd });
+    const fileName = opts.fileName || (category === 'Attachment' ? file && file.name : '');
+    if (fileName) fd.append('fileName', fileName);
+    if (typeof opts.onProgress === 'function') return xhrUpload('/files', fd, opts.onProgress, opts.signal);
+    try {
+      return await request('POST', '/files', { form: fd });
+    } catch (e) {
+      // nginx 直接拒绝超大请求体：非 JSON 的 413
+      if (e && e.status === 413 && e.code === 50000) throw new ApiError('文件不能超过 100MB', 40000, 413);
+      throw e;
+    }
   },
+  /**
+   * 下载原文件（带 Authorization；文件名取 Content-Disposition 的 filename*，即原始文件名）。
+   * @param {number} id @param {string} [name] 兜底文件名
+   * @returns {Promise<void>}
+   */
+  download: (id, name) => download('/api/files/' + id + '/download', name),
 };
 
 export default { request, download, auth, me, orders, engineers, hours, admin, files };

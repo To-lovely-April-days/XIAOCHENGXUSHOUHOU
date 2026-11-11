@@ -50,12 +50,15 @@ export function confirm(title, message = '', opts = {}) {
 }
 
 /**
- * 图片预览（lightbox）。
- * @param {string|string[]|Array<{url:string}>} urls
+ * 图片 / 视频预览（lightbox）。
+ * 条目可以是地址字符串、{ url }（按图片）或 { url, type: 'image'|'video' }。
+ * @param {string|Array<string|{url:string,type?:'image'|'video'}>|{url:string,type?:string}} items
  * @param {number} [index=0]
  */
-export function preview(urls, index = 0) {
-  const list = (Array.isArray(urls) ? urls : [urls]).map(u => (typeof u === 'string' ? u : u && u.url)).filter(Boolean);
+export function preview(items, index = 0) {
+  const list = (Array.isArray(items) ? items : [items])
+    .map(u => (typeof u === 'string' ? { url: u, type: 'image' } : (u && u.url ? { url: u.url, type: u.type === 'video' ? 'video' : 'image' } : null)))
+    .filter(Boolean);
   if (!list.length) return;
   uiState.lightbox = { list, index: Math.min(Math.max(0, index), list.length - 1) };
 }
@@ -82,6 +85,12 @@ const ICONS = {
   key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/>',
   image: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8"/>',
   refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  file: '<path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v5h5"/>',
+  video: '<rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10.5l5-3v9l-5-3z"/>',
+  lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  trash: '<path d="M4 7h16M10 7V4h4v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/>',
+  paperclip: '<path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.8 17.1a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6"/>',
 };
 
 /** <Icon name="search" :size="15" :stroke="1.8" /> */
@@ -270,6 +279,7 @@ export const UiHost = {
   computed: {
     dialog() { return this.ui.dialog; },
     lb() { return this.ui.lightbox; },
+    lbItem() { const lb = this.ui.lightbox; return (lb && lb.list[lb.index]) || { url: '', type: 'image' }; },
   },
   watch: {
     dialog(d) {
@@ -338,7 +348,8 @@ export const UiHost = {
     </div>
   </div>
   <div v-if="lb" class="lightbox" @click.self="ui.lightbox = null">
-    <img :src="lb.list[lb.index]" alt="图片预览">
+    <video v-if="lbItem.type === 'video'" :key="lbItem.url" class="att-lightbox-video" :src="lbItem.url" controls autoplay playsinline></video>
+    <img v-else :src="lbItem.url" alt="图片预览">
     <button type="button" class="lightbox-close" aria-label="关闭预览" @click="ui.lightbox = null"><Icon name="close" :size="20" :stroke="2" /></button>
     <template v-if="lb.list.length > 1">
       <button type="button" class="lightbox-nav lightbox-prev" aria-label="上一张" @click="step(-1)"><Icon name="chevronLeft" :size="22" :stroke="2" /></button>

@@ -20,6 +20,7 @@ miniprogram/
 ├── api/index.js                     每个接口一个函数（与 API.md 一一对应）
 ├── utils/
 │   ├── request.js                   wx.request / uploadFile / downloadFile 封装
+│   ├── attachments.js               工单附件（v1.2）：选择、预检、排队上传、类型角标、预览 / 打开
 │   ├── auth.js                      登录态：ensureLogin / setSession / logout …
 │   ├── format.js                    时间、时长、价格、距离、手机号格式化；服务器时间校准
 │   ├── enums.js                     枚举中文 + 配色 + picker options
@@ -70,7 +71,8 @@ const api = require('../../api/index.js');
 api.auth.login(code) / api.auth.bind(bindTicket, phoneCode)
 api.me.get() → {user, monthMinutes, activeOrderCount, monthTripDays}
 api.me.setAvatar(fileId) → User
-api.files.upload(filePath, category) → FileDto
+api.files.upload(filePath, category, {fileName?, timeout?, onProgress?}) → FileDto   // 附件一律 category='Attachment'
+api.files.downloadPath(id) → '/api/files/{id}/download'                            // 配合 request.download（带 Authorization）
 api.orders.hall(filter)            // 'all'|'urgent'|'onsite'|'remote' → {items, counts}
 api.orders.mine(group)             // 'doing'|'check'|'closed'|'all'
 api.orders.created(group)          // 'all'|'wait'|'doing'|'check'|'closed'
@@ -86,6 +88,8 @@ api.orders.requestHold(id, reasonType, note)                                  //
 api.orders.approveRequest(id, requestId) / rejectRequest(id, requestId, reply) / cancelRequest(id, requestId)
 api.orders.setAssistants(id, engineerIds) / requestAssistant(id, engineerId, note)
 api.orders.factoryNode(id, {node, courier, trackingNo, note, photoIds})       // 返厂节点记录 / 更正
+// v1.2（详见 docs/CHANGES-v1.2.md）
+api.orders.addAttachments(id, [{fileId, restricted}]) / deleteAttachment(id, fileId) / setAttachmentRestricted(id, fileId, restricted)
 api.punches.context(orderId?) → 上下文或 null
 api.punches.create({orderId, kind, latitude, longitude, address, photoFileId}) → {punch, order}
 api.hours.today(engineerId?) / api.hours.month(year, month, engineerId?)
@@ -97,7 +101,7 @@ api.admin.employees() / createEmployee(body) / updateEmployee(id, body) / unbind
 出错 reject `{ code, message, httpStatus, data }`（如 `40900`），默认已 toast；需要自定义提示时传 `{ silent: true }` 自己处理。网络失败 `code = -1`。
 
 ### utils/request.js
-`request({url, method, data, silent, loading})`、`get(url, data, opts)`、`post`、`put`、`uploadFile(filePath, category, opts) → FileDto`、`download(url, query) → tempFilePath`。401/40100 自动清 token 并 reLaunch 登录页（防抖）。
+`request({url, method, data, silent, loading})`、`get(url, data, opts)`、`post`、`put`、`uploadFile(filePath, category, opts) → FileDto`（opts：`fileName`、`timeout` 默认 60000、`onProgress(percent)`、`onTask(task)`；HTTP 413 且响应不是 JSON → `文件不能超过 100MB`）、`download(url, query, opts) → 本地路径`（opts：`filePath`、`timeout`、`onProgress(percent)`、`silent`；非 200：404「文件不存在或已删除」、403「无权查看该文件」、其他「下载失败（状态码）」）。401/40100 自动清 token 并 reLaunch 登录页（防抖）。
 
 ### utils/auth.js
 `ensureLogin() → Promise<User>`、`getUser()`、`getRole()`、`setSession(token, user)`、`setUser(user)`、`refreshUser() → /api/me 的 data`、`logout()`。
@@ -134,7 +138,7 @@ api.admin.employees() / createEmployee(body) / updateEmployee(id, body) / unbind
 `setTabSelected(page, 'home'|'orders'|'hours'|'me')`、`setTabBarHidden(page, true|false)`（自己写的底部弹层要隐藏 tabBar 时用）、`refreshAll()`。
 
 ### utils/icons.js / `<ui-icon>`
-`icons.get(name, color, strokeWidth) → data URI`；名字：home orders camera clock user plus plus-square back right down check close phone location search image edit warning info flash switch shield wechat。
+`icons.get(name, color, strokeWidth) → data URI`；名字：home orders camera clock user plus plus-square back right down check close phone location search image edit warning info flash switch shield wechat lock more。
 WXML：`<ui-icon name="camera" color="#FFFFFF" size="24" stroke="2" />`（size 为设计稿 px）。
 
 ### 组件
@@ -169,4 +173,17 @@ onAssigned(e) { const detail = e.detail; this.reload(); }
 CSS 变量：`--bg --card --text --text-2 --text-3 --text-body --divider --border --soft --track --segment-bg --red --red-soft --green --amber --gray --disabled --radius --radius-lg --radius-btn --shadow --tabbar-height --font-num`。
 
 ## 隐私
-`app.json` 开启 `__usePrivacyCheck__`。登录页的验证按钮为 `open-type="getPhoneNumber|agreePrivacyAuthorization"`，点击即同意；其他页面调用隐私接口而用户未同意时，`app.js` 的 `wx.onNeedPrivacyAuthorization` 会打开 `pages/privacy/index?mode=authorize`，用户点「同意并继续」后继续原操作。小程序后台「用户隐私保护指引」需声明：手机号、位置信息、摄像头 / 相册、微信头像。
+`app.json` 开启 `__usePrivacyCheck__`。登录页的验证按钮为 `open-type="getPhoneNumber|agreePrivacyAuthorization"`，点击即同意；其他页面调用隐私接口而用户未同意时，`app.js` 的 `wx.onNeedPrivacyAuthorization` 会打开 `pages/privacy/index?mode=authorize`，用户点「同意并继续」后继续原操作。小程序后台「用户隐私保护指引」需声明：手机号、位置信息、摄像头 / 相册、微信头像、选中的文件（v1.2 新增，见下文「上线前的手工步骤」）。
+
+## v1.2 工单附件（详见 docs/CHANGES-v1.2.md §6）
+
+- **建单页**：「现场照片 / 视频」改为「附件（照片 / 视频 / 文件）」，最多 20 个。点「+」选「拍照或从相册选择」（`wx.chooseMedia`，`sizeType: ['original']` 原图不压缩）或「从微信聊天选择文件」（`wx.chooseMessageFile`，仅 Word / Excel / PPT / PDF / TXT / CSV）。小程序里文档只能从微信聊天中选：先把文件发到「文件传输助手」再选。销售 / 主管长按格子可设为「仅销售和主管可见」。提交用 `attachments: [{fileId, restricted}]`，不再传 `photoFileIds`。
+- **工单详情**：tab「资料」改名「附件资料」，顶部是「附件」卡片（类型角标、名称、大小 · 上传人 · 时间、受限角标），其下「流程资料」保留打卡照片 / 处理照片 / 签字件 / 返厂照片（建单照片已并入附件）。添加、删除、切换可见范围只看服务端返回的 `canAddAttachment`、`canRestrictAttachment`、`attachments[].canDelete / canToggleRestricted`、`attachmentRemaining`，**页面不自行推导权限**。工程师从任何接口都拿不到受限附件。
+- **打开附件**：图片 / 视频用原文件地址 `wx.previewMedia`；文档先经 `GET /api/files/{id}/download`（`Authorization` 头）下载到 `USER_DATA_PATH/att/{id}/{name}`（每次下载前清空 `att/`），再 `wx.openDocument({ fileType, showMenu: true })`，右上角菜单可转发 / 保存；TXT / CSV 微信不支持预览，改为 `wx.shareFileMessage` 转发到聊天。
+- **utils/attachments.js**：`MAX_COUNT=20`、`MAX_IMAGE=20MB`、`MAX_FILE=100MB`、`DOC_EXTS`、`OPEN_DOC_EXTS`；`pickMedia(left)` / `pickChatFiles(left)` / `pick(left)`（先弹选择方式）→ 统一条目；`upload(item, onChange(item, patch))` 逐个排队上传（同一时间只传 1 个，`timeout` 10 分钟，带进度），`cancel(key)`；`fmtSize(bytes)`、`badge(att) → {text, color}`；`open(att, list)`（服务端附件）、`openLocal(item, list)`（未提交的本地条目）、`resetCache()`。预检文案：`不支持的文件类型` / `图片不能超过 20MB` / `文件不能超过 100MB`，服务端校验是最终依据。
+- **大小与超时**：图片 ≤ 20 MB，视频与文档 ≤ 100 MB；附件上传与文档下载超时 10 分钟。完工照片、打卡照片、返厂照片、头像不变（压缩图、20 MB）。
+
+### 上线前的手工步骤（小程序后台）
+1. 「设置 → 服务内容声明 → 用户隐私保护指引」新增一项 **选中的文件**（用途：`用于将聊天中的文件作为工单附件上传`）。不声明的话 `wx.chooseMessageFile` 在正式版会被拒绝。
+2. request / uploadFile / downloadFile 合法域名已有 `https://shouhou.sh-htlab.com`，无需改动。
+3. 小程序需重新提审发布。后端与 PC 后台先上线不影响 v1.1 小程序；v1.2 小程序依赖 v1.2 后端（`attachments` 等字段），**必须在后端升级之后发布**。服务器 nginx 的 `client_max_body_size` 需已改为 `110m`（见 deploy/README.md），否则超过 30 MB 的上传会被拦截并提示「文件不能超过 100MB」。

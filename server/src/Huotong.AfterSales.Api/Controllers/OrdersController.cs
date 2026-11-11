@@ -130,4 +130,18 @@ public class OrdersController : ApiControllerBase
     [HttpPost("{id:int}/factory-nodes")]
     public async Task<ApiResponse<OrderDetail>> FactoryNode(int id, [FromBody] FactoryNodeRequest? req) =>
         Ok(await _orders.RecordFactoryNode(id, req ?? new(), Me));
+
+    // ---------- v1.2：附件（任何角色，服务端按 AttachmentRules 判权）----------
+
+    [HttpPost("{id:int}/attachments")]
+    public async Task<ApiResponse<OrderDetail>> AddAttachments(int id, [FromBody] AttachmentsRequest? req) =>
+        Ok(await _orders.AddAttachments(id, req ?? new(), Me));
+
+    [HttpPost("{id:int}/attachments/{fileId:int}/delete")]
+    public async Task<ApiResponse<OrderDetail>> DeleteAttachment(int id, int fileId) => Ok(await _orders.DeleteAttachment(id, fileId, Me));
+
+    [HttpPost("{id:int}/attachments/{fileId:int}/restricted")]
+    [Authorize(Roles = "Supervisor")]
+    public async Task<ApiResponse<OrderDetail>> SetAttachmentRestricted(int id, int fileId, [FromBody] RestrictedRequest? req) =>
+        Ok(await _orders.SetAttachmentRestricted(id, fileId, req ?? new(), Me));
 }
