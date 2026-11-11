@@ -80,7 +80,7 @@ PHOTO=$(upload "$SALES" OrderPhoto); ok "上传建单照片 id=$PHOTO"
 NEW=$(call POST /api/orders "$SALES" "{\"source\":\"SalesReferral\",\"problemType\":\"Fault\",\"urgency\":\"Urgent\",\"serviceType\":\"Onsite\",
  \"customerName\":\"冒烟测试客户\",\"contactName\":\"张工\",\"contactPhone\":\"138 0000 0000\",\"address\":\"江苏省苏州市工业园区星湖街 1 号\",
  \"latitude\":31.30,\"longitude\":120.72,\"deviceModel\":\"高压反应釜 HTR-500\",\"deviceSn\":\"SN-SMOKE\",\"satDate\":\"2024-08\",\"satSigned\":true,
- \"projectNo\":null,\"faultTime\":\"11月4日 下午\",\"symptom\":\"升温到 180℃ 不再加热\",\"customerTried\":\"断电重启\",\"siteEnvironment\":\"通风橱内\",
+ \"projectNo\":\"SMOKE-001\",\"faultTime\":\"11月4日 下午\",\"symptom\":\"升温到 180℃ 不再加热\",\"customerTried\":\"断电重启\",\"siteEnvironment\":\"通风橱内\",
  \"customerRequest\":null,\"price\":1800,\"photoFileIds\":[$PHOTO]}")
 OID=$(echo "$NEW" | py 'd["id"]')
 expect "$(echo "$NEW" | py 'str(d["priceSet"])+"/"+str(d["price"])')" "False/None" "建单忽略旧客户端传入的 price（未定价）"
@@ -94,7 +94,7 @@ expect "$(echo "$NEW" | py 'd["logs"][0]["text"]')" "王敏 建单 · 紧急" "�
 echo "== 工程师认领"
 D=$(call POST "/api/orders/$OID/claim" "$ENG")
 expect "$(echo "$D" | py 'd["status"]')" "Accepted" "认领 → Accepted"
-expect "$(echo "$D" | py '",".join(d["actions"])')" "appoint,checkin,requestHold,requestAssistant" "工程师 actions"
+expect "$(echo "$D" | py '",".join(d["actions"])')" "appoint,checkin,requestHold,requestAssistant,transfer" "工程师 actions"
 expect "$(echo "$D" | py 'str(d["price"])+"/"+str(d["priceSet"])+"/"+str(d["priceSuggestion"])')" "None/None/None" "工程师看不到价格"
 expect "$(echo "$D" | py 'd["myRole"]')" "Lead" "myRole=Lead"
 req POST "/api/orders/$OID/claim" "$LI"; expect "$(py 'd["message"]' < "$TMP/body")" "工单已被他人认领" "重复认领 → 409"
@@ -188,7 +188,7 @@ done
 echo "== 远程单与其他主管动作"
 RO=$(call POST /api/orders "$ENG" "{\"source\":\"CustomerDirect\",\"problemType\":\"Consult\",\"urgency\":\"Consult\",\"serviceType\":\"Remote\",
  \"customerName\":\"冒烟远程客户\",\"contactName\":\"李老师\",\"contactPhone\":\"021-12345678\",\"address\":\"上海市杨浦区 [示例地址]\",
- \"deviceModel\":\"微型反应釜 HTM-100\",\"deviceSn\":\"SN-REMOTE\",\"satDate\":\"2025-02\",\"satSigned\":false,
+ \"deviceModel\":\"微型反应釜 HTM-100\",\"deviceSn\":\"SN-REMOTE\",\"satDate\":\"2025-02\",\"satSigned\":false,\"projectNo\":\"SMOKE-002\",
  \"faultTime\":\"今天上午\",\"symptom\":\"压力传感器多久校准一次？\",\"customerTried\":\"查阅说明书\",\"siteEnvironment\":\"教学实验室\"}")
 RID=$(echo "$RO" | py 'd["id"]')
 expect "$(echo "$RO" | py 'd["productStage"]+"/"+d["city"]')" "新产品/上海" "工程师建远程单（新产品、直辖市解析）"
@@ -198,7 +198,7 @@ D=$(call POST "/api/orders/$RID/assign" "$SUP" "{\"engineerId\":$WANG}")
 expect "$(echo "$D" | py 'd["logs"][-1]["text"]')" "赵主管 指派给 王工 → 待启动" "指派 → 待启动"
 D=$(call POST "/api/orders/$RID/appointment" "$ENG" '{"appointmentTime":"2026-11-09T10:00:00"}')
 expect "$(echo "$D" | py 'd["logs"][-1]["text"]')" "王工 预约 11月9日 10:00" "预约"
-expect "$(echo "$D" | py '",".join(d["actions"])')" "appoint,start,requestHold,requestAssistant" "远程单 actions"
+expect "$(echo "$D" | py '",".join(d["actions"])')" "appoint,start,requestHold,requestAssistant,transfer" "远程单 actions"
 
 echo "== 暂停搁置：直接暂停 / 申请与审批"
 D=$(call POST "/api/orders/$RID/hold" "$SUP" '{"reasonType":"WaitCustomer","note":"客户下周才有空"}')
@@ -249,7 +249,7 @@ expect "$(call POST "/api/orders/$RID/complete" "$LIUT" "$BODY" | py 'd["status"
 expect "$(call POST "/api/orders/$RID/reject" "$SUP" '{"reason":"缺少校准记录"}' | py 'd["status"]')" "InProgress" "退回处理中"
 FACTORY_BODY="{\"source\":\"SalesReferral\",\"problemType\":\"Fault\",\"urgency\":\"Normal\",\"serviceType\":\"Factory\",
  \"customerName\":\"冒烟返厂客户\",\"contactName\":\"王工\",\"contactPhone\":\"13800000000\",\"address\":\"南京市玄武区\",
- \"deviceModel\":\"HTM-100\",\"deviceSn\":\"SN-V\",\"satDate\":\"2024-01\",\"satSigned\":true,
+ \"deviceModel\":\"HTM-100\",\"deviceSn\":\"SN-V\",\"satDate\":\"2024-01\",\"satSigned\":true,\"projectNo\":\"SMOKE-003\",
  \"faultTime\":\"昨天\",\"symptom\":\"异响\",\"customerTried\":\"无\",\"siteEnvironment\":\"实验室\"}"
 
 echo "== 返厂流程：5 节点"
@@ -257,7 +257,7 @@ FO=$(call POST /api/orders "$SALES" "$FACTORY_BODY")
 FID=$(echo "$FO" | py 'd["id"]')
 expect "$(echo "$FO" | py 'd["factoryText"]+"/"+",".join(n["state"] for n in d["factory"]["nodes"])+"/"+",".join(d["actions"])')" "待客户寄出/current,todo,todo,todo,todo/suggestPrice,factory" "返厂单建单"
 D=$(call POST "/api/orders/$FID/claim" "$ENG")
-expect "$(echo "$D" | py '",".join(d["actions"])')" "appoint,factory,requestHold,requestAssistant" "返厂单工程师 actions（无 start）"
+expect "$(echo "$D" | py '",".join(d["actions"])')" "appoint,factory,requestHold,requestAssistant,transfer" "返厂单工程师 actions（无 start）"
 req POST "/api/orders/$FID/start" "$ENG"; expect "$(py 'd["message"]' < "$TMP/body")" "返厂工单记录「工厂收货」后自动开始处理" "返厂单 start → 409"
 RP=$(upload "$ENG" FactoryReceivePhoto); ok "上传收货照片 id=$RP"
 req POST "/api/orders/$FID/factory-nodes" "$ENG" "{\"node\":\"FactoryReceived\",\"photoIds\":[$RP]}"
@@ -279,7 +279,7 @@ SP=$(upload "$ENG" FactoryShipPhoto)
 req POST "/api/orders/$FID/factory-nodes" "$ENG" '{"node":"ShippedBack","courier":"顺丰","trackingNo":"SF2"}'
 expect "$(py 'd["message"]' < "$TMP/body")" "请至少上传 1 张寄回照片" "寄回无照片 → 40000"
 D=$(call POST "/api/orders/$FID/factory-nodes" "$ENG" "{\"node\":\"ShippedBack\",\"courier\":\"顺丰\",\"trackingNo\":\"SF2\",\"photoIds\":[$SP]}")
-expect "$(echo "$D" | py 'd["factoryText"]+"/"+",".join(d["actions"])')" "已寄回客户/appoint,factory,complete,requestHold,requestAssistant" "4 寄回客户"
+expect "$(echo "$D" | py 'd["factoryText"]+"/"+",".join(d["actions"])')" "已寄回客户/appoint,factory,complete,requestHold,requestAssistant,transfer" "4 寄回客户"
 D=$(call POST "/api/orders/$FID/factory-nodes" "$ENG" "{\"node\":\"ShippedBack\",\"courier\":\"顺丰\",\"trackingNo\":\"SF3\",\"photoIds\":[$SP]}")
 expect "$(echo "$D" | py 'd["logs"][-1]["text"]+"/"+d["status"]')" "王工 更正寄回客户（顺丰 SF3）/InProgress" "更正寄回单号（状态不变）"
 expect "$(call POST "/api/orders/$FID/complete" "$ENG" "$FBODY" | py 'd["status"]+"/"+",".join(d["actions"])')" "Submitted/factory" "返厂单提交完工"
@@ -452,7 +452,7 @@ echo "== v1.2 附件：建单 / 可见性 / 添加"
 ORDER_BODY() { # ORDER_BODY 客户名 额外字段
   echo "{\"source\":\"SalesReferral\",\"problemType\":\"Fault\",\"urgency\":\"Normal\",\"serviceType\":\"Onsite\",
  \"customerName\":\"$1\",\"contactName\":\"张工\",\"contactPhone\":\"13800000000\",\"address\":\"江苏省苏州市工业园区星湖街 1 号\",
- \"latitude\":31.30,\"longitude\":120.72,\"deviceModel\":\"HTR-500\",\"deviceSn\":\"SN-V12\",\"satDate\":\"2024-08\",\"satSigned\":true,
+ \"latitude\":31.30,\"longitude\":120.72,\"deviceModel\":\"HTR-500\",\"deviceSn\":\"SN-V12\",\"satDate\":\"2024-08\",\"satSigned\":true,\"projectNo\":\"SMOKE-004\",
  \"faultTime\":\"昨天\",\"symptom\":\"不加热\",\"customerTried\":\"重启\",\"siteEnvironment\":\"通风橱\",$2}"
 }
 # 先拼到变量里：macOS 自带的 bash 3.2 在嵌套的 $(...) 中会对花括号做展开
@@ -460,13 +460,13 @@ EXTRA="\"attachments\":[{\"fileId\":$OPEN},{\"fileId\":$SECRET,\"restricted\":tr
 BODY=$(ORDER_BODY "附件冒烟客户" "$EXTRA")
 D=$(call POST /api/orders "$SALES" "$BODY")
 AID=$(echo "$D" | py 'd["id"]')
-expect "$(echo "$D" | py 'str(len(d["attachments"]))+"/"+str(d["attachmentRemaining"])+"/"+str(d["canRestrictAttachment"])+"/"+str(d["canAddAttachment"])')" "2/18/True/True" "销售建单带 2 个附件（1 受限）"
+expect "$(echo "$D" | py 'str(len(d["attachments"]))+"/"+str(d["attachmentRemaining"])+"/"+str(d["canRestrictAttachment"])+"/"+str(d["canAddAttachment"])')" "2/48/True/True" "销售建单带 2 个附件（1 受限）"
 expect "$(echo "$D" | py '[a["name"] for a in d["attachments"] if a["restricted"]]')" '["报价单.pdf"]' "restricted 标记正确"
 expect "$(echo "$D" | py 'len(d["logs"])')" "1" "建单时的附件不另写状态记录"
 
 call POST "/api/orders/$AID/claim" "$ENG" > /dev/null
 call GET "/api/orders/$AID" "$ENG" > "$TMP/eng.json"
-expect "$(py 'str(len(d["attachments"]))+"/"+str(d["canAddAttachment"])+"/"+str(d["canRestrictAttachment"])+"/"+str(d["attachmentRemaining"])' < "$TMP/eng.json")" "1/True/False/18" "工程师详情：只见 1 个附件，名额仍为 18"
+expect "$(py 'str(len(d["attachments"]))+"/"+str(d["canAddAttachment"])+"/"+str(d["canRestrictAttachment"])+"/"+str(d["attachmentRemaining"])' < "$TMP/eng.json")" "1/True/False/48" "工程师详情：只见 1 个附件，名额仍为 48"
 expect "$(grep -c '报价单' "$TMP/eng.json" || true)" "0" "工程师详情全文不含受限文件名"
 expect "$(py 'any(l["kind"]=="AttachmentPrivate" for l in d["logs"])' < "$TMP/eng.json")" "False" "工程师 logs 不含 AttachmentPrivate"
 
@@ -519,7 +519,7 @@ expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "403/只能删�
 D=$(call POST "/api/orders/$AID/attachments/$EF/delete" "$ENG")
 expect "$(echo "$D" | py 'str(len(d["attachments"]))+"/"+d["logs"][-1]["text"]')" "1/王工 删除附件 现场记录.pdf" "工程师删除自己的附件"
 D=$(call POST "/api/orders/$AID/attachments/$OPEN/delete" "$SUP")
-expect "$(echo "$D" | py 'str(len(d["attachments"]))+"/"+str(d["attachmentRemaining"])')" "1/19" "主管删除销售的附件，名额释放"
+expect "$(echo "$D" | py 'str(len(d["attachments"]))+"/"+str(d["attachmentRemaining"])')" "1/49" "主管删除销售的附件，名额释放"
 req POST "/api/orders/$AID/attachments/$OPEN/delete" "$SUP"
 expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "404/附件不存在" "再次删除 → 404"
 req GET "/api/files/$OPEN/download" "$SUP"
@@ -595,6 +595,182 @@ expect "$(scode "$(upath "$(echo "$F" | py 'd["url"]')")")" "200" "/uploads HEIC
 printf 'The free trial ends tomorrow\n' > "$TMP/free.txt"
 expect "$(upok "$SALES" "$TMP/free.txt" Attachment free.txt "free.txt" | py 'd["mimeType"]')" "text/plain" "「The free…」文本作为 txt 上传成功"
 expect "$(curl -s -o /dev/null -w "%{http_code}" "$BASE/admin/js/views/files.js")" "200" "GET /admin/js/views/files.js → 200"
+
+# ============================== v1.3：设备资料 + 附件分类与随时可传 + 转交 ==============================
+echo "== v1.3 设备资料：多台设备 / 项目编号必填 / SAT 可改"
+SUP=$(login 13900000001); ENG=$(login 13900000004); SALES=$(login 13900000010); LI=$(login 13900000000)
+LIID=$(call GET /api/me "$LI" | py 'd["user"]["id"]')
+WANGID=$(call GET /api/me "$ENG" | py 'd["user"]["id"]')
+SFX=$(date +%s | tail -c 7)   # 让项目编号 / 设备编号在重复运行时也唯一
+PRJ="SMK-$SFX"; DSN2="SN-SMK2-$SFX"
+V13_BODY() { # V13_BODY 客户名 维修类型 额外字段（v1.3 请求体：传 devices，不传 deviceModel / deviceSn）
+  echo "{\"source\":\"SalesReferral\",\"problemType\":\"Fault\",\"urgency\":\"Normal\",\"serviceType\":\"$2\",
+ \"customerName\":\"$1\",\"contactName\":\"张工\",\"contactPhone\":\"13800000000\",\"address\":\"江苏省苏州市工业园区星湖街 1 号\",
+ \"latitude\":31.30,\"longitude\":120.72,\"faultTime\":\"昨天\",\"symptom\":\"不加热\",\"customerTried\":\"重启\",\"siteEnvironment\":\"通风橱\",$3}"
+}
+# 1. 销售建单：项目编号 + 2 台设备（另有 1 个空行）+ 未完成 SAT + 不传时间
+EXTRA="\"projectNo\":\"$PRJ\",\"devices\":[{\"name\":\"高压反应釜\",\"sn\":\"SN-SMK1-$SFX\",\"model\":\"HTR-250\"},{\"name\":\"搅拌器\",\"sn\":\"$DSN2\",\"model\":\"HTS-80\"},{\"name\":\" \",\"sn\":\"\",\"model\":\"\"}],\"satSigned\":false"
+BODY=$(V13_BODY "设备冒烟客户" Onsite "$EXTRA")
+D=$(call POST /api/orders "$SALES" "$BODY")
+DID=$(echo "$D" | py 'd["id"]')
+expect "$(echo "$D" | py 'd["deviceText"]')" "高压反应釜 HTR-250 等 2 台" "多设备建单：deviceText 以「 等 2 台」结尾"
+expect "$(echo "$D" | py 'str(len(d["devices"]))+"/"+d["devices"][1]["title"]+"/"+d["satDateLabel"]+"/"+d["satText"]+"/"+str(d["canEditSat"])+"/["+d["satDate"]+"]"')" "2/搅拌器 HTS-80/发货时间/未完成/True/[]" "devices 2 条（空行忽略）、时间选填、canEditSat"
+expect "$(echo "$D" | py 'd["projectNo"]+"/"+d["deviceModel"]+"/"+d["deviceSn"]')" "$PRJ/高压反应釜 HTR-250/SN-SMK1-$SFX" "兼容列 = 第一台设备"
+# 2. 不带项目编号 → 400；旧请求体（deviceModel / deviceSn / satDate yyyy-MM，带 projectNo）→ 合成一台设备
+EXTRA="\"devices\":[],\"satSigned\":true"
+BODY=$(V13_BODY "缺项目编号客户" Onsite "$EXTRA")
+req POST /api/orders "$SALES" "$BODY"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "400/请填写项目编号" "建单不带 projectNo → 400"
+EXTRA="\"photoFileIds\":[]"
+BODY=$(ORDER_BODY "旧请求体设备客户" "$EXTRA")
+D=$(call POST /api/orders "$SALES" "$BODY")
+expect "$(echo "$D" | py 'str(len(d["devices"]))+"/"+d["devices"][0]["model"]+"/"+d["devices"][0]["sn"]+"/"+d["deviceText"]+"/"+d["satDate"]')" "1/HTR-500/SN-V12/HTR-500/2024-08" "旧请求体：devices 1 条"
+# 3. 搜索：第二台设备的编号、项目编号
+expect "$(call GET "/api/orders?keyword=$DSN2" "$SUP" | py "[i['id'] for i in d['items']]")" "[$DID]" "keyword=第二台设备编号 能搜到"
+expect "$(call GET "/api/orders?keyword=$PRJ" "$SUP" | py "any(i['id']==$DID and i['projectNo']=='$PRJ' for i in d['items'])")" "True" "keyword=项目编号 能搜到"
+# 4. 修改 SAT 信息
+D=$(call POST "/api/orders/$DID/sat" "$SALES" '{"satSigned":true,"satDate":"2026-03-15"}')
+expect "$(echo "$D" | py 'd["satText"]+"/"+d["satDateLabel"]+"/"+d["satDate"]+"/"+d["logs"][-1]["kind"]+"/"+d["logs"][-1]["text"]')" "已完成/SAT 完成时间/2026-03-15/Info/王敏 修改 SAT 信息：已完成 SAT，SAT 完成时间 2026-03-15" "销售（建单人）修改 SAT 信息"
+req POST "/api/orders/$DID/sat" "$LI" '{"satSigned":false,"satDate":""}'
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "403/只有建单人、负责工程师或主管可以修改 SAT 信息" "无关工程师修改 SAT → 403"
+req POST "/api/orders/$DID/sat" "$SALES" '{"satSigned":true,"satDate":"2026-13-01"}'
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "400/SAT 完成时间格式应为 yyyy-MM-dd" "SAT 时间格式错误 → 400"
+
+echo "== v1.3 附件分类 + 随时可传"
+# 5. 建单带三类附件各 1 个
+A1=$(upok "$SALES" "$TMP/a.pdf" Attachment a.pdf "SAT验收单.pdf" | py 'd["id"]')
+A2=$(upok "$SALES" "$TMP/b.pdf" Attachment b.pdf "维修登记表.pdf" | py 'd["id"]')
+A3=$(upok "$SALES" "$TMP/a.txt" Attachment a.txt "沟通记录.txt" | py 'd["id"]')
+EXTRA="\"projectNo\":\"$PRJ-A\",\"devices\":[],\"satSigned\":true,\"attachments\":[{\"fileId\":$A1,\"type\":\"Sat\"},{\"fileId\":$A2,\"type\":\"RepairForm\"},{\"fileId\":$A3}]"
+BODY=$(V13_BODY "附件分类冒烟客户" Remote "$EXTRA")
+D=$(call POST /api/orders "$SALES" "$BODY")
+CID=$(echo "$D" | py 'd["id"]')
+expect "$(echo "$D" | py '",".join(a["attachmentType"] for a in d["attachments"])+"/"+str(d["attachmentLimit"])+"/"+d["deviceText"]')" "Sat,RepairForm,Other/50/未填设备" "建单带三类附件各 1 个；attachmentLimit = 50"
+expect "$(echo "$D" | py 'd["attachments"][0]["attachmentTypeLabel"]+"/"+d["attachments"][1]["attachmentTypeShort"]+"/"+str(d["attachments"][2]["canChangeType"])')" "SAT 验收单（签字版）/维修登记表/True" "附件类别文字与 canChangeType"
+# 6. 改类别
+D=$(call POST "/api/orders/$CID/attachments/$A3/type" "$SALES" '{"type":"RepairForm"}')
+expect "$(echo "$D" | py '[a["attachmentType"] for a in d["attachments"] if a["id"]=='"$A3"'][0]+"/"+d["logs"][-1]["text"]')" "RepairForm/王敏 将附件 沟通记录.txt 归为「维修登记表」" "上传人改附件类别"
+req POST "/api/orders/$CID/attachments/$A3/type" "$ENG" '{"type":"Sat"}'
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "403/只能修改自己上传的附件" "非上传人（工程师）改类别 → 403"
+req POST "/api/orders/$CID/attachments/$A3/type" "$SALES" '{"type":"Nope"}'
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "400/请选择附件类别" "type=Nope → 400"
+req POST "/api/orders/$CID/attachments" "$SALES" "{\"attachments\":[{\"fileId\":$A3,\"type\":\"1\"}]}"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "400/附件类别不正确" "添加附件 type=1 → 400"
+# 7. 闭环后：建单人、负责人仍可添加；只能新增不能删除
+call POST "/api/orders/$CID/claim" "$ENG" > /dev/null
+call POST "/api/orders/$CID/start" "$ENG" > /dev/null
+PP=$(upload "$ENG" ProcessPhoto)
+BODY="{\"faultCause\":\"咨询\",\"solution\":\"远程指导\",\"runStatus\":\"Normal\",\"processPhotoIds\":[$PP]}"
+call POST "/api/orders/$CID/complete" "$ENG" "$BODY" > /dev/null
+call POST "/api/orders/$CID/price" "$SUP" '{"price":0}' > /dev/null
+expect "$(call POST "/api/orders/$CID/close" "$SUP" | py 'd["status"]')" "Closed" "缺任何一类附件都不拦闭环"
+C1=$(upok "$SALES" "$TMP/b.pdf" Attachment b.pdf "闭环后-销售补传.pdf" | py 'd["id"]')
+D=$(call POST "/api/orders/$CID/attachments" "$SALES" "{\"attachments\":[{\"fileId\":$C1,\"type\":\"Sat\"}]}")
+expect "$(echo "$D" | py 'd["status"]+"/"+str(d["canAddAttachment"])+"/"+str(len(d["attachments"]))')" "Closed/True/4" "闭环后建单人添加附件 → 200"
+C2=$(upok "$ENG" "$TMP/c.pdf" Attachment c.pdf "闭环后-工程师补传.pdf" | py 'd["id"]')
+D=$(call POST "/api/orders/$CID/attachments" "$ENG" "{\"attachments\":[{\"fileId\":$C2}]}")
+expect "$(echo "$D" | py 'str(d["canAddAttachment"])+"/"+str(len(d["attachments"]))+"/"+str([a["canDelete"] for a in d["attachments"] if a["id"]=='"$C2"'][0])')" "True/5/False" "闭环后负责人添加附件 → 200（不可删除）"
+req POST "/api/orders/$CID/attachments/$C2/delete" "$ENG"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "409/工单已闭环，只有主管可以删除附件" "闭环后负责人删除自己补传的附件 → 409"
+# 8. 文件中心按附件类别筛选
+R=$(call GET "/api/admin/files?attachmentType=Sat&pageSize=200" "$SUP")
+expect "$(echo "$R" | py 'd["total"]>=2 and all(i["attachmentType"]=="Sat" and i["attachmentTypeShort"]=="SAT 验收单" for i in d["items"])')" "True" "文件中心 attachmentType=Sat"
+R=$(call GET "/api/admin/files?source=PunchPhoto&pageSize=5" "$SUP")
+expect "$(echo "$R" | py 'all(i["attachmentType"] is None and i["attachmentTypeShort"]=="" and not i["canChangeType"] for i in d["items"])')" "True" "非附件行 attachmentType 为 null"
+req GET "/api/admin/files?attachmentType=Nope" "$SUP"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "400/附件类别不正确" "attachmentType 非法 → 400"
+
+echo "== v1.3 转交"
+# 9. 新建远程单，王工认领；王工转交给李工
+EXTRA="\"projectNo\":\"$PRJ-T\",\"devices\":[{\"name\":\"微型反应釜\",\"sn\":\"\",\"model\":\"HTM-100\"}],\"satSigned\":true"
+BODY=$(V13_BODY "转交冒烟客户" Remote "$EXTRA")
+XID=$(call POST /api/orders "$SALES" "$BODY" | py 'd["id"]')
+call POST "/api/orders/$XID/claim" "$ENG" > /dev/null
+call POST "/api/orders/$XID/price" "$SUP" '{"price":4321}' > /dev/null
+req POST "/api/orders/$XID/transfers" "$ENG" "{\"engineerId\":$LIID}"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "400/请填写转交原因" "转交不带原因 → 400"
+req GET "/api/orders/$XID" "$LI"; expect "$(cat "$TMP/status")" "403" "转交前李工看不了这张单"
+D=$(call POST "/api/orders/$XID/transfers" "$ENG" "{\"engineerId\":$LIID,\"reason\":\"电气部分我搞不定\"}")
+T1=$(echo "$D" | py 'd["pendingTransfer"]["id"]')
+expect "$(echo "$D" | py 'd["pendingTransfer"]["status"]+"/"+d["pendingTransfer"]["text"]+"/"+d["logs"][-1]["text"]')" "Pending/王工 转交给 李工，待 李工 确认/王工 发起转交给 李工：电气部分我搞不定" "王工发起转交"
+expect "$(echo "$D" | py '",".join(d["actions"])')" "appoint,start,requestHold,requestAssistant,cancelTransfer" "发起人 actions（cancelTransfer，无 transfer）"
+# 10. 接手人：首页入口 + 只读详情（无价格）
+expect "$(call GET /api/home/engineer "$LI" | py "[i['pendingTransfer']['id'] for i in d['transfersToMe'] if i['id']==$XID]")" "[$T1]" "李工首页 transfersToMe 含该单"
+call GET "/api/orders/$XID" "$LI" > "$TMP/li.json"
+expect "$(py '",".join(d["actions"])+"/"+str(d["price"])+"/"+str(d["priceSet"])+"/"+str(d["myRole"])+"/"+str(d["canAddAttachment"])' < "$TMP/li.json")" "acceptTransfer,rejectTransfer/None/None/None/False" "李工看详情：只有确认 / 拒绝，没有价格"
+expect "$(grep -c '¥' "$TMP/li.json" || true)/$(py 'len([l for l in d["logs"] if l["kind"] in ("Price","AttachmentPrivate")])' < "$TMP/li.json")" "0/0" "接手人的详情全文不含金额与价格记录"
+expect "$(call GET "/api/orders?keyword=$PRJ-T" "$SUP" | py "[i['pendingTransfer']['id'] for i in d['items'] if i['id']==$XID]")" "[$T1]" "主管列表项带 pendingTransfer"
+# 11. 待确认期间：不能提交完工、不能再发起
+call POST "/api/orders/$XID/start" "$ENG" > /dev/null
+PP=$(upload "$ENG" ProcessPhoto)
+XBODY="{\"faultCause\":\"咨询\",\"solution\":\"远程指导\",\"runStatus\":\"Normal\",\"processPhotoIds\":[$PP]}"
+req POST "/api/orders/$XID/complete" "$ENG" "$XBODY"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "409/本单有待确认的转交，请先撤回转交后再提交完工" "待确认转交时提交完工 → 409"
+req POST "/api/orders/$XID/transfers" "$ENG" "{\"engineerId\":$LIID,\"reason\":\"再来一次\"}"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "409/已有待确认的转交，请先撤回" "重复发起转交 → 409"
+req POST "/api/orders/$XID/transfers/$T1/accept" "$ENG"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "403/只有接手人可以确认接手" "发起人自己确认接手 → 403"
+# 12. 李工拒绝（带理由）→ data 为 null；之后看不了
+req POST "/api/orders/$XID/transfers/$T1/reject" "$LI" '{"reply":"这周都在外地，排不开"}'
+expect "$(cat "$TMP/status")/$(py 'str(d["code"])+"/"+str(d["data"])' < "$TMP/body")" "200/0/None" "李工拒绝 → 200 且 data 为 null"
+req GET "/api/orders/$XID" "$LI"; expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "403/无权查看该工单" "拒绝后李工看详情 → 403"
+expect "$(call GET "/api/orders/$XID" "$ENG" | py 'd["logs"][-1]["text"]+"/"+str("transfer" in d["actions"] and "complete" in d["actions"])')" "李工 拒绝接手：这周都在外地，排不开/True" "拒绝后发起人可再次转交 / 提交完工"
+# 13. 再次转交 → 李工确认接手
+T2=$(call POST "/api/orders/$XID/transfers" "$ENG" "{\"engineerId\":$LIID,\"reason\":\"还是请你接\"}" | py 'd["pendingTransfer"]["id"]')
+D=$(call POST "/api/orders/$XID/transfers/$T2/accept" "$LI")
+expect "$(echo "$D" | py 'd["assignee"]["name"]+"/"+d["myRole"]+"/"+d["status"]+"/"+str(d["pendingTransfer"])+"/"+d["logs"][-1]["text"]')" "李工/Lead/InProgress/None/李工 确认接手（原负责人 王工）" "李工确认接手"
+req POST "/api/orders/$XID/transfers/$T2/accept" "$LI"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "409/该转交已处理或已失效" "重复确认接手 → 409"
+# 14. 原负责人：已退出（只读）
+D=$(call GET "/api/orders/$XID" "$ENG")
+expect "$(echo "$D" | py 'd["myRole"]+"/"+d["myExitText"]+"/"+str(d["actions"])+"/"+d["readOnlyText"]+"/"+str(d["canAddAttachment"])+"/"+str(d["price"])')" "Former/已转交/[]/你已退出本单（已转交），只能查看；你的打卡和工时记录已保留。/False/None" "王工：已退出、只读"
+XF=$(upok "$ENG" "$TMP/c.pdf" Attachment c.pdf "退出后.pdf" | py 'd["id"]')
+req POST "/api/orders/$XID/attachments" "$ENG" "{\"attachments\":[{\"fileId\":$XF}]}"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "403/你已退出本单，只能查看" "已退出的人添加附件 → 403"
+req POST "/api/orders/$XID/sat" "$ENG" '{"satSigned":false}'
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "403/你已退出本单，只能查看" "已退出的人修改 SAT → 403"
+M=$(call GET "/api/orders/mine?group=former" "$ENG")
+expect "$(echo "$M" | py "[i['myExitText'] for i in d['items'] if i['id']==$XID]")" '["已转交"]' "mine?group=former 含该单"
+expect "$(echo "$M" | py 'sorted(d["counts"].keys())')" '["all", "check", "closed", "doing", "former"]' "mine counts 含 former"
+expect "$(call GET "/api/orders/mine?group=doing" "$ENG" | py "any(i['id']==$XID for i in d['items'])")" "False" "已退出的单不在 doing 里"
+# 15. 主管视角：转交记录与参与人
+D=$(call GET "/api/orders/$XID" "$SUP")
+expect "$(echo "$D" | py 'str(len(d["transfers"]))+"/"+",".join(t["statusText"] for t in d["transfers"])')" "2/已拒绝,已接手" "主管详情 transfers 2 条"
+expect "$(echo "$D" | py '",".join(p["user"]["name"]+":"+p["role"]+":"+str(p["exitText"]) for p in d["participants"])')" "李工:Lead:None,王工:Former:已转交" "participants：王工已退出（已转交，远程单无打卡也显示）"
+# 16. 主管撤销：李工转交给王工（待确认）→ 主管 cancel
+T3=$(call POST "/api/orders/$XID/transfers" "$LI" "{\"engineerId\":$WANGID,\"reason\":\"转回去\"}" | py 'd["pendingTransfer"]["id"]')
+expect "$(call GET "/api/orders/$XID" "$ENG" | py '",".join(d["actions"])+"/"+d["myRole"]')" "acceptTransfer,rejectTransfer/Former" "已退出的人被转交回来：只有确认 / 拒绝"
+expect "$(call GET "/api/orders/$XID" "$SUP" | py '"cancelTransfer" in d["actions"]')" "True" "主管 actions 含 cancelTransfer"
+D=$(call POST "/api/orders/$XID/transfers/$T3/cancel" "$SUP")
+expect "$(echo "$D" | py 'str(d["pendingTransfer"])+"/"+d["logs"][-1]["text"]+"/"+d["transfers"][-1]["text"]')" "None/赵主管 撤销转交（李工 → 王工）/李工 转交给 王工，已由 赵主管 撤销" "主管撤销转交"
+req POST "/api/orders/$XID/transfers/$T3/cancel" "$SALES"; expect "$(cat "$TMP/status")" "403" "销售撤回转交 → 403"
+# 主管改派：原负责人同样成为「已退出」（已改派）
+LIUID=$(call GET /api/admin/employees "$SUP" | py '[e["id"] for e in d if e["name"]=="刘工"][0]')
+call POST "/api/orders/$XID/assign" "$SUP" "{\"engineerId\":$LIUID}" > /dev/null
+expect "$(call GET "/api/orders/$XID" "$LI" | py 'd["myRole"]+"/"+d["myExitText"]+"/"+str(d["actions"])')" "Former/已改派/[]" "改派后原负责人：已退出（已改派）、只读"
+# 审查补充：待确认的接手人确认前只读——即使他以前（做协助人时）在本单上传过附件，也不能删除 / 改类别
+EXTRA="\"projectNo\":\"$PRJ-R\",\"devices\":[],\"satSigned\":true"
+BODY=$(V13_BODY "接手前只读冒烟客户" Remote "$EXTRA")
+RID=$(call POST /api/orders "$SALES" "$BODY" | py 'd["id"]')
+call POST "/api/orders/$RID/claim" "$ENG" > /dev/null
+call POST "/api/orders/$RID/assistants" "$SUP" "{\"engineerIds\":[$LIID]}" > /dev/null
+RF=$(upok "$LI" "$TMP/c.pdf" Attachment c.pdf "李工的记录.pdf" | py 'd["id"]')
+call POST "/api/orders/$RID/attachments" "$LI" "{\"attachments\":[{\"fileId\":$RF}]}" > /dev/null
+call POST "/api/orders/$RID/assistants" "$SUP" '{"engineerIds":[]}' > /dev/null
+req GET "/api/orders/$RID" "$LI"; expect "$(cat "$TMP/status")" "403" "被移除的协助人看不了工单（不变）"
+T4=$(call POST "/api/orders/$RID/transfers" "$ENG" "{\"engineerId\":$LIID,\"reason\":\"你熟悉这台\"}" | py 'd["pendingTransfer"]["id"]')
+expect "$(call GET "/api/orders/$RID" "$LI" | py '[str(a["canDelete"])+"/"+str(a["canChangeType"]) for a in d["attachments"] if a["id"]=='"$RF"'][0]+"/"+str(d["canAddAttachment"])')" "False/False/False" "接手人确认前：自己以前上传的附件也不可删、不可改类别"
+req POST "/api/orders/$RID/attachments/$RF/delete" "$LI"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "403/只有建单人、负责工程师、协助人或主管可以删除附件" "接手人确认前删除自己以前上传的附件 → 403"
+req POST "/api/orders/$RID/attachments/$RF/type" "$LI" '{"type":"Sat"}'
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "403/只有建单人、负责工程师、协助人或主管可以修改附件类别" "接手人确认前改自己以前上传的附件类别 → 403"
+D=$(call POST "/api/orders/$RID/transfers/$T4/accept" "$LI")
+expect "$(echo "$D" | py '[str(a["canDelete"])+"/"+str(a["canChangeType"]) for a in d["attachments"] if a["id"]=='"$RF"'][0]+"/"+d["assignee"]["name"]')" "True/True/李工" "确认接手后恢复上传人的附件权限"
+# 调整协助人进了写锁（与「确认接手」排队）之后，校验与文案不变：把现负责人设为协助人 → 400
+req POST "/api/orders/$RID/assistants" "$SUP" "{\"engineerIds\":[$LIID]}"
+expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "400/协助人不能是负责人" "把现负责人设为协助人 → 400"
+# 17. PC 新文件已随后端发布
+expect "$(curl -s -o /dev/null -w "%{http_code}" "$BASE/admin/js/views/orders-sat.js")" "200" "GET /admin/js/views/orders-sat.js → 200"
 
 echo
 echo "全部通过：$PASS 项"

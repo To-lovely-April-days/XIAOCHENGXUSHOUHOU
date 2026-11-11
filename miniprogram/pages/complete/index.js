@@ -65,7 +65,9 @@ Page({
       if (!canSubmit) {
         const nodes = (o.factory && o.factory.nodes) || [];
         const shippedBack = nodes.some((n) => n.node === 'ShippedBack' && n.recorded);
-        if (o.status === 'OnHold') blockText = '工单已暂停搁置，恢复后才能提交完工';
+        // v1.3：负责人有待确认的转交时不能提交完工（服务端同样拦截）
+        if (o.pendingTransfer && o.myRole === 'Lead') blockText = '本单有待确认的转交，请先撤回转交后再提交完工';
+        else if (o.status === 'OnHold') blockText = '工单已暂停搁置，恢复后才能提交完工';
         else if (o.status !== 'InProgress') blockText = '工单当前为「' + enums.label(enums.STATUS, o.status) + '」，仅「处理中」的工单可以提交完工';
         else if (o.myRole === 'Assistant') blockText = '你是本单协助人，完工由负责工程师提交';
         else if (o.serviceType === 'Factory' && o.myRole === 'Lead' && !shippedBack) blockText = '返厂工单请先记录「寄回客户」再提交完工';

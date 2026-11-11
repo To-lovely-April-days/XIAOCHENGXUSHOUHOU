@@ -1,12 +1,13 @@
 // 工单文件中心（#/files，v1.2）。数据：GET /api/admin/files（CHANGES-v1.2 §5），上传人下拉：GET /api/admin/employees。
 // 汇总所有工单名下的文件：附件、建单照片、完工照片、签字件、打卡照片、返厂照片。
-// 查询参数全部放在 hash 上：?keyword=&type=&source=&uploaderId=&orderId=&from=&to=&page=&id=（id = 打开的工单抽屉）
-// 行上的删除 / 切换受限只看服务端给的 canDelete / canToggleRestricted，这里不推导规则。
+// 查询参数全部放在 hash 上：?keyword=&type=&source=&attachmentType=&uploaderId=&orderId=&from=&to=&page=&id=（id = 打开的工单抽屉）
+// v1.3：attachmentType=Sat|RepairForm|Other 只看某一类附件（给了它就只返回附件行）；表格多一列「类别」；keyword 也匹配项目编号。
+// 行上的删除 / 切换受限 / 改类别只看服务端给的 canDelete / canToggleRestricted / canChangeType，这里不推导规则。
 import * as api from '../api.js';
 import { route, navigate, updateQuery } from '../router.js';
 import { toast, toastError, confirm, preview } from '../ui.js';
 import { fmtDateTime, fmtSize, fileBadge } from '../format.js';
-import { FILE_KIND, FILE_SOURCE, options } from '../enums.js';
+import { FILE_KIND, FILE_SOURCE, ATTACHMENT_TYPE, ATTACHMENT_TYPE_OPTIONS, options } from '../enums.js';
 import OrdersDrawer from './orders-drawer.js';
 
 const PAGE_SIZE = 30;
@@ -31,6 +32,7 @@ export default {
       keywordInput: '',
       type: '',
       source: '',
+      attachmentType: '',
       uploaderId: '',
       orderId: '',
       from: '',
@@ -48,8 +50,9 @@ export default {
       error: '',
       employees: [],
       orderNoHint: '', // 带 orderId 进入但列表为空时，另查到的工单号
-      busyId: 0, // 正在下载 / 删除 / 切换的文件 id
+      busyId: 0, // 正在下载 / 删除 / 切换 / 改类别的文件 id
       sources: options(FILE_SOURCE),
+      attTypes: ATTACHMENT_TYPE_OPTIONS, // 附件类别下拉（短标题）
     };
   },
   computed: {
@@ -58,7 +61,7 @@ export default {
     },
     sizeTotalText() { return fmtSize(this.totalSize) || '0 B'; },
     filtered() {
-      return !!(this.keyword || this.type || this.source || this.uploaderId || this.orderId || this.from || this.to);
+      return !!(this.keyword || this.type || this.source || this.attachmentType || this.uploaderId || this.orderId || this.from || this.to);
     },
     /** 筛选标签「工单 {orderNo}」 */
     orderChip() {
@@ -85,6 +88,11 @@ export default {
           previewTitle: media ? '预览' : '下载',
           sourceLabel: f.sourceLabel || (FILE_SOURCE[f.source] && FILE_SOURCE[f.source].label) || f.source || '',
           restricted: !!f.restricted,
+          // 附件类别：非附件行（打卡照片、完工照片…）没有类别，显示 —
+          attType: ATTACHMENT_TYPE[f.attachmentType] ? f.attachmentType : '',
+          attTypeShort: f.attachmentTypeShort || (ATTACHMENT_TYPE[f.attachmentType] && ATTACHMENT_TYPE[f.attachmentType].short) || '—',
+          attTypeTitle: f.attachmentTypeLabel || (ATTACHMENT_TYPE[f.attachmentType] && ATTACHMENT_TYPE[f.attachmentType].label) || null,
+          canChangeType: !!f.canChangeType && !!ATTACHMENT_TYPE[f.attachmentType],
           uploader: (f.uploader && f.uploader.name) || '—',
           timeText: fmtDateTime(f.createdAt),
           sizeText: fmtSize(f.size),
@@ -105,12 +113,13 @@ export default {
         const idChanged = (q.id || '') !== (o.id || '');
         this.selectedId = /^\d+$/.test(q.id || '') ? Number(q.id) : null;
         // 只是打开 / 关闭抽屉时不重新拉列表
-        const keys = ['keyword', 'type', 'source', 'uploaderId', 'orderId', 'from', 'to', 'page'];
+        const keys = ['keyword', 'type', 'source', 'attachmentType', 'uploaderId', 'orderId', 'from', 'to', 'page'];
         if (old && idChanged && keys.every(k => (q[k] || '') === (o[k] || ''))) return;
         this.keyword = (q.keyword || '').trim();
         this.keywordInput = this.keyword;
         this.type = TYPE_TABS.some(t => t.key === q.type) ? q.type : '';
         this.source = FILE_SOURCE[q.source] ? q.source : '';
+        this.attachmentType = ATTACHMENT_TYPE[q.attachmentType] ? q.attachmentType : '';
         this.uploaderId = /^\d+$/.test(q.uploaderId || '') ? q.uploaderId : '';
         const orderId = /^\d+$/.test(q.orderId || '') ? q.orderId : '';
         if (orderId !== this.orderId) this.orderNoHint = '';
@@ -140,6 +149,7 @@ export default {
           keyword: this.keyword || undefined,
           type: this.type || undefined,
           source: this.source || undefined,
+          attachmentType: this.attachmentType || undefined,
           uploaderId: this.uploaderId || undefined,
           orderId: this.orderId || undefined,
           from: this.from || undefined,
@@ -192,6 +202,7 @@ export default {
       this.setQuery({ keyword: kw || null });
     },
     onSource(e) { this.setQuery({ source: e.target.value || null }); },
+    onAttType(e) { this.setQuery({ attachmentType: e.target.value || null }); },
     onUploader(e) { this.setQuery({ uploaderId: e.target.value || null }); },
     onFrom(e) {
       const v = e.target.value;
@@ -255,6 +266,24 @@ export default {
         this.busyId = 0;
       }
     },
+    /** 改附件类别（下拉）：成功后刷新列表；失败还原选项 */
+    async changeType(r, e) {
+      const el = e.target;
+      const type = el.value;
+      if (type === r.attType) return;
+      if (this.busyId || !ATTACHMENT_TYPE[type]) { el.value = r.attType; return; }
+      this.busyId = r.f.id;
+      try {
+        await api.orders.setAttachmentType(r.f.orderId, r.f.id, type);
+        toast(`已归为「${ATTACHMENT_TYPE[type].short}」`, 'success');
+        this.afterRowChange(r);
+      } catch (err) {
+        el.value = r.attType;
+        this.rowFailed(err);
+      } finally {
+        this.busyId = 0;
+      }
+    },
     afterRowChange(r) {
       this.load();
       if (this.selectedId && this.selectedId === r.f.orderId) this.drawerRev += 1;
@@ -296,12 +325,16 @@ export default {
         </div>
       </div>
       <div class="files-filters">
-        <SearchBox v-model="keywordInput" placeholder="搜索文件名 / 工单号 / 客户" :width="240" @search="onSearch" />
-        <select class="select files-select" :value="source" aria-label="文件来源" @change="onSource">
+        <SearchBox v-model="keywordInput" placeholder="文件名 / 工单号 / 客户 / 项目编号" :width="248" @search="onSearch" />
+        <select class="select files-select att-filter-select" :value="source" aria-label="文件来源" @change="onSource">
           <option value="">全部来源</option>
           <option v-for="s in sources" :key="s.value" :value="s.value">{{ s.label }}</option>
         </select>
-        <select class="select files-select" :value="uploaderId" aria-label="上传人" @change="onUploader">
+        <select class="select files-select att-filter-select" :value="attachmentType" aria-label="附件类别" title="只看某一类附件" @change="onAttType">
+          <option value="">全部类别</option>
+          <option v-for="t in attTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
+        </select>
+        <select class="select files-select att-filter-select" :value="uploaderId" aria-label="上传人" @change="onUploader">
           <option value="">全部上传人</option>
           <option v-for="e in employees" :key="e.id" :value="String(e.id)">{{ e.name }}</option>
         </select>
@@ -318,11 +351,11 @@ export default {
       <div class="files-table-wrap" :class="{ 'files-busy': loading && loaded }">
         <table class="data-table files-table">
           <colgroup>
-            <col style="width: 60px"><col><col style="width: 104px"><col style="width: 190px">
-            <col style="width: 88px"><col style="width: 136px"><col style="width: 84px"><col style="width: 172px">
+            <col style="width: 60px"><col><col style="width: 100px"><col style="width: 94px"><col style="width: 156px">
+            <col style="width: 80px"><col style="width: 136px"><col style="width: 84px"><col style="width: 172px">
           </colgroup>
           <thead>
-            <tr><th>预览</th><th>文件名</th><th>来源</th><th>工单</th><th>上传人</th><th>上传时间</th><th class="text-right">大小</th><th>操作</th></tr>
+            <tr><th>预览</th><th>文件名</th><th>来源</th><th>类别</th><th>工单</th><th>上传人</th><th>上传时间</th><th class="text-right">大小</th><th>操作</th></tr>
           </thead>
           <tbody v-if="rows.length">
             <tr v-for="r in rows" :key="r.key" :class="{ selected: r.selected }">
@@ -333,12 +366,13 @@ export default {
                         :title="r.previewTitle + ' ' + r.name" :aria-label="r.previewTitle + ' ' + r.name" @click="openFile(r)">{{ r.badge.text }}</button>
               </td>
               <td>
-                <div class="files-name-line">
+                <div class="files-name-line att-name-wrap">
                   <button type="button" class="files-name ellipsis" :title="r.name" @click="openFile(r)">{{ r.name }}</button>
                   <Tag v-if="r.restricted" tone="warn">仅销售和主管可见</Tag>
                 </div>
               </td>
               <td class="nowrap">{{ r.sourceLabel }}</td>
+              <td class="nowrap" :class="{ 'text-faint': !r.attType }" :title="r.attTypeTitle">{{ r.attTypeShort }}</td>
               <td class="files-order">
                 <button type="button" class="files-order-link mono" :title="'查看工单 ' + r.f.orderNo" @click="openOrder(r)">{{ r.f.orderNo }}</button>
                 <span class="cell-sub" :title="r.f.customerName">{{ r.f.customerName || '—' }}</span>
@@ -351,6 +385,10 @@ export default {
                   <button type="button" class="btn-link att-link" :disabled="!!busyId" @click="download(r)">{{ r.busy ? '处理中…' : '下载' }}</button>
                   <button v-if="r.canDelete" type="button" class="btn-link att-link att-link-danger" :disabled="!!busyId" @click="remove(r)">删除</button>
                   <button v-if="r.canToggle" type="button" class="btn-link att-link files-toggle" :disabled="!!busyId" @click="toggle(r)">{{ r.toggleLabel }}</button>
+                  <select v-if="r.canChangeType" class="select att-type-select" aria-label="附件类别" title="修改附件类别"
+                          :value="r.attType" :disabled="!!busyId" @change="changeType(r, $event)">
+                    <option v-for="t in attTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
+                  </select>
                 </div>
               </td>
             </tr>

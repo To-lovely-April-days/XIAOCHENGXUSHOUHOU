@@ -99,7 +99,8 @@ public class AdminService
         var t = OrderService.ParseDate(to, "结束日期");
         var st = OrderService.ParseEnum<OrderStatus>(status, "状态");
         var q = _db.Orders.Include(o => o.Assignee).Include(o => o.Creator)
-            .Include(o => o.Assistants).ThenInclude(a => a.Engineer).AsQueryable();
+            .Include(o => o.Assistants).ThenInclude(a => a.Engineer)
+            .Include(o => o.Devices).AsQueryable();
         if (f != null) { var x = f.Value.ToDateTime(TimeOnly.MinValue); q = q.Where(o => o.CreatedAt >= x); }
         if (t != null) { var x = t.Value.AddDays(1).ToDateTime(TimeOnly.MinValue); q = q.Where(o => o.CreatedAt < x); }
         q = st == null ? q.Where(o => o.Status != OrderStatus.Voided) : q.Where(o => o.Status == st);
@@ -116,7 +117,9 @@ public class AdminService
             "项目编号", "工单号", "客户全称", "设备型号", "设备编号", "产品阶段", "故障描述", "故障发生时间", "报修人", "报修电话",
             "维修类型", "处理人", "处理时间(首次到场)", "解决措施", "进度状态", "是否收费", "服务价格", "现场工时(小时)",
             "验收结果(运行状况)", "客户签字(有/无)", "建单人", "建单时间",
-            "协助人", "人员工时", "暂停原因", "返厂进度", "寄回单号"
+            "协助人", "人员工时", "暂停原因", "返厂进度", "寄回单号",
+            // v1.3：只在末尾追加（第 17、18 列的数字格式按列号写死，不能在中间插列）
+            "设备台数", "SAT 完成时间", "发货时间"
         };
         using var wb = new XLWorkbook();
         var ws = wb.AddWorksheet("售后进度台账");
@@ -136,9 +139,13 @@ public class AdminService
             var records = factory.GetValueOrDefault(o.Id) ?? new();
             var back = records.FirstOrDefault(r => r.Node == FactoryNode.ShippedBack);
             var isFactory = o.ServiceType == ServiceType.Factory;
+            // v1.3 多设备：型号列 = 每台的 title，编号列与之一一对应（某台没填编号且总数 ≥ 2 时用「—」占位）
+            var devices = o.Devices.OrderBy(d => d.Seq).ThenBy(d => d.Id).ToList();
+            var deviceTitles = string.Join("；", devices.Select(DeviceRules.Title));
+            var deviceSns = string.Join("；", devices.Select(d => d.Sn.Length == 0 && devices.Count >= 2 ? "—" : d.Sn));
             object?[] values =
             {
-                o.ProjectNo ?? "", o.OrderNo, o.CustomerName, o.DeviceModel, o.DeviceSn, o.SatSigned ? "老产品" : "新产品",
+                o.ProjectNo ?? "", o.OrderNo, o.CustomerName, deviceTitles, deviceSns, o.SatSigned ? "老产品" : "新产品",
                 o.Symptom, o.FaultTime, o.ContactName, o.ContactPhone, EnumText.Service(o.ServiceType), o.Assignee?.Name ?? "",
                 handleTime == null ? "" : handleTime.Value.ToString("yyyy-MM-dd HH:mm"), o.Solution ?? "", EnumText.Status(o.Status),
                 !o.PriceSet ? "未定价" : o.Price > 0 ? "是" : "否（保内）", o.PriceSet ? (object)(double)o.Price : "未定价", TimeText.Hours1(minutes),
@@ -148,7 +155,8 @@ public class AdminService
                 personHours,
                 o.Status == OrderStatus.OnHold ? EnumText.HoldText(o.HoldReasonType, o.HoldReason) : "",
                 isFactory ? EnumText.FactoryText(records.Select(r => r.Node)) : "",
-                isFactory && back != null ? $"{back.Courier} {back.TrackingNo}" : ""
+                isFactory && back != null ? $"{back.Courier} {back.TrackingNo}" : "",
+                devices.Count, o.SatSigned ? o.SatDate : "", o.SatSigned ? "" : o.SatDate
             };
             WriteRow(ws, row++, values);
         }
@@ -274,6 +282,9 @@ public class AdminService
         var v = await ValidateEmployee(r, id);
         if (id == user.Id && (r.Enabled == false || v.Role != Role.Supervisor))
             throw BizException.Conflict("不能停用自己或修改自己的角色");
+        // v1.3：校验之后的读写包在事务里（停用 / 改角色时要连带失效待确认的转交）；没有待确认转交时行为与以前完全一样
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        var wasActiveEngineer = e.Enabled && e.Role == Role.Engineer;
         var revoke = e.Phone != v.Phone || e.Role != v.Role || (r.Enabled == false && e.Enabled);
         if (e.Phone != v.Phone) e.OpenId = null; // 手机号变更需重新绑定
         if (revoke) e.TokenVersion++;             // 旧登录令牌失效
@@ -282,8 +293,32 @@ public class AdminService
         e.Role = v.Role;
         e.Department = v.Dept;
         if (r.Enabled != null) e.Enabled = r.Enabled.Value;
+        if (wasActiveEngineer && !(e.Enabled && e.Role == Role.Engineer))
+            await ExpireTransfersTo(e, user, !e.Enabled ? "接手人账号已停用" : "接手人已不是工程师");
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
         return ToDto(e);
+    }
+
+    /// <summary>
+    /// v1.3：接手人被停用 / 改为非工程师角色时，以他为接手人的所有待确认转交自动失效（CHANGES-v1.3 §5.6）：
+    /// 清空对应工单的 PendingTransferToId 并各写一条状态记录（操作人 = 执行修改的主管）。由调用方保存与提交。
+    /// </summary>
+    private async Task ExpireTransfersTo(Employee to, CurrentUser actor, string why)
+    {
+        var pending = await _db.OrderTransfers.Include(t => t.From).Include(t => t.Order)
+            .Where(t => t.ToEngineerId == to.Id && t.Status == TransferStatus.Pending).OrderBy(t => t.Id).ToListAsync();
+        var now = _clock.Now;
+        foreach (var t in pending.Where(t => t.Order != null))
+        {
+            TransferRules.End(t.Order!, t, TransferStatus.Expired, null, now, why);
+            _db.StatusLogs.Add(new StatusLog
+            {
+                OrderId = t.OrderId, ActorId = actor.Id, Time = now, ToStatus = t.Order!.Status, Kind = LogKind.Assist,
+                // 接手人姓名取修改后的姓名
+                Text = TransferRules.ExpiredLogText(t.From?.Name, to.Name, why)
+            });
+        }
     }
 
     public async Task<EmployeeDto> Unbind(int id)

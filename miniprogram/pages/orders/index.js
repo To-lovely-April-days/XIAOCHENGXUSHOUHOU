@@ -35,7 +35,7 @@ function toHallItem(o) {
     id: o.id,
     customerName: o.customerName,
     urgency: o.urgency,
-    device: [o.deviceModel, o.deviceSn].filter(Boolean).join(' · '),
+    device: o.deviceText || '',
     fault: o.symptom ? '“' + o.symptom + '”' : '',
     meta: [typeLabel(o), o.region || o.city, format.timeAgo(o.createdAt)].filter(Boolean).join(' · ')
   };
@@ -64,8 +64,9 @@ function toListItem(o, role) {
     priceText: format.formatPrice(o.price, true, o.priceSet),
     unpriced: unpriced,
     priceFree: !unpriced && Number(o.price) === 0,
-    device: [o.orderNo, o.deviceModel, o.symptom].filter(Boolean).join(' · '),
+    device: [o.orderNo, o.deviceText, o.symptom].filter(Boolean).join(' · '),
     meta: metaOf(o),
+    transferPending: !!o.pendingTransfer, // v1.3：本单有待确认的转交
     hold: o.status === 'OnHold',
     assistText: assistCount ? '+' + assistCount + ' 协助' : '',
     pending: role === 'Supervisor' && (o.pendingRequestCount || 0) > 0

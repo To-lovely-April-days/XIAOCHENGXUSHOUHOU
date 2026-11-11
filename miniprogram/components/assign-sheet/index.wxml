@@ -17,7 +17,7 @@
       <text class="as-legend-count">已选 {{assistCount}}/5</text>
     </view>
 
-    <scroll-view scroll-y class="as-list {{kind === 'request' ? 'short' : ''}}" aria-label="选择工程师">
+    <scroll-view scroll-y class="as-list {{kind === 'request' || kind === 'transfer' ? 'short' : ''}}" aria-label="选择工程师">
       <view wx:if="{{loading}}" class="as-state">加载中…</view>
       <view wx:elif="{{error}}" class="as-state">
         <text>{{error}}</text>
@@ -40,8 +40,9 @@
       </view>
     </scroll-view>
 
-    <input wx:if="{{kind === 'request'}}" class="as-note-input" value="{{note}}" bindinput="onNote" maxlength="200" cursor-spacing="140"
-           placeholder="说明（选填），如：需要两人抬设备" placeholder-class="placeholder" catchtouchmove="noop" />
+    <!-- request：说明（选填）；transfer（v1.3）：转交原因（必填） -->
+    <input wx:if="{{kind === 'request' || kind === 'transfer'}}" class="as-note-input" value="{{note}}" bindinput="onNote" maxlength="200" cursor-spacing="140"
+           placeholder="{{notePlaceholder}}" placeholder-class="placeholder" catchtouchmove="noop" />
 
     <view class="as-note" catchtouchmove="noop">{{footNote}}</view>
     <view catchtouchmove="noop" class="as-confirm {{canConfirm && !submitting ? '' : 'disabled'}}" hover-class="{{canConfirm ? 'as-hover' : 'none'}}" bindtap="onConfirm">{{confirmLabel}}</view>

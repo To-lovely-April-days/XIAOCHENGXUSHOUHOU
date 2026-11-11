@@ -15,3 +15,8 @@
 
 .state { padding: 80rpx 0; text-align: center; font-size: 28rpx; color: var(--text-3); }
 .tip { margin: 8rpx 8rpx 0; padding-top: 12rpx; font-size: 26rpx; line-height: 40rpx; color: var(--text-2); }
+
+/* v1.3 筛选横向滚动：贴边滚动（同 pages/orders） */
+.chips-bleed { margin: 0 -32rpx; width: calc(100% + 64rpx); white-space: nowrap; }
+.chips-track { display: inline-flex; padding: 24rpx 0 24rpx 32rpx; }
+.chips-end { display: inline-block; width: 16rpx; flex-shrink: 0; }

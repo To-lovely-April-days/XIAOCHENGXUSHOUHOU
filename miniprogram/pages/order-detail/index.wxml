@@ -18,7 +18,7 @@
         <text class="od-no num-font">{{order.orderNo}}</text>
       </view>
       <view class="od-customer">{{order.customerName}}</view>
-      <view class="od-device">{{order.deviceModel}}<text wx:if="{{order.deviceSn}}"> · {{order.deviceSn}}</text></view>
+      <view class="od-device">{{order.deviceText}}</view>
 
       <!-- 5 段进度（暂停时显示灰色暂停标记与原因） -->
       <view class="od-pb"><progress-bar order="{{order}}" labels="{{true}}" /></view>
@@ -70,6 +70,9 @@
       </view>
     </view>
 
+    <!-- 只读提示（v1.3：当前用户已退出本单——已转交 / 已改派） -->
+    <view wx:if="{{order.readOnlyText}}" class="od-readonly">{{order.readOnlyText}}</view>
+
     <!-- 异常警示 -->
     <view wx:for="{{issues}}" wx:key="key" class="od-alert {{item.tone}}">
       <view class="row od-alert-head">
@@ -98,6 +101,25 @@
         </view>
       </block>
     </view>
+
+    <!-- 转交待确认（v1.3；按钮只看 actions：接手人「确认接手 / 拒绝」，发起人「撤回转交」，主管「撤销转交」） -->
+    <view wx:if="{{transferCard}}" class="od-req">
+      <view class="row-between">
+        <text class="od-req-title">转交待确认</text>
+        <text class="od-req-time num-font">{{transferCard.time}}</text>
+      </view>
+      <view class="od-req-text">{{transferCard.text}}</view>
+      <view class="od-req-reason">原因：{{transferCard.reason}}</view>
+      <view wx:if="{{transferCard.canAccept || transferCard.canReject}}" class="row od-req-actions">
+        <view wx:if="{{transferCard.canAccept}}" class="od-req-btn primary {{busy ? 'disabled' : ''}}" hover-class="btn-hover" bindtap="onAcceptTransfer" aria-role="button">确认接手</view>
+        <view wx:if="{{transferCard.canReject}}" class="od-req-btn" hover-class="btn-hover" bindtap="onRejectTransfer" aria-role="button">拒绝</view>
+      </view>
+      <view wx:elif="{{transferCard.canCancel}}" class="row od-req-actions">
+        <view class="flex1"></view>
+        <view class="od-req-btn small" hover-class="btn-hover" bindtap="onCancelTransfer" aria-role="button">{{transferCard.cancelLabel}}</view>
+      </view>
+    </view>
+    <view wx:elif="{{transferRejected}}" class="od-req-rejected">{{transferRejected}}</view>
 
     <!-- 待审批的申请（暂停 / 协助人） -->
     <view wx:for="{{requests}}" wx:key="id" class="od-req">
@@ -229,7 +251,38 @@
           </view>
         </view>
 
-        <!-- 处理人员（负责人 + 协助人，每人工时） -->
+        <!-- 设备资料（v1.3：项目编号 / 多台设备 / SAT 信息；「修改 SAT」按 canEditSat） -->
+        <view wx:if="{{deviceCard}}" class="od-card mt-card">
+          <view class="row-between od-h3">
+            <text>设备资料</text>
+            <text wx:if="{{order.canEditSat}}" class="od-link" bindtap="openSatSheet" aria-role="button">修改 SAT</text>
+          </view>
+          <view class="od-kv first">
+            <text class="od-kv-label">项目编号</text>
+            <text class="od-kv-value">{{deviceCard.projectNo}}</text>
+          </view>
+          <block wx:for="{{deviceCard.devices}}" wx:for-item="dev" wx:key="key">
+            <view class="od-dev-title">{{dev.title}}</view>
+            <view wx:for="{{dev.rows}}" wx:for-item="r" wx:key="label" class="od-kv od-dev-kv {{r.last ? 'last' : ''}}">
+              <text class="od-kv-label">{{r.label}}</text>
+              <text class="od-kv-value">{{r.value}}</text>
+            </view>
+          </block>
+          <view wx:if="{{!deviceCard.devices.length}}" class="od-kv">
+            <text class="od-kv-label">设备</text>
+            <text class="od-kv-value muted">未填设备</text>
+          </view>
+          <view class="od-kv">
+            <text class="od-kv-label">是否已完成 SAT</text>
+            <text class="od-kv-value">{{deviceCard.satText}}</text>
+          </view>
+          <view class="od-kv">
+            <text class="od-kv-label">{{deviceCard.satDateLabel}}</text>
+            <text class="od-kv-value {{deviceCard.satDateEmpty ? 'muted' : 'num-font'}}">{{deviceCard.satDate}}</text>
+          </view>
+        </view>
+
+        <!-- 处理人员（负责人 + 协助人 + 已退出，每人工时） -->
         <view wx:if="{{participants.length}}" class="od-card mt-card">
           <view class="row-between od-h3">
             <text>处理人员</text>
@@ -241,6 +294,7 @@
             <view class="flex1 row od-person-main">
               <text class="od-person-name ellipsis">{{item.name}}</text>
               <text class="tag tag-sm od-role {{item.roleClass}}">{{item.roleLabel}}</text>
+              <text wx:if="{{item.exitText}}" class="od-person-exit">{{item.exitText}}</text>
               <text wx:if="{{item.onSite}}" class="od-person-flag">现场中</text>
               <text wx:if="{{item.missing}}" class="od-person-flag">缺卡</text>
             </view>
@@ -304,27 +358,30 @@
         </view>
       </block>
 
-      <!-- 附件资料（v1.2：附件 + 流程资料） -->
+      <!-- 附件资料（v1.2：附件 + 流程资料；v1.3：附件按三类分组，空组也显示标题和「暂无」；「添加」只看 canAddAttachment，已闭环也可以） -->
       <block wx:if="{{tab === 'files'}}">
         <view class="od-card od-atts">
-          <view class="row-between od-h3">
-            <text>附件（{{attachments.length}}）</text>
-            <text wx:if="{{canAddAttachment}}" class="od-link" bindtap="openAttachSheet" aria-role="button">添加</text>
-          </view>
-          <view wx:for="{{attachments}}" wx:key="id" class="od-att {{index === 0 ? 'first' : ''}}" hover-class="od-file-hover"
-                data-id="{{item.id}}" bindtap="onAttachmentTap" aria-role="button" aria-label="打开附件 {{item.name}}">
-            <view class="od-att-badge" style="background: {{item.badgeColor}};">{{item.badgeText}}</view>
-            <view class="flex1">
-              <view class="od-att-name ellipsis">{{item.name}}</view>
-              <view class="od-att-sub num-font ellipsis">{{item.sub}}</view>
-              <view wx:if="{{item.restricted}}" class="od-att-tags"><text class="tag tag-sm tag-amber">仅销售和主管可见</text></view>
+          <view class="od-h3">附件（{{attachTotal}}）</view>
+          <block wx:for="{{attachGroups}}" wx:for-item="grp" wx:for-index="gi" wx:key="type">
+            <view class="od-att-group {{gi === 0 ? 'first' : ''}}">
+              <text class="flex1 od-att-group-title">{{grp.label}}（{{grp.count}}）</text>
+              <text wx:if="{{canAddAttachment}}" class="od-link" data-att-type="{{grp.type}}" bindtap="openAttachSheet" aria-role="button" aria-label="添加{{grp.label}}">添加</text>
             </view>
-            <view wx:if="{{item.hasMenu}}" class="od-att-more" hover-class="btn-hover" hover-stop-propagation data-id="{{item.id}}" catchtap="onAttachmentMore"
-                  aria-role="button" aria-label="更多操作">
-              <ui-icon name="more" color="#6E6E73" size="22" stroke="3" />
+            <view wx:for="{{grp.items}}" wx:key="id" class="od-att {{item.first ? 'first' : ''}}" hover-class="od-file-hover"
+                  data-id="{{item.id}}" bindtap="onAttachmentTap" aria-role="button" aria-label="打开附件 {{item.name}}">
+              <view class="od-att-badge" style="background: {{item.badgeColor}};">{{item.badgeText}}</view>
+              <view class="flex1">
+                <view class="od-att-name ellipsis">{{item.name}}</view>
+                <view class="od-att-sub num-font ellipsis">{{item.sub}}</view>
+                <view wx:if="{{item.restricted}}" class="od-att-tags"><text class="tag tag-sm tag-amber">仅销售和主管可见</text></view>
+              </view>
+              <view wx:if="{{item.hasMenu}}" class="od-att-more" hover-class="btn-hover" hover-stop-propagation data-id="{{item.id}}" catchtap="onAttachmentMore"
+                    aria-role="button" aria-label="更多操作">
+                <ui-icon name="more" color="#6E6E73" size="22" stroke="3" />
+              </view>
             </view>
-          </view>
-          <view wx:if="{{!attachments.length}}" class="od-empty-line muted">暂无附件</view>
+            <view wx:if="{{!grp.count}}" class="od-att-none">暂无</view>
+          </block>
         </view>
 
         <view class="od-sub-title">流程资料</view>
@@ -351,7 +408,7 @@
   <view wx:for="{{buttons}}" wx:key="key" class="od-btn {{item.kind}} {{item.wide ? 'wide' : ''}}" hover-class="{{item.disabled ? 'none' : 'btn-hover'}}" data-key="{{item.key}}" bindtap="onAction" aria-role="button" aria-disabled="{{item.disabled}}">{{item.label}}</view>
 </view>
 
-<!-- 指派 / 改派 / 调整协助人 / 申请协助人 -->
+<!-- 指派 / 改派 / 调整协助人 / 申请协助人 / 转交（v1.3，mode = transfer） -->
 <assign-sheet show="{{sheetShow}}" order="{{order}}" mode="{{sheetMode}}" bind:done="onAssigned" bind:close="onSheetClose" />
 
 <!-- 暂停搁置（主管）/ 申请暂停（负责工程师） -->
@@ -415,6 +472,12 @@
         <text class="od-appt-title">添加附件</text>
         <text class="muted od-appt-cancel" bindtap="closeAttachSheet">取消</text>
       </view>
+      <!-- 类别（v1.3）：本次添加的附件整批归入所选类别。用 data-att-type，下面两个选择按钮的 data-type 是 media | chat -->
+      <view class="od-sheet-label od-att-type-label">类别</view>
+      <view class="od-reasons" aria-role="radiogroup">
+        <view wx:for="{{attachTypes}}" wx:key="value" class="chip od-reason {{attachSheet.type === item.value ? 'active' : ''}}"
+              data-att-type="{{item.value}}" bindtap="onAttachType" aria-role="radio" aria-checked="{{attachSheet.type === item.value}}">{{item.short}}</view>
+      </view>
       <view wx:if="{{attachSheet.canRestrict}}" class="row od-att-switch">
         <view class="flex1">
           <view class="od-att-switch-title">仅销售和主管可见</view>
@@ -449,6 +512,36 @@
             hover-class="{{attachSheet.uploading || busy ? 'none' : 'btn-hover'}}" bindtap="saveAttachments" aria-role="button"
             aria-disabled="{{attachSheet.uploading || busy}}">{{attachSheet.uploading ? '上传中…' : '确定添加（' + attachSheet.doneCount + '）'}}</view>
     </view>
+  </view>
+</block>
+
+<!-- 修改 SAT 信息（v1.3） -->
+<block wx:if="{{satSheet.show}}">
+  <view class="mask" bindtap="closeSatSheet" catchtouchmove="noop"></view>
+  <view class="sheet od-appt" catchtouchmove="noop" aria-role="dialog" aria-label="修改 SAT 信息">
+    <view class="sheet-handle"></view>
+    <view class="row-between od-appt-head">
+      <text class="od-appt-title">修改 SAT 信息</text>
+      <text class="muted od-appt-cancel" bindtap="closeSatSheet">取消</text>
+    </view>
+    <view class="od-appt-sub muted">接单时拿不到的时间可以之后补填。</view>
+    <view class="od-sheet-label">是否已完成 SAT</view>
+    <view class="od-reasons" aria-role="radiogroup">
+      <view class="chip od-reason {{satSheet.satSigned ? 'active' : ''}}" data-v="1" bindtap="onSatChoose" aria-role="radio" aria-checked="{{satSheet.satSigned}}">已完成</view>
+      <view class="chip od-reason {{satSheet.satSigned ? '' : 'active'}}" data-v="0" bindtap="onSatChoose" aria-role="radio" aria-checked="{{!satSheet.satSigned}}">未完成</view>
+    </view>
+    <view class="form-item od-sat-row">
+      <picker class="flex1" mode="date" fields="day" value="{{satSheet.satDate || satSheet.pickerValue}}" bindchange="onSatDate">
+        <view class="row od-sat-pick">
+          <text class="od-sat-label">{{satSheet.label}}</text>
+          <text class="flex1 od-sat-value num-font {{satSheet.satDate ? '' : 'placeholder'}}">{{satSheet.satDate || '选填'}}</text>
+          <ui-icon wx:if="{{!satSheet.satDate}}" name="right" color="#AEAEB2" size="18" stroke="2" />
+        </view>
+      </picker>
+      <text wx:if="{{satSheet.satDate}}" class="od-sat-clear" catchtap="onSatClear" aria-role="button">清除</text>
+    </view>
+    <view wx:if="{{satSheet.legacy}}" class="od-sat-legacy">原记录：{{satSheet.legacy}}</view>
+    <view class="btn-primary od-appt-btn {{busy ? 'btn-disabled' : ''}}" hover-class="btn-hover" bindtap="saveSat">保存</view>
   </view>
 </block>
 

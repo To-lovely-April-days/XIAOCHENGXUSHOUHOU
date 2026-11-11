@@ -1,13 +1,17 @@
 <nav-bar title="我的工单" />
 <view class="page safe-bottom">
-  <view class="desc">本人负责或协助的工单</view>
+  <view class="desc">本人负责、协助或已转交的工单</view>
 
-  <view class="chips" aria-role="tablist" aria-label="筛选">
-    <view wx:for="{{filters}}" wx:key="key" class="chip {{filter === item.key ? 'active' : ''}}"
-          data-key="{{item.key}}" bindtap="onFilter" aria-role="tab" aria-selected="{{filter === item.key}}">
-      {{item.label}}<text class="chip-count">{{item.count}}</text>
+  <!-- v1.3 起有 5 个分组，小屏放不下：横向滚动（写法同「全部工单」的状态筛选） -->
+  <scroll-view scroll-x enhanced show-scrollbar="{{false}}" class="chips-bleed" aria-label="筛选">
+    <view class="chips-track">
+      <view wx:for="{{filters}}" wx:key="key" class="chip {{filter === item.key ? 'active' : ''}}"
+            data-key="{{item.key}}" bindtap="onFilter" aria-role="tab" aria-selected="{{filter === item.key}}">
+        {{item.label}}<text class="chip-count">{{item.count}}</text>
+      </view>
+      <view class="chips-end"></view>
     </view>
-  </view>
+  </scroll-view>
 
   <view wx:if="{{!ready}}" class="state">加载中…</view>
   <empty wx:elif="{{error}}" text="{{error}}">
@@ -20,6 +24,8 @@
       <view class="row gap8">
         <text class="customer ellipsis">{{item.customerName}}</text>
         <text wx:if="{{item.assist}}" class="tag tag-sm assist-tag">协助</text>
+        <text wx:if="{{item.exitText}}" class="tag tag-sm assist-tag">{{item.exitText}}</text>
+        <text wx:if="{{item.transferPending}}" class="tag tag-sm assist-tag">转交待确认</text>
       </view>
       <view class="device ellipsis">{{item.device}}</view>
       <view class="row gap8 foot">

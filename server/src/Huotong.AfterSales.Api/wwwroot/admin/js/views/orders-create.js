@@ -1,24 +1,44 @@
 // 新建工单弹窗：字段按 API.md POST /api/orders（v1.1 起建单不填价格，建单后在详情里定价）。PC 端没有地图选点，手工填写地址与经纬度（现场单必填）。
-// v1.2：附件（照片 / 视频 / 文件）用 attachments-upload.js 先 POST /api/files（category=Attachment）上传，最多 20 个，提交时带 attachments: [{ fileId, restricted }]。
+// v1.2：附件（照片 / 视频 / 文件）用 attachments-upload.js 先 POST /api/files（category=Attachment）上传，提交时带 attachments。
+// v1.3（CHANGES-v1.3 §10.4）：
+//   「设备资料」区固定为 *项目编号 → 设备（可多台，选填）→ *是否已完成 SAT → 时间（选填，标签随 SAT 选择变化）；
+//   提交 projectNo / devices: [{ name, sn, model }]（过滤空行）/ satSigned / satDate，不再传 deviceModel / deviceSn；
+//   附件按三类分三个上传区，三类合计最多 50 个，提交 attachments: [{ fileId, restricted, type }]。
 import * as api from '../api.js';
 import { confirm } from '../ui.js';
-import { ORDER_SOURCE, PROBLEM_TYPE, URGENCY, SERVICE_TYPE, options } from '../enums.js';
+import { ORDER_SOURCE, PROBLEM_TYPE, URGENCY, SERVICE_TYPE, ATTACHMENT_TYPE, options } from '../enums.js';
 import { toApiDate, parseTime } from '../format.js';
-import AttachmentsUpload, { MAX_COUNT, attUploading, attHasError, attDone } from './attachments-upload.js';
+import AttachmentsUpload, { MAX_COUNT, attUploading, attHasError, attDone, attUsed } from './attachments-upload.js';
 
 const PERIODS = ['凌晨', '上午', '中午', '下午', '晚上'];
 const PHONE_RE = /^[0-9-]{7,20}$/;
 const PICKER_URL = 'https://lbs.qq.com/getPoint/';
+/** 设备最多几台（与服务端 DeviceRules.Max 一致） */
+const MAX_DEVICES = 20;
+const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+/** 附件类别，顺序即展示顺序 */
+const ATT_TYPES = Object.keys(ATTACHMENT_TYPE);
+
+let devSeq = 0;
+/** 一台空设备；k 只用于 v-for 的 key，不提交 */
+function emptyDevice() { return { k: ++devSeq, name: '', sn: '', model: '' }; }
 
 function emptyForm() {
   return {
     source: '', problemType: '', urgency: 'Normal', serviceType: 'Onsite',
     customerName: '', contactName: '', contactPhone: '',
     address: '', latitude: '', longitude: '',
-    deviceModel: '', deviceSn: '', satDate: '', satSigned: null, projectNo: '',
+    projectNo: '', devices: [emptyDevice()], satSigned: null, satDate: '',
     faultDate: toApiDate(new Date()), faultPeriod: '',
     symptom: '', customerTried: '', siteEnvironment: '', customerRequest: '',
   };
+}
+
+/** 三类附件各自的条目列表 */
+function emptyAtts() {
+  const o = {};
+  ATT_TYPES.forEach(t => { o[t] = []; });
+  return o;
 }
 
 const trim = (v) => (v === null || v === undefined ? '' : String(v).trim());
@@ -31,7 +51,7 @@ export default {
     return {
       f: emptyForm(),
       errors: {},
-      atts: [], // 附件条目，结构见 attachments-upload.js
+      atts: emptyAtts(), // 附件条目，按类别分三组：{ Sat: [], RepairForm: [], Other: [] }，条目结构见 attachments-upload.js
       saving: false,
       submitError: '',
       opts: {
@@ -43,6 +63,7 @@ export default {
       periods: PERIODS,
       pickerUrl: PICKER_URL,
       maxAtts: MAX_COUNT,
+      maxDevices: MAX_DEVICES,
     };
   },
   computed: {
@@ -52,10 +73,35 @@ export default {
       if (!d || !this.f.faultPeriod) return '';
       return `${d.getMonth() + 1}月${d.getDate()}日 ${this.f.faultPeriod}`;
     },
-    uploading() { return attUploading(this.atts); },
+    /** 时间栏的标签：随「是否已完成 SAT」变化 */
+    satDateLabel() {
+      if (this.f.satSigned === true) return 'SAT 完成时间';
+      if (this.f.satSigned === false) return '发货时间';
+      return 'SAT 完成时间 / 发货时间';
+    },
+    canAddDevice() { return this.f.devices.length < MAX_DEVICES; },
+    /** 三类附件合在一起（提交、上传中 / 失败的判断都看它） */
+    allAtts() { return ATT_TYPES.reduce((all, t) => all.concat(this.atts[t] || []), []); },
+    /** 三个上传区：每个区的名额 = 50 − 另外两个区已选的数量 */
+    attZones() {
+      const used = {};
+      ATT_TYPES.forEach(t => { used[t] = attUsed(this.atts[t]); });
+      const total = ATT_TYPES.reduce((n, t) => n + used[t], 0);
+      return ATT_TYPES.map(t => ({
+        type: t,
+        label: ATTACHMENT_TYPE[t].label,
+        items: this.atts[t],
+        limit: Math.max(0, MAX_COUNT - (total - used[t])),
+      }));
+    },
+    uploading() { return attUploading(this.allAtts); },
     dirty() {
       const e = emptyForm();
-      return this.atts.length > 0 || Object.keys(e).some(k => k !== 'faultDate' && this.f[k] !== e[k]);
+      const f = this.f;
+      if (this.allAtts.length > 0) return true;
+      // 设备：任一行任一项非空即为已填写
+      if ((f.devices || []).some(d => trim(d.name) || trim(d.sn) || trim(d.model))) return true;
+      return Object.keys(e).some(k => k !== 'faultDate' && k !== 'devices' && f[k] !== e[k]);
     },
   },
   methods: {
@@ -73,8 +119,32 @@ export default {
       this.clearErr('latitude');
     },
 
+    // ------------------------------------------------ 设备资料
+    addDevice() {
+      if (!this.canAddDevice) return;
+      this.f.devices.push(emptyDevice());
+      // 光标移到新加的那一行（弹窗经 Teleport 渲染，直接按类名找）
+      this.$nextTick(() => {
+        const rows = document.querySelectorAll('.orders-create .dev-table tbody tr');
+        const input = rows.length ? rows[rows.length - 1].querySelector('input') : null;
+        if (input) input.focus();
+      });
+    },
+    /** 删除一台设备；只剩一行时 = 清空该行 */
+    removeDevice(i) {
+      const list = this.f.devices;
+      if (list.length <= 1) { this.f.devices = [emptyDevice()]; return; }
+      list.splice(i, 1);
+    },
+    /** 选择是否已完成 SAT；在「已完成 / 未完成」之间切换时清空已填的时间（两个时间含义不同）。第一次选择不清空：先填了时间再选的不用重填 */
+    setSat(v) {
+      const prev = this.f.satSigned;
+      if ((prev === true || prev === false) && prev !== v) { this.f.satDate = ''; this.clearErr('satDate'); }
+      this.set('satSigned', v);
+    },
+
     // ------------------------------------------------ 附件
-    onAtts(list) { this.atts = list; this.clearErr('attachments'); },
+    onAtts(type, list) { this.atts[type] = list; this.clearErr('attachments'); },
 
     // ------------------------------------------------ 校验 / 提交
     validate() {
@@ -99,16 +169,16 @@ export default {
         if (lng === '') e.longitude = this.onsite ? '现场工单必须填写经度' : '请同时填写经度';
         else if (!isFinite(Number(lng)) || Number(lng) < -180 || Number(lng) > 180) e.longitude = '经度应在 -180 ~ 180 之间';
       }
-      req('deviceModel', '请填写设备型号');
-      req('deviceSn', '请填写设备编号');
-      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(trim(f.satDate))) e.satDate = '请选择购买/SAT 时间（年月）';
-      if (f.satSigned !== true && f.satSigned !== false) e.satSigned = '请选择 SAT 是否已签字';
+      req('projectNo', '请填写项目编号');
+      // 设备、时间都是选填；satSigned 是布尔值，「未完成」（false）也算已选
+      if (f.satSigned !== true && f.satSigned !== false) e.satSigned = '请选择是否已完成 SAT';
+      if (trim(f.satDate) && !DATE_RE.test(trim(f.satDate))) e.satDate = (f.satSigned === false ? '发货时间' : 'SAT 完成时间') + '格式应为 yyyy-MM-dd';
       if (!f.faultDate) e.faultTime = '请选择发生日期';
       else if (!f.faultPeriod) e.faultTime = '请选择发生时段';
       req('symptom', '请按客户原话填写故障现象/报错');
       req('customerTried', '请填写客户已尝试的操作');
       req('siteEnvironment', '请填写现场环境条件');
-      if (attHasError(this.atts)) e.attachments = '有附件未上传成功，请重试或移除';
+      if (attHasError(this.allAtts)) e.attachments = '有附件未上传成功，请重试或移除';
       this.errors = e;
       return Object.keys(e).length === 0;
     },
@@ -123,12 +193,15 @@ export default {
         contactPhone: trim(f.contactPhone).replace(/\s+/g, ''),
         address: trim(f.address),
         latitude: lat === '' ? null : Number(lat), longitude: lng === '' ? null : Number(lng),
-        deviceModel: trim(f.deviceModel), deviceSn: trim(f.deviceSn),
-        satDate: trim(f.satDate), satSigned: f.satSigned, projectNo: opt(f.projectNo),
+        projectNo: trim(f.projectNo),
+        // 整行不填的设备直接忽略；一台都没有时传 []（与旧客户端「不传 devices」含义不同）
+        devices: (f.devices || []).map(d => ({ name: trim(d.name), sn: trim(d.sn), model: trim(d.model) }))
+          .filter(d => d.name || d.sn || d.model),
+        satSigned: f.satSigned, satDate: trim(f.satDate),
         faultTime: this.faultTimeText,
         symptom: trim(f.symptom), customerTried: trim(f.customerTried), siteEnvironment: trim(f.siteEnvironment),
         customerRequest: opt(f.customerRequest),
-        attachments: attDone(this.atts),
+        attachments: attDone(this.allAtts),
       };
     },
     async submit() {
@@ -205,27 +278,42 @@ export default {
           <a :href="pickerUrl" target="_blank" rel="noopener noreferrer">lbs.qq.com/getPoint</a>（GCJ-02 坐标）</span>
       </div>
 
-      <div class="form-section-title">设备</div>
-      <label class="field"><span class="field-label">设备型号<span class="req">*</span></span>
-        <input class="input" :class="{ invalid: errors.deviceModel }" v-model="f.deviceModel" maxlength="100"
-               placeholder="如 高压反应釜 HTR-500" @input="clearErr('deviceModel')">
-        <span v-if="errors.deviceModel" class="field-error">{{ errors.deviceModel }}</span></label>
-      <label class="field"><span class="field-label">设备编号<span class="req">*</span></span>
-        <input class="input mono" :class="{ invalid: errors.deviceSn }" v-model="f.deviceSn" maxlength="100" @input="clearErr('deviceSn')">
-        <span v-if="errors.deviceSn" class="field-error">{{ errors.deviceSn }}</span></label>
-      <label class="field"><span class="field-label">购买/SAT 时间<span class="req">*</span></span>
-        <input class="input" type="month" :class="{ invalid: errors.satDate }" v-model="f.satDate" @input="clearErr('satDate')">
-        <span v-if="errors.satDate" class="field-error">{{ errors.satDate }}</span></label>
-      <div class="field"><span class="field-label">SAT 是否已签字<span class="req">*</span></span>
-        <div class="radio-group" role="radiogroup" aria-label="SAT 是否已签字">
+      <div class="form-section-title">设备资料</div>
+      <label class="field span-2"><span class="field-label">项目编号<span class="req">*</span></span>
+        <input class="input" :class="{ invalid: errors.projectNo }" v-model="f.projectNo" maxlength="50" placeholder="必填"
+               @input="clearErr('projectNo')">
+        <span v-if="errors.projectNo" class="field-error">{{ errors.projectNo }}</span></label>
+      <div class="field span-2"><span class="field-label">设备（选填，可添加多台）</span>
+        <table class="dev-table">
+          <thead>
+            <tr><th>设备名称</th><th>设备编号</th><th>设备型号</th><th class="dev-col-act"><span class="dev-sr">操作</span></th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="(dv, i) in f.devices" :key="dv.k">
+              <td><input class="input" v-model="dv.name" maxlength="100" placeholder="如 高压反应釜" :aria-label="'设备 ' + (i + 1) + ' 名称'"></td>
+              <td><input class="input mono" v-model="dv.sn" maxlength="100" placeholder="铭牌上的序列号" :aria-label="'设备 ' + (i + 1) + ' 编号'"></td>
+              <td><input class="input" v-model="dv.model" maxlength="100" placeholder="如 HTR-500" :aria-label="'设备 ' + (i + 1) + ' 型号'"></td>
+              <td class="dev-col-act"><button type="button" class="btn-link att-link" :aria-label="'删除设备 ' + (i + 1)" @click="removeDevice(i)">删除</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="dev-add">
+          <button type="button" class="btn btn-secondary btn-sm" :disabled="!canAddDevice" :title="canAddDevice ? null : '设备最多 ' + maxDevices + ' 台'"
+                  @click="addDevice">+ 添加设备</button>
+        </div>
+        <span class="field-hint">一个项目多台设备同时维修时逐台添加；整行不填的会被忽略。</span>
+      </div>
+      <div class="field"><span class="field-label">是否已完成 SAT<span class="req">*</span></span>
+        <div class="radio-group" role="radiogroup" aria-label="是否已完成 SAT">
           <button type="button" role="radio" class="radio-chip" :class="{ active: f.satSigned === true }"
-                  :aria-checked="f.satSigned === true ? 'true' : 'false'" @click="set('satSigned', true)">已签字（老产品）</button>
+                  :aria-checked="f.satSigned === true ? 'true' : 'false'" @click="setSat(true)">已完成（老产品）</button>
           <button type="button" role="radio" class="radio-chip" :class="{ active: f.satSigned === false }"
-                  :aria-checked="f.satSigned === false ? 'true' : 'false'" @click="set('satSigned', false)">未签字（新产品）</button>
+                  :aria-checked="f.satSigned === false ? 'true' : 'false'" @click="setSat(false)">未完成（新产品）</button>
         </div>
         <span v-if="errors.satSigned" class="field-error">{{ errors.satSigned }}</span></div>
-      <label class="field"><span class="field-label">项目编号</span>
-        <input class="input" v-model="f.projectNo" maxlength="50" placeholder="选填"></label>
+      <label class="field"><span class="field-label">{{ satDateLabel }}<em>（选填）</em></span>
+        <input class="input" type="date" max="9999-12-31" :class="{ invalid: errors.satDate }" v-model="f.satDate" @input="clearErr('satDate')">
+        <span v-if="errors.satDate" class="field-error">{{ errors.satDate }}</span></label>
 
       <div class="form-section-title">故障</div>
       <div class="field span-2"><span class="field-label">发生时间<span class="req">*</span></span>
@@ -255,8 +343,12 @@ export default {
         <textarea class="textarea" v-model="f.customerRequest" rows="2" maxlength="500" placeholder="选填，如：希望本周内上门，周末不方便"></textarea></label>
 
       <div class="form-section-title">附件</div>
-      <div class="field span-2"><span class="field-label">附件（照片 / 视频 / 文件，选填，最多 {{ maxAtts }} 个）</span>
-        <AttachmentsUpload :model-value="atts" :limit="maxAtts" :can-restrict="true" :disabled="saving" @update:model-value="onAtts" />
+      <div class="field span-2"><span class="field-label">附件（照片 / 视频 / 文件，选填，三类合计最多 {{ maxAtts }} 个）</span>
+        <div v-for="z in attZones" :key="z.type" class="att-zone">
+          <div class="att-zone-title">{{ z.label }}</div>
+          <AttachmentsUpload :model-value="z.items" :type="z.type" :limit="z.limit" :can-restrict="true" :disabled="saving"
+                             @update:model-value="onAtts(z.type, $event)" />
+        </div>
         <span v-if="errors.attachments" class="field-error">{{ errors.attachments }}</span>
         <span class="field-hint">支持图片、视频、Word、Excel、PPT、PDF、TXT、CSV；图片单个不超过 20MB，其他不超过 100MB。服务价格不在建单时填写，建单后由主管在工单详情中定价。</span>
       </div>

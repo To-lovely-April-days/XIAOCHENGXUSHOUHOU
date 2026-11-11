@@ -1,16 +1,18 @@
 // 附件上传组件（v1.2，新建工单与工单抽屉共用）。契约见 docs/CHANGES-v1.2.md §7.3。
 // 选择 / 拖入文件 → 预检（类型、大小、数量）→ POST /api/files（category=Attachment，带原始文件名与进度）。
-// 这里只上传、不挂工单：父组件用 attDone(items) 取 [{ fileId, restricted }] 再提交。
+// 这里只上传、不挂工单：父组件用 attDone(items) 取 [{ fileId, restricted, type }] 再提交。
+// v1.3（CHANGES-v1.3 §10.3）：每单上限 50；新增 prop type（附件类别），新加入的条目记下当时的类别。
+// 组件本身不提供类别选择，由父组件决定（建单页三个上传区各一类，抽屉里在哪一组点「添加」就是哪一类）。
 //
-// <AttachmentsUpload ref="att" v-model="items" :limit="20" :can-restrict="true" />
-// 条目：{ key, file, name, size, kind, ext, previewUrl, status: 'uploading'|'done'|'error', fatal, error, percent, id, restricted }
+// <AttachmentsUpload ref="att" v-model="items" type="Sat" :limit="50" :can-restrict="true" />
+// 条目：{ key, file, name, size, kind, ext, previewUrl, status: 'uploading'|'done'|'error', fatal, error, percent, id, restricted, type }
 //   （另有内部字段 queued：排队中尚未开始；removed：已被移除）
 import * as api from '../api.js';
 import { fmtSize, fileBadge } from '../format.js';
 
 const { reactive } = window.Vue;
 
-export const MAX_COUNT = 20;
+export const MAX_COUNT = 50;
 export const MAX_IMAGE = 20 * 1024 * 1024;
 export const MAX_FILE = 100 * 1024 * 1024;
 export const DOC_EXTS = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'pdf', 'txt', 'csv'];
@@ -48,9 +50,11 @@ export function precheck(file) {
 export const attUploading = (items) => (items || []).some(x => x.status === 'uploading');
 /** 是否有上传失败（含预检不通过）的条目 */
 export const attHasError = (items) => (items || []).some(x => x.status === 'error');
-/** 已上传成功的条目 → 接口需要的 [{ fileId, restricted }] */
+/** 已上传成功的条目 → 接口需要的 [{ fileId, restricted, type }] */
 export const attDone = (items) => (items || []).filter(x => x.status === 'done' && x.id)
-  .map(x => ({ fileId: x.id, restricted: !!x.restricted }));
+  .map(x => ({ fileId: x.id, restricted: !!x.restricted, type: x.type || 'Other' }));
+/** 占名额的条目数（预检不通过的不占）：多个上传区合计上限时用 */
+export const attUsed = (items) => (items || []).filter(x => !x.fatal).length;
 
 let seq = 0;
 
@@ -59,17 +63,19 @@ export default {
   props: {
     /** 还能加几个（包含本组件里已选的条目） */
     limit: { type: Number, default: MAX_COUNT },
+    /** 附件类别（v1.3）：'Sat' | 'RepairForm' | 'Other'，新加入的条目记下当时的值 */
+    type: { type: String, default: 'Other' },
     /** 是否显示「仅销售和主管可见」复选框 */
     canRestrict: { type: Boolean, default: false },
     modelValue: { type: Array, default: () => [] },
     disabled: { type: Boolean, default: false },
   },
   emits: ['update:modelValue'],
-  data() { return { accept: ACCEPT, notice: '', dragging: false }; },
+  data() { return { accept: ACCEPT, maxCount: MAX_COUNT, notice: '', dragging: false }; },
   computed: {
     items() { return this.modelValue || []; },
     /** 占名额的条目数（预检不通过的不占） */
-    used() { return this.items.filter(x => !x.fatal).length; },
+    used() { return attUsed(this.items); },
     room() { return Math.max(0, this.limit - this.used); },
     uploading() { return attUploading(this.items); },
     hasError() { return attHasError(this.items); },
@@ -135,7 +141,7 @@ export default {
           key: 'a' + (++seq) + '-' + Math.random().toString(36).slice(2, 8),
           file, name: file.name || '未命名', size: file.size, kind: chk.kind, ext: chk.ext,
           previewUrl: '', status: chk.error ? 'error' : 'uploading', fatal: !!chk.error, error: chk.error,
-          percent: 0, id: null, restricted: false, queued: !chk.error, removed: false,
+          percent: 0, id: null, restricted: false, type: this.type || 'Other', queued: !chk.error, removed: false,
         });
         if (!chk.error && chk.kind === 'Image') {
           try { item.previewUrl = URL.createObjectURL(file); } catch (e) { item.previewUrl = ''; }
@@ -230,7 +236,7 @@ export default {
     <button type="button" class="att-up-drop" :disabled="disabled || room <= 0" @click="pick">
       <Icon name="paperclip" :size="16" />
       <span v-if="room > 0">点击选择文件，或把文件拖到这里<span class="att-up-room">还可添加 <span class="num">{{ room }}</span> 个</span></span>
-      <span v-else>附件最多 20 个，已达上限</span>
+      <span v-else>附件最多 {{ maxCount }} 个，已达上限</span>
     </button>
     <input ref="file" type="file" multiple hidden :accept="accept" @change="onFiles">
     <div v-if="notice" class="field-error att-up-notice" role="status">{{ notice }}</div>

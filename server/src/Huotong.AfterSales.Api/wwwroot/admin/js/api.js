@@ -216,13 +216,19 @@ export const orders = {
   /**
    * 全部工单（分页）。
    * priceSet：按是否已定价过滤；pendingRequest=true：只返回有待审批申请的工单。
+   * v1.3：keyword 匹配工单号 / 客户 / 项目编号 / 任意一台设备的名称、编号、型号；每项带 deviceText、projectNo、pendingTransfer。
    * @param {{status?:string,keyword?:string,issue?:'MissingPunch'|'DistanceAbnormal',assigneeId?:number,serviceType?:string,from?:string,to?:string,priceSet?:boolean,pendingRequest?:boolean,page?:number,pageSize?:number}} [params]
    * @returns {Promise<{items:object[],total:number,page:number,pageSize:number,counts:Record<string,number>}>}
    */
   list: (params) => get('/orders', params),
   /** @param {number} id @returns {Promise<object>} OrderDetail */
   detail: (id) => get(`/orders/${id}`),
-  /** @param {object} body 见 API.md POST /api/orders；附件用 attachments: [{ fileId, restricted }]（v1.2 起不再传 photoFileIds） @returns {Promise<object>} OrderDetail */
+  /**
+   * 新建工单。v1.3：projectNo 必填；devices: [{ name, sn, model }]（可为 []，不再传 deviceModel / deviceSn）；
+   * satSigned（是否已完成 SAT）必填；satDate 为 'yyyy-MM-dd' 或 ''；附件用 attachments: [{ fileId, restricted, type }]。
+   * @param {object} body 见 API.md POST /api/orders
+   * @returns {Promise<object>} OrderDetail
+   */
   create: (body) => post('/orders', body),
   /**
    * 指派/改派。assistantIds 省略 = 不调整协助人；传数组（含空数组）= 协助人最终全集。
@@ -256,7 +262,8 @@ export const orders = {
   factoryNode: (id, body) => post(`/orders/${id}/factory-nodes`, body),
   /**
    * 给工单添加附件（文件须先用 files.upload(file, 'Attachment') 上传）。
-   * @param {number} id @param {Array<{fileId:number,restricted?:boolean}>} attachments
+   * v1.3：条目带附件类别 type（省略 = Other）；已闭环的工单也可以添加（看 canAddAttachment）。
+   * @param {number} id @param {Array<{fileId:number,restricted?:boolean,type?:'Sat'|'RepairForm'|'Other'}>} attachments
    * @returns {Promise<object>} OrderDetail
    */
   addAttachments: (id, attachments) => post(`/orders/${id}/attachments`, { attachments: attachments || [] }),
@@ -264,6 +271,20 @@ export const orders = {
   deleteAttachment: (id, fileId) => post(`/orders/${id}/attachments/${fileId}/delete`),
   /** 切换「仅销售和主管可见」 @param {number} id @param {number} fileId @param {boolean} restricted @returns {Promise<object>} OrderDetail */
   setAttachmentRestricted: (id, fileId, restricted) => post(`/orders/${id}/attachments/${fileId}/restricted`, { restricted: !!restricted }),
+  /**
+   * 修改附件类别（v1.3）。
+   * @param {number} id @param {number} fileId @param {'Sat'|'RepairForm'|'Other'} type
+   * @returns {Promise<object>} OrderDetail
+   */
+  setAttachmentType: (id, fileId, type) => post(`/orders/${id}/attachments/${fileId}/type`, { type }),
+  /**
+   * 修改 SAT 信息（v1.3）：是否已完成 SAT + 对应时间，两项一起提交、整体覆盖。
+   * @param {number} id @param {{satSigned:boolean,satDate?:string}} body satDate 为 'yyyy-MM-dd'，'' = 清空
+   * @returns {Promise<object>} OrderDetail
+   */
+  setSat: (id, body) => post(`/orders/${id}/sat`, { satSigned: body.satSigned, satDate: body.satDate || '' }),
+  /** 撤销待确认的转交（v1.3，主管） @param {number} id @param {number} transferId @returns {Promise<object>} OrderDetail */
+  cancelTransfer: (id, transferId) => post(`/orders/${id}/transfers/${transferId}/cancel`),
 };
 
 export const engineers = {
@@ -306,8 +327,8 @@ export const admin = {
   /** 设置/重置密码 @param {number} id @param {string} password */
   setPassword: (id, password) => post(`/admin/employees/${id}/password`, { password }),
   /**
-   * 工单文件中心（v1.2）。
-   * @param {{keyword?:string,type?:'Image'|'Video'|'Document',source?:string,uploaderId?:number|string,orderId?:number|string,restricted?:boolean,from?:string,to?:string,page?:number,pageSize?:number}} [params]
+   * 工单文件中心（v1.2）。v1.3：attachmentType 只看某一类附件；keyword 增加匹配项目编号。
+   * @param {{keyword?:string,type?:'Image'|'Video'|'Document',source?:string,attachmentType?:'Sat'|'RepairForm'|'Other',uploaderId?:number|string,orderId?:number|string,restricted?:boolean,from?:string,to?:string,page?:number,pageSize?:number}} [params]
    * @returns {Promise<{items:object[],total:number,totalSize:number,page:number,pageSize:number,counts:{all:number,Image:number,Video:number,Document:number}}>}
    */
   files: (params) => get('/admin/files', params),

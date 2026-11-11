@@ -44,13 +44,19 @@ public static class OrderStateMachine
         return action == OrderAction.Resume ? ResumeTarget(holdFrom) : to;
     }
 
-    /// <summary>计算 actions 所需的全部事实（CHANGES-v1.1 §2.7）</summary>
+    /// <summary>
+    /// 计算 actions 所需的全部事实（CHANGES-v1.1 §2.7；v1.3 §2.9 在末尾新增 IsFormer / HasPendingTransfer / PendingTransferToMe）
+    /// </summary>
     public record ActionContext(Role Role, int UserId, OrderStatus Status, int? AssigneeId, ServiceType ServiceType,
         bool HasMissingPunch, bool IsAssistant = false, bool PriceSet = true, bool HasPendingHoldRequest = false,
-        bool FactoryCanRecord = false, bool FactoryShippedBack = false);
+        bool FactoryCanRecord = false, bool FactoryShippedBack = false,
+        bool IsFormer = false, bool HasPendingTransfer = false, bool PendingTransferToMe = false);
+
+    /// <summary>可以发起 / 存在待确认转交的状态：待启动、处理中、暂停搁置</summary>
+    public static bool CanTransfer(OrderStatus s) => s is OrderStatus.Accepted or OrderStatus.InProgress or OrderStatus.OnHold;
 
     /// <summary>
-    /// 计算当前用户可执行动作（CHANGES-v1.1 §2.7，固定顺序）
+    /// 计算当前用户可执行动作（CHANGES-v1.1 §2.7、CHANGES-v1.3 §2.9，固定顺序）
     /// </summary>
     public static List<string> Actions(ActionContext c)
     {
@@ -61,15 +67,25 @@ public static class OrderStateMachine
         switch (c.Role)
         {
             case Role.Engineer:
+                // 已退出的人只读：只可能有「确认接手 / 拒绝」（又被转交回来待确认时）
+                if (c.IsFormer)
+                {
+                    if (c.PendingTransferToMe) { a.Add("acceptTransfer"); a.Add("rejectTransfer"); }
+                    break;
+                }
                 var lead = c.AssigneeId == c.UserId;
                 if (status == OrderStatus.Pending) a.Add("claim");
                 if (lead && active) a.Add("appoint");
                 if ((lead || c.IsAssistant) && c.ServiceType == ServiceType.Onsite && active) a.Add("checkin");
                 if (lead && c.ServiceType == ServiceType.Remote && status == OrderStatus.Accepted) a.Add("start");
                 if (factory) a.Add("factory");
-                if (lead && status == OrderStatus.InProgress && (c.ServiceType != ServiceType.Factory || c.FactoryShippedBack)) a.Add("complete");
+                if (lead && status == OrderStatus.InProgress && (c.ServiceType != ServiceType.Factory || c.FactoryShippedBack)
+                    && !c.HasPendingTransfer) a.Add("complete");
                 if (lead && active && !c.HasPendingHoldRequest) a.Add("requestHold");
                 if (lead && active) a.Add("requestAssistant");
+                if (lead && CanTransfer(status) && !c.HasPendingTransfer) a.Add("transfer");
+                if (lead && c.HasPendingTransfer) a.Add("cancelTransfer");
+                if (c.PendingTransferToMe) { a.Add("acceptTransfer"); a.Add("rejectTransfer"); }
                 break;
             case Role.Supervisor:
                 if (status == OrderStatus.Pending) a.Add("assign");
@@ -83,6 +99,7 @@ public static class OrderStateMachine
                 if (c.HasMissingPunch) a.Add("supplement");
                 if (status != OrderStatus.Voided) a.Add("setPrice");
                 if (factory) a.Add("factory");
+                if (c.HasPendingTransfer) a.Add("cancelTransfer");
                 break;
             case Role.Sales:
                 if (status is not (OrderStatus.Closed or OrderStatus.Voided)) a.Add("suggestPrice");

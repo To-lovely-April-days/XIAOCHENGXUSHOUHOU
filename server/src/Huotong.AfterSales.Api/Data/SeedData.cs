@@ -88,6 +88,11 @@ public class SeedData
             "南京市玄武区 [示例地址]", 32.06, 118.79, "高压反应釜 HTR-250", "SN2405009", "2024-05", true,
             "11月4日 上午", "釜盖密封处有泄漏，保压 30 分钟掉 0.5MPa", "重新拧紧釜盖螺栓", "检测实验室，通风橱内", 960,
             created: D(11, 4, 16, 20), claimed: D(11, 4, 17, 5));
+        // v1.3：多设备示例（一个项目三台设备同时维修）
+        o5.Devices.Add(new OrderDevice { Seq = 2, Name = "搅拌器", Sn = "SN2405010", Model = "HTS-80" });
+        o5.Devices.Add(new OrderDevice { Seq = 3, Name = "冷凝器", Sn = "SN2405011", Model = "HTC-20" });
+        o5.DeviceText = DeviceRules.Summary(o5.Devices);
+        o5.ProjectNo = "HT-2024-031";
         // 6. 上海某高校化学系：远程咨询待认领
         var o6 = Order(No(11, 4, "019"), OrderStatus.Pending, sl, null, "上海某高校化学系", "陈老师", "13800000006",
             "上海市杨浦区 [示例地址]", 31.26, 121.53, "微型反应釜 HTM-100", "SN2502015", "2025-02", true,
@@ -272,6 +277,8 @@ public class SeedData
             ProblemType = problem, Urgency = urgency, ServiceType = service, CustomerName = customer, ContactName = contact,
             ContactPhone = phone, Address = address, City = city, Region = region, Latitude = lat, Longitude = lng,
             DeviceModel = model, DeviceSn = sn, SatDate = sat, SatSigned = signed, FaultTime = faultTime, Symptom = symptom,
+            // v1.3：每张种子工单 1 台设备（名称为空，型号 / 编号沿用原参数），汇总文字 = 型号
+            DeviceText = model, Devices = { new OrderDevice { Seq = 1, Name = "", Sn = sn, Model = model } },
             CustomerTried = tried, SiteEnvironment = env, CustomerRequest = request, Price = price, PriceSet = true, CreatorId = creator.Id,
             AssigneeId = assignee?.Id, CreatedAt = created, ClaimedAt = assignee == null ? null : claimed,
             StartedAt = status is OrderStatus.InProgress or OrderStatus.Submitted or OrderStatus.Closed ? claimed : null

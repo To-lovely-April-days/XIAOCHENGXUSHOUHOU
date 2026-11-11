@@ -105,6 +105,9 @@ public class PunchService
         if (r.Latitude is < -90 or > 90 || r.Longitude is < -180 or > 180) throw BizException.BadRequest("定位坐标不正确");
         if (r.PhotoFileId == null) throw BizException.BadRequest("请现场拍照后再打卡");
 
+        // v1.3：与「确认接手」/「改派」排队（SQLite 事务一开始就取写锁）——要么打卡先成功、接手被「正在现场计时」拦住，
+        // 要么接手先成功、这里得到「只有本单的负责人或协助人可以打卡」；不会留下已退出的人打不了离场卡的到场卡
+        await using var tx = await _db.Database.BeginTransactionAsync();
         var order = await OrdersWithAssistants().FirstOrDefaultAsync(o => o.Id == r.OrderId) ?? throw BizException.NotFound("工单不存在");
         EnsureParticipant(order, user);
         if (order.ServiceType != ServiceType.Onsite) throw BizException.Conflict("远程/返厂工单无需打卡");
@@ -144,6 +147,7 @@ public class PunchService
             _db.StatusLogs.Add(new StatusLog { OrderId = order.Id, ActorId = me.Id, Text = $"{me.Name} 首次到场 → {EnumText.Status(to)}", Time = now, ToStatus = to, Kind = LogKind.Status });
         }
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
 
         var full = await _view.PunchesFull().Where(p => p.OrderId == order.Id).ToListAsync();
         var dto = _view.PunchDtos(full).First(p => p.Id == punch.Id);

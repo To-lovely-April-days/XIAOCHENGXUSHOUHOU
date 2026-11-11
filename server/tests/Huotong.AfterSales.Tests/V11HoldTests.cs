@@ -42,7 +42,7 @@ public sealed class V11HoldTests : V11TestBase
         Assert.Equal("等备件：轴承预计周五到", item.HoldText);
         Assert.Equal(2, item.ProgressStep);
         Assert.Contains((await Home.Engineer(wang)).OnHold, i => i.Id == id);
-        Assert.Empty((await Orders.Detail(id, wang)).Actions);
+        Assert.Equal(new[] { "transfer" }, (await Orders.Detail(id, wang)).Actions); // v1.3：暂停搁置的负责人只能转交
         await Fails(40900, "工单当前为「暂停搁置」，不能执行此操作", () => Orders.Void(id, new ReasonRequest(), Sup));
 
         Tick();

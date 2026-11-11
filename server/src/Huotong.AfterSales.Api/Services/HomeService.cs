@@ -108,6 +108,10 @@ public class HomeService
             .OrderByDescending(o => o.ClosedAt ?? o.SubmittedAt ?? o.CreatedAt).Take(2).Select(o => items[o.Id]).ToList();
         dto.OnHold = mine.Where(o => o.Status == OrderStatus.OnHold)
             .OrderByDescending(o => o.HoldAt ?? DateTime.MinValue).ThenByDescending(o => o.Id).Select(o => items[o.Id]).ToList();
+        // v1.3：待我确认的转交（不在「我的」里；同时是本单协助人时两处都显示，不去重），按转交发起时间正序
+        var toMe = await _view.Orders().Where(o => o.PendingTransferToId == me.Id).ToListAsync();
+        dto.TransfersToMe = (await _view.BuildList(toMe, user)).Where(i => i.PendingTransfer != null)
+            .OrderBy(i => i.PendingTransfer!.CreatedAt).ThenBy(i => i.PendingTransfer!.Id).ToList();
         dto.MonthMinutes = (await _hours.MonthSummary(me.Id)).Minutes;
         return dto;
     }

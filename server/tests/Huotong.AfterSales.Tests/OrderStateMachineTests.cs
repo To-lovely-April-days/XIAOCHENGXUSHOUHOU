@@ -71,21 +71,23 @@ public class OrderStateMachineTests
         const Role E = Role.Engineer;
         Assert.Equal(new[] { "claim" }, Act(E, 2, OrderStatus.Pending, null));
         // 负责人
-        Assert.Equal(new[] { "appoint", "checkin", "requestHold", "requestAssistant" }, Act(E, 2, OrderStatus.Accepted, 2));
-        Assert.Equal(new[] { "appoint", "start", "requestHold", "requestAssistant" }, Act(E, 2, OrderStatus.Accepted, 2, ServiceType.Remote));
-        Assert.Equal(new[] { "appoint", "checkin", "complete", "requestHold", "requestAssistant" }, Act(E, 2, OrderStatus.InProgress, 2));
+        Assert.Equal(new[] { "appoint", "checkin", "requestHold", "requestAssistant", "transfer" }, Act(E, 2, OrderStatus.Accepted, 2));
+        Assert.Equal(new[] { "appoint", "start", "requestHold", "requestAssistant", "transfer" }, Act(E, 2, OrderStatus.Accepted, 2, ServiceType.Remote));
+        Assert.Equal(new[] { "appoint", "checkin", "complete", "requestHold", "requestAssistant", "transfer" }, Act(E, 2, OrderStatus.InProgress, 2));
         // 已有待审批的暂停申请 → 不再出现 requestHold
-        Assert.Equal(new[] { "appoint", "checkin", "complete", "requestAssistant" }, Act(E, 2, OrderStatus.InProgress, 2, pendingHold: true));
+        Assert.Equal(new[] { "appoint", "checkin", "complete", "requestAssistant", "transfer" }, Act(E, 2, OrderStatus.InProgress, 2, pendingHold: true));
         // 返厂：没有 start；未寄回不能 complete
-        Assert.Equal(new[] { "appoint", "factory", "requestHold", "requestAssistant" },
+        Assert.Equal(new[] { "appoint", "factory", "requestHold", "requestAssistant", "transfer" },
             Act(E, 2, OrderStatus.Accepted, 2, ServiceType.Factory, canRecord: true));
-        Assert.Equal(new[] { "appoint", "factory", "requestHold", "requestAssistant" },
+        Assert.Equal(new[] { "appoint", "factory", "requestHold", "requestAssistant", "transfer" },
             Act(E, 2, OrderStatus.InProgress, 2, ServiceType.Factory, canRecord: true));
-        Assert.Equal(new[] { "appoint", "factory", "complete", "requestHold", "requestAssistant" },
+        Assert.Equal(new[] { "appoint", "factory", "complete", "requestHold", "requestAssistant", "transfer" },
             Act(E, 2, OrderStatus.InProgress, 2, ServiceType.Factory, canRecord: true, shippedBack: true));
         Assert.Equal(new[] { "factory" }, Act(E, 2, OrderStatus.Submitted, 2, ServiceType.Factory, canRecord: true, shippedBack: true));
-        Assert.Empty(Act(E, 2, OrderStatus.OnHold, 2));
+        // v1.3：暂停搁置的负责人可以转交；待验收 / 已闭环没有 transfer
+        Assert.Equal(new[] { "transfer" }, Act(E, 2, OrderStatus.OnHold, 2));
         Assert.Empty(Act(E, 2, OrderStatus.Submitted, 2));
+        Assert.Empty(Act(E, 2, OrderStatus.Closed, 2));
         // 协助人：现场单只能打卡
         Assert.Equal(new[] { "checkin" }, Act(E, 2, OrderStatus.Accepted, 3, assistant: true));
         Assert.Equal(new[] { "checkin" }, Act(E, 2, OrderStatus.InProgress, 3, assistant: true));

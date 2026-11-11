@@ -144,4 +144,35 @@ public class OrdersController : ApiControllerBase
     [Authorize(Roles = "Supervisor")]
     public async Task<ApiResponse<OrderDetail>> SetAttachmentRestricted(int id, int fileId, [FromBody] RestrictedRequest? req) =>
         Ok(await _orders.SetAttachmentRestricted(id, fileId, req ?? new(), Me));
+
+    /// <summary>v1.3：修改附件类别（上传人本人或主管；任何角色，服务端判权）</summary>
+    [HttpPost("{id:int}/attachments/{fileId:int}/type")]
+    public async Task<ApiResponse<OrderDetail>> SetAttachmentType(int id, int fileId, [FromBody] AttachmentTypeRequest? req) =>
+        Ok(await _orders.SetAttachmentType(id, fileId, req ?? new(), Me));
+
+    // ---------- v1.3：SAT 信息（任何角色，服务端判权）----------
+
+    [HttpPost("{id:int}/sat")]
+    public async Task<ApiResponse<OrderDetail>> SetSat(int id, [FromBody] SatRequest? req) => Ok(await _orders.SetSat(id, req ?? new(), Me));
+
+    // ---------- v1.3：转交（负责工程师发起，接手人确认 / 拒绝；不需要主管批准）----------
+
+    [HttpPost("{id:int}/transfers")]
+    [Authorize(Roles = "Engineer")]
+    public async Task<ApiResponse<OrderDetail>> Transfer(int id, [FromBody] TransferRequest? req) => Ok(await _orders.Transfer(id, req ?? new(), Me));
+
+    [HttpPost("{id:int}/transfers/{transferId:int}/accept")]
+    [Authorize(Roles = "Engineer")]
+    public async Task<ApiResponse<OrderDetail>> AcceptTransfer(int id, int transferId) => Ok(await _orders.AcceptTransfer(id, transferId, Me));
+
+    /// <summary>拒绝接手：拒绝后当前用户已无查看权时 data 为 null（全系统唯一可能返回 null 的工单动作）</summary>
+    [HttpPost("{id:int}/transfers/{transferId:int}/reject")]
+    [Authorize(Roles = "Engineer")]
+    public async Task<ApiResponse<OrderDetail?>> RejectTransfer(int id, int transferId, [FromBody] ReplyRequest? req) =>
+        Ok(await _orders.RejectTransfer(id, transferId, req ?? new(), Me));
+
+    /// <summary>发起人撤回 / 主管撤销</summary>
+    [HttpPost("{id:int}/transfers/{transferId:int}/cancel")]
+    [Authorize(Roles = "Engineer,Supervisor")]
+    public async Task<ApiResponse<OrderDetail>> CancelTransfer(int id, int transferId) => Ok(await _orders.CancelTransfer(id, transferId, Me));
 }

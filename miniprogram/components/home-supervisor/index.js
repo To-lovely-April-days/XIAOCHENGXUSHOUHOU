@@ -181,7 +181,7 @@ Component({
       wx.navigateTo({ url: '/pages/order-detail/index?id=' + t.orderId });
     },
 
-    /** 取工单详情（assign-sheet 需要 assignee / deviceModel / urgency） */
+    /** 取工单详情（assign-sheet 需要 assignee / deviceText / urgency） */
     openAssign(t) {
       if (this._opening) return;
       this._opening = true;

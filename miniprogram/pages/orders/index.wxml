@@ -53,7 +53,7 @@
 
     <view class="search">
       <ui-icon name="search" color="#6E6E73" size="18" stroke="2" />
-      <input class="search-input" value="{{keyword}}" placeholder="搜索客户、设备型号或工单号" placeholder-class="placeholder"
+      <input class="search-input" value="{{keyword}}" placeholder="搜索客户、设备、项目编号或工单号" placeholder-class="placeholder"
              confirm-type="search" bindinput="onSearchInput" bindconfirm="onSearchConfirm" aria-label="搜索工单" />
       <view wx:if="{{keyword}}" class="search-clear" bindtap="onSearchClear" aria-role="button" aria-label="清空搜索">
         <ui-icon name="close" color="#AEAEB2" size="16" stroke="2.2" />
@@ -82,6 +82,7 @@
           <text class="customer ellipsis">{{item.customerName}}</text>
           <urgency-tag wx:if="{{item.urgency === 'Urgent'}}" urgency="Urgent" />
           <text wx:if="{{item.pending}}" class="tag tag-sm tag-amber pending-tag">待审批</text>
+          <text wx:if="{{item.transferPending}}" class="tag tag-sm transfer-tag">转交待确认</text>
           <text class="price price-sm {{item.unpriced ? 'unpriced' : 'num-bold'}} {{item.priceFree ? 'free-green' : ''}}">{{item.priceText}}</text>
         </view>
         <view class="device ellipsis">{{item.device}}</view>

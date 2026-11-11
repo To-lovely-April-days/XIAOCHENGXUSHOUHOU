@@ -56,4 +56,24 @@ page { background: var(--bg); }
 .media-fatal { padding: 0 8rpx; text-align: center; font-size: 20rpx; line-height: 28rpx; }
 .media-hint { margin-top: 20rpx; font-size: 24rpx; line-height: 36rpx; }
 
+/* v1.3 设备资料：多台设备卡片、SAT 单选胶囊、时间栏 */
+.dev-area { padding: 8rpx 0 28rpx; border-bottom: 2rpx solid var(--divider); }
+.dev-card { margin-top: 20rpx; padding: 0 24rpx; border-radius: 20rpx; background: var(--bg); }
+.dev-head { display: flex; align-items: center; justify-content: space-between; height: 80rpx; }
+.dev-title { font-size: 28rpx; font-weight: 600; color: var(--text-2); }
+.dev-del { flex-shrink: 0; height: 80rpx; padding-left: 24rpx; display: flex; align-items: center; font-size: 28rpx; color: var(--text-2); }
+.dev-row { display: flex; align-items: center; gap: 20rpx; min-height: 92rpx; border-bottom: 2rpx solid var(--border); }
+.dev-row.no-line { border-bottom: none; }
+.dev-lbl { flex-shrink: 0; font-size: 30rpx; color: var(--text); }
+.dev-ipt { height: 84rpx; font-size: 30rpx; }
+.dev-add { margin-top: 20rpx; height: 84rpx; border-radius: 20rpx; border: 2rpx dashed #D1D1CF; display: flex; align-items: center; justify-content: center; font-size: 30rpx; font-weight: 600; color: var(--text); }
+.dev-hint { margin-top: 16rpx; font-size: 24rpx; line-height: 36rpx; }
+.sat-chips { flex-shrink: 0; display: flex; gap: 16rpx; }
+.sat-chip { margin-right: 0; height: 64rpx; padding: 0 24rpx; }
+.sat-date { display: flex; align-items: center; gap: 20rpx; min-height: 104rpx; }
+.sat-date-val { color: var(--text); }
+.sat-clear { flex-shrink: 0; height: 88rpx; padding-left: 8rpx; display: flex; align-items: center; font-size: 28rpx; color: var(--text-2); }
+/* v1.3 附件按类别分三个小节 */
+.media-sub { padding: 20rpx 0 14rpx; font-size: 26rpx; line-height: 36rpx; font-weight: 600; color: var(--text-2); }
+
 .submit { height: 100rpx; border-radius: 24rpx; font-size: 32rpx; }

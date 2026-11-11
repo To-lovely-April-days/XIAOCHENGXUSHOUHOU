@@ -17,6 +17,8 @@ public class FileCenterQuery
     public int? OrderId { get; set; }
     /// <summary>true / false</summary>
     public string? Restricted { get; set; }
+    /// <summary>v1.3 附件类别：Sat | RepairForm | Other；给了就只返回该类别的附件</summary>
+    public string? AttachmentType { get; set; }
     public string? From { get; set; }
     public string? To { get; set; }
     public int Page { get; set; } = 1;
@@ -58,6 +60,7 @@ public class FileCenterService
             if (!bool.TryParse(p.Restricted.Trim(), out var rv)) throw BizException.BadRequest("可见范围筛选不正确");
             restricted = rv;
         }
+        if (!AttachmentRules.TryParseType(p.AttachmentType, out var attType)) throw BizException.BadRequest("附件类别不正确");
         var from = OrderService.ParseDate(p.From, "开始日期");
         var to = OrderService.ParseDate(p.To, "结束日期");
         if (from != null && to != null && from > to) throw BizException.BadRequest("开始日期不能晚于结束日期");
@@ -70,25 +73,34 @@ public class FileCenterService
             where f.Category != FileCategory.Avatar
             select new Row { File = f, Order = o };
 
-        // 可见性：Engineer 只看能查看的工单（待认领、本人负责 / 协助 / 建单），且不含受限附件
+        // 可见性：Engineer 只看能查看的工单（待认领、本人负责 / 协助 / 建单；v1.3：本人已退出、待本人确认转交），且不含受限附件
         if (user.Role == Role.Engineer)
         {
             var uid = user.Id;
             q = q.Where(x => !x.File.Restricted
                              && (x.Order.Status == OrderStatus.Pending || x.Order.AssigneeId == uid || x.Order.CreatorId == uid
-                                 || x.Order.Assistants.Any(a => a.EngineerId == uid)));
+                                 || x.Order.Assistants.Any(a => a.EngineerId == uid)
+                                 || x.Order.Exits.Any(e => e.EngineerId == uid) || x.Order.PendingTransferToId == uid));
         }
 
         if (!string.IsNullOrWhiteSpace(p.Keyword))
         {
             var k = p.Keyword.Trim();
             q = q.Where(x => (x.File.DisplayName != null && x.File.DisplayName.Contains(k)) || x.File.OriginalName.Contains(k)
-                             || x.Order.OrderNo.Contains(k) || x.Order.CustomerName.Contains(k));
+                             || x.Order.OrderNo.Contains(k) || x.Order.CustomerName.Contains(k)
+                             || (x.Order.ProjectNo != null && x.Order.ProjectNo.Contains(k)));
         }
         if (source != null)
         {
             var cats = AttachmentRules.CategoriesOf(source);
             q = q.Where(x => cats.Contains(x.File.Category));
+        }
+        if (attType != null)
+        {
+            // 只返回附件（建单照片 / 新附件）且类别等于该值的行；与 source 同时给时取交集
+            var at = attType.Value;
+            q = q.Where(x => (x.File.Category == FileCategory.OrderPhoto || x.File.Category == FileCategory.Attachment)
+                             && x.File.AttachmentType == at);
         }
         if (p.UploaderId != null) q = q.Where(x => x.File.UploaderId == p.UploaderId);
         if (p.OrderId != null) q = q.Where(x => x.File.OrderId == p.OrderId);
@@ -112,7 +124,9 @@ public class FileCenterService
         var files = await q.OrderByDescending(x => x.File.CreatedAt).ThenByDescending(x => x.File.Id)
             .Skip((page - 1) * size).Take(size).Select(x => x.File).AsNoTracking().ToListAsync();
         var orderIds = files.Select(f => f.OrderId!.Value).Distinct().ToList();
-        var orders = await _db.Orders.AsNoTracking().Include(o => o.Assistants).Where(o => orderIds.Contains(o.Id)).ToDictionaryAsync(o => o.Id);
+        // Exits：canDelete / canChangeType 要判断「已退出」
+        var orders = await _db.Orders.AsNoTracking().Include(o => o.Assistants).Include(o => o.Exits)
+            .Where(o => orderIds.Contains(o.Id)).ToDictionaryAsync(o => o.Id);
         var uploaders = await _view.UploaderMap(files.Select(f => f.UploaderId));
 
         var items = files.Select(f =>

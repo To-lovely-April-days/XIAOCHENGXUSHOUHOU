@@ -407,7 +407,8 @@ public class FileService
         }
         else
         {
-            var o = await _db.Orders.AsNoTracking().Include(x => x.Assistants).FirstOrDefaultAsync(x => x.Id == f.OrderId)
+            // v1.3：查看权限多了「已退出」与「待确认转交的接手人」，需要 Exits
+            var o = await _db.Orders.AsNoTracking().Include(x => x.Assistants).Include(x => x.Exits).FirstOrDefaultAsync(x => x.Id == f.OrderId)
                     ?? throw BizException.NotFound("文件不存在");
             OrderViewBuilder.EnsureCanView(o, user);
             if (!AttachmentRules.Visible(f, user)) throw BizException.NotFound("文件不存在");

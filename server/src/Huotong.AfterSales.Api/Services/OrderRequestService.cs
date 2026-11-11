@@ -225,6 +225,8 @@ public partial class OrderService
         }
         if (o.Assistants.Count >= MaxAssistants) throw BizException.Conflict("协助人最多 5 人");
         o.Assistants.Add(new OrderAssistant { OrderId = o.Id, EngineerId = target.Id, Engineer = target, AddedById = me.Id, AddedAt = now });
+        // v1.3 不变量 I2：成为协助人的人不再是「已退出」
+        RemoveExit(o, target.Id);
         Decide(req, RequestStatus.Approved, me, now, null);
         AddLog(o, me, $"{me.Name} 同意添加协助人 {target.Name}", o.Status, now, LogKind.Assist);
         await AutoCancelRequests(o, now);

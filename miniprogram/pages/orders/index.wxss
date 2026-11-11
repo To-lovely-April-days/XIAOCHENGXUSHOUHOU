@@ -14,6 +14,7 @@
 .price.free-green { color: var(--green); }
 .price.unpriced { font-size: 28rpx; font-weight: 600; color: var(--text-3); }
 .pending-tag { background: #FBF3E4; }
+.transfer-tag { background: var(--soft); color: var(--gray); }
 .meta-hold { color: #8E8E93; }
 .assist { flex-shrink: 0; font-size: 24rpx; color: var(--text-2); }
 .device { font-size: 26rpx; color: var(--text-2); margin-top: 4rpx; }

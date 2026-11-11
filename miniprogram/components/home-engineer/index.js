@@ -1,6 +1,7 @@
 /**
  * 工程师首页（原型 00 处理中 / 01 待启动 / 02 空闲）。数据：GET /api/home/engineer。
  * 页面调用 refresh() → Promise；事件 meta：{ user, tripDay }（更新页头）。
+ * v1.3：最前面增加「待我确认的转交」（transfersToMe）；本人负责且有待确认转交的工单带「转交待确认」标签。
  */
 const api = require('../../api/index.js');
 const format = require('../../utils/format.js');
@@ -14,16 +15,21 @@ function badgeOf(o) {
   return enums.label(enums.SERVICE_TYPE, o && o.serviceType, '工单');
 }
 
+/** 设备用服务端的汇总文字 deviceText（v1.3），不自己拼 */
 function deviceLine(o) {
-  return [o.deviceModel, o.symptom].filter(Boolean).join(' · ');
+  return [o.deviceText, o.symptom].filter(Boolean).join(' · ');
 }
 
-/** v1.1：工程师端不展示价格；assist = 本人是协助人（只能打卡 / 查看详情） */
+/**
+ * v1.1：工程师端不展示价格；assist = 本人是协助人（只能打卡 / 查看详情）；
+ * v1.3：transferPending = 本人是负责人且本单有待确认的转交（发起人一定是当前负责人）
+ */
 function decorate(o) {
   return Object.assign({}, o, {
     badge: badgeOf(o),
     deviceLine: deviceLine(o),
     assist: o.myRole === 'Assistant',
+    transferPending: !!o.pendingTransfer && o.myRole === 'Lead',
     onsite: o.serviceType === 'Onsite',
     factory: o.serviceType === 'Factory'
   });
@@ -69,6 +75,18 @@ function upcomingItem(o) {
   });
 }
 
+/** 待我确认的转交：谁请我接手 · 设备，原因 */
+function transferItem(o) {
+  const t = o.pendingTransfer || {};
+  const from = (t.from && t.from.name) || '';
+  return {
+    id: o.id,
+    customerName: o.customerName,
+    line: [(from ? from + ' ' : '') + '请你接手', o.deviceText].filter(Boolean).join(' · '),
+    reason: t.reason || ''
+  };
+}
+
 function hallItem(o) {
   return Object.assign(decorate(o), {
     meta: [o.symptom, o.region, format.timeAgo(o.createdAt)].filter(Boolean).join(' · ')
@@ -97,6 +115,7 @@ Component({
     clockSs: '',
     running: false,
     heroLines: [],
+    transfersToMe: [],
     current: null,
     steps: [],
     currentOnsite: false,
@@ -163,6 +182,7 @@ Component({
       this.setData({
         status: 'ok',
         state: state,
+        transfersToMe: (d.transfersToMe || []).map(transferItem),
         current: current,
         steps: current ? buildSteps(current) : [],
         currentOnsite: !!current && current.serviceType === 'Onsite',
@@ -286,7 +306,17 @@ Component({
 
     toComplete(e) {
       const id = e.currentTarget.dataset.id;
-      if (id) wx.navigateTo({ url: '/pages/complete/index?id=' + id });
+      if (!id) return;
+      const c = this.data.current;
+      // 有待确认的转交时不能提交完工：进详情页（那里可以撤回转交）并提示
+      if (c && c.id === Number(id) && c.transferPending) {
+        wx.navigateTo({ url: '/pages/order-detail/index?id=' + id });
+        setTimeout(() => {
+          wx.showToast({ title: '本单有待确认的转交，请先撤回转交后再提交完工', icon: 'none', duration: 3000 });
+        }, 400);
+        return;
+      }
+      wx.navigateTo({ url: '/pages/complete/index?id=' + id });
     },
 
     toHall() { wx.switchTab({ url: '/pages/orders/index' }); },

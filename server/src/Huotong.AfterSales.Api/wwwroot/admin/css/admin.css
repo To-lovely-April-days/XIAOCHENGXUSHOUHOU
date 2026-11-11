@@ -871,3 +871,60 @@ h1, h2, h3, p { margin: 0; }
 .files-uploader { display: block; }
 .files-actions { display: flex; flex-wrap: wrap; gap: 2px 12px; }
 .files-toggle { flex-basis: 100%; text-align: left; }
+
+/* ------------------------------------------------------------ v1.3 设备资料（dev-*：建单的设备表、抽屉的设备资料区、修改 SAT 弹窗） */
+.dev-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.dev-table th { padding: 0 8px 4px 0; font-size: 12px; font-weight: 400; color: var(--muted); text-align: left; }
+.dev-table td { padding: 0 8px 6px 0; vertical-align: middle; }
+.dev-table .dev-col-act { width: 36px; padding-right: 0; text-align: right; white-space: nowrap; }
+.dev-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.dev-add { display: flex; align-items: center; gap: 8px; }
+.dev-sat-date { width: 180px; }
+.kv.dev-kv { margin-top: 0; }
+.kv dd.dev-empty { color: var(--muted); font-weight: 400; }
+.dev-list { width: 100%; margin-top: 12px; border-collapse: collapse; font-size: 13px; }
+.dev-list th {
+  padding: 6px 8px; background: var(--surface-2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  font-size: 12px; font-weight: 500; color: var(--muted); text-align: left; white-space: nowrap;
+}
+.dev-list td { padding: 7px 8px; border-bottom: 1px solid var(--border-row); vertical-align: top; line-height: 18px; word-break: break-all; }
+.dev-list td.mono { font-size: 12px; }
+.dev-list .dev-col-no { width: 30px; color: var(--muted); }
+.dev-none { padding-bottom: 0; }
+
+/* ------------------------------------------------------------ v1.3 转交（tr-*：抽屉里的待确认提示、转交记录、参与人的退出方式） */
+.tr-reason { font-size: 12px; line-height: 18px; word-break: break-all; }
+.alert .tr-reason { margin-top: 2px; opacity: .85; }
+.tr-list { list-style: none; margin: 0; padding: 0; }
+.tr-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border-row); font-size: 13px; min-width: 0; }
+.tr-row:last-child { border-bottom: 0; }
+.tr-main { flex: 1; min-width: 0; }
+.tr-text { line-height: 20px; word-break: break-all; }
+.tr-row .tr-reason { color: var(--muted); }
+.tr-side { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; padding-top: 1px; }
+.tr-time { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.tr-exit { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* ------------------------------------------------------------ v1.3 附件分类（att-*：建单的三个上传区、抽屉里按类别分组、类别下拉） */
+.att-zone { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; }
+.att-zone-title { font-size: 13px; font-weight: 500; line-height: 18px; color: var(--text); }
+.att-group + .att-group { margin-top: 10px; }
+.att-group-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; padding: 4px 8px;
+  border-radius: var(--radius-sm); background: var(--surface-2);
+}
+.att-group-title { min-width: 0; font-size: 12px; font-weight: 600; line-height: 18px; color: var(--text-2); }
+.att-group-head .orders-dr-link { flex-shrink: 0; white-space: nowrap; }
+.att-group-head .orders-dr-link:disabled { color: var(--faint); cursor: default; text-decoration: none; }
+.att-group-empty { padding: 8px 8px 2px; font-size: 12px; color: var(--faint); }
+.att-group .att-add { margin: 6px 0 0; }
+.att-add-title { font-size: 12px; font-weight: 600; color: var(--text-2); }
+.att-type-select {
+  width: auto; max-width: 100%; height: 22px; padding: 0 20px 0 6px; border-radius: 5px;
+  font-size: 12px; color: var(--text-2); background-position: right 5px center;
+}
+.att-type-select:disabled { color: var(--faint); }
+/* 文件中心筛选条多了「附件类别」下拉：三个下拉收窄一点，1280 宽下筛选条仍排在一行 */
+.files-filters .att-filter-select { width: 110px; }
+.att-name-wrap { flex-wrap: wrap; row-gap: 2px; }
+.att-name-wrap > .ellipsis { max-width: 100%; }

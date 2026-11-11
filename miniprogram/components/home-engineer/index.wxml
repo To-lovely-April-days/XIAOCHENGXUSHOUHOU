@@ -28,6 +28,22 @@
 
 <view wx:else class="main">
 
+  <!-- ===== 待我确认的转交（v1.3；确认 / 拒绝在详情页里做） ===== -->
+  <view wx:if="{{transfersToMe.length}}" aria-label="待我确认的转交">
+    <view class="sec-head">
+      <text class="sec-title">待我确认的转交 <text class="sec-count tr-count">{{transfersToMe.length}}</text></text>
+    </view>
+    <view wx:for="{{transfersToMe}}" wx:key="id" class="tr-item {{index > 0 ? 'mt-10' : ''}}" hover-class="row-hover" data-id="{{item.id}}" bindtap="toDetail" aria-role="button">
+      <view class="tr-dot"></view>
+      <view class="flex1">
+        <view class="tr-name ellipsis">{{item.customerName}}</view>
+        <view class="oh-sub ellipsis">{{item.line}}</view>
+        <view class="tr-reason ellipsis2">原因：{{item.reason}}</view>
+      </view>
+      <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+    </view>
+  </view>
+
   <!-- ===== 处理中：当前工单 ===== -->
   <view wx:if="{{state === 'working' && current}}" class="hcard" aria-label="当前工单">
     <view class="order-head" hover-class="row-hover" data-id="{{current.id}}" bindtap="toDetail">
@@ -37,6 +53,7 @@
         <view class="oh-sub ellipsis">{{current.deviceLine}}</view>
       </view>
       <text wx:if="{{current.assist}}" class="tag tag-sm assist-tag">协助</text>
+      <text wx:if="{{current.transferPending}}" class="tag tag-sm assist-tag">转交待确认</text>
     </view>
 
     <view class="steps" aria-label="工单进度">
@@ -87,6 +104,7 @@
       <view class="row gap8">
         <status-tag status="{{next.status}}" />
         <text wx:if="{{next.assist}}" class="tag tag-sm assist-tag">协助</text>
+        <text wx:if="{{next.transferPending}}" class="tag tag-sm assist-tag">转交待确认</text>
       </view>
       <text class="order-no">{{next.orderNo}}</text>
     </view>
@@ -149,8 +167,8 @@
         <text class="up-day">{{item.dayText}}</text>
       </view>
       <view class="flex1">
-        <view class="row gap8"><text class="up-name ellipsis">{{item.customerName}}</text><text wx:if="{{item.assist}}" class="tag tag-sm assist-tag">协助</text></view>
-        <view class="oh-sub ellipsis"><text class="num-plain">{{item.apptText}}</text><text wx:if="{{item.deviceModel}}"> · {{item.deviceModel}}</text></view>
+        <view class="row gap8"><text class="up-name ellipsis">{{item.customerName}}</text><text wx:if="{{item.assist}}" class="tag tag-sm assist-tag">协助</text><text wx:if="{{item.transferPending}}" class="tag tag-sm assist-tag">转交待确认</text></view>
+        <view class="oh-sub ellipsis"><text class="num-plain">{{item.apptText}}</text><text wx:if="{{item.deviceText}}"> · {{item.deviceText}}</text></view>
       </view>
       <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
     </view>
@@ -185,7 +203,7 @@
       <view wx:for="{{onHold}}" wx:key="id" class="done-item" hover-class="row-hover" data-id="{{item.id}}" bindtap="toDetail">
         <view class="hold-mark"><view class="hold-bar"></view><view class="hold-bar"></view></view>
         <view class="flex1">
-          <view class="row gap8"><text class="done-name ellipsis">{{item.customerName}}</text><text wx:if="{{item.assist}}" class="tag tag-sm assist-tag">协助</text></view>
+          <view class="row gap8"><text class="done-name ellipsis">{{item.customerName}}</text><text wx:if="{{item.assist}}" class="tag tag-sm assist-tag">协助</text><text wx:if="{{item.transferPending}}" class="tag tag-sm assist-tag">转交待确认</text></view>
           <view class="oh-sub hold-line ellipsis">{{item.holdLine}}</view>
         </view>
         <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />

@@ -108,7 +108,7 @@ public abstract class V11TestBase : IDisposable
     {
         Source = OrderSource.SalesReferral, ProblemType = ProblemType.Fault, Urgency = Urgency.Normal, ServiceType = service,
         CustomerName = customer, ContactName = "张工", ContactPhone = "138 0000 0000", Address = "苏州市工业园区星湖街 1 号",
-        Latitude = 31.30, Longitude = 120.72, DeviceModel = "HTR-500", DeviceSn = "SN1", SatDate = "2024-08", SatSigned = true,
+        Latitude = 31.30, Longitude = 120.72, DeviceModel = "HTR-500", DeviceSn = "SN1", SatDate = "2024-08", SatSigned = true, ProjectNo = "P-TEST",
         FaultTime = "11月4日 下午", Symptom = "不加热", CustomerTried = "重启", SiteEnvironment = "通风橱"
     };
 

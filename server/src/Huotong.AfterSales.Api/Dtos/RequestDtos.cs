@@ -38,6 +38,8 @@ public class CreateOrderRequest
     public string? SatDate { get; set; }
     public bool? SatSigned { get; set; }
     public string? ProjectNo { get; set; }
+    /// <summary>v1.3：设备清单。null（省略）= 旧客户端，按 deviceModel / deviceSn 合成一台；[] = 明确没有设备</summary>
+    public List<DeviceItem>? Devices { get; set; }
     public string? FaultTime { get; set; }
     public string? Symptom { get; set; }
     public string? CustomerTried { get; set; }
@@ -50,9 +52,15 @@ public class CreateOrderRequest
     public List<AttachmentItem>? Attachments { get; set; }
 }
 
-public class AttachmentItem { public int? FileId { get; set; } public bool? Restricted { get; set; } }
+public class DeviceItem { public string? Name { get; set; } public string? Sn { get; set; } public string? Model { get; set; } }
+
+/// <summary>Type（v1.3）用字符串接收，非法值由服务层报「附件类别不正确」；省略 = Other</summary>
+public class AttachmentItem { public int? FileId { get; set; } public bool? Restricted { get; set; } public string? Type { get; set; } }
 public class AttachmentsRequest { public List<AttachmentItem>? Attachments { get; set; } }
 public class RestrictedRequest { public bool? Restricted { get; set; } }
+public class AttachmentTypeRequest { public string? Type { get; set; } }
+public class SatRequest { public bool? SatSigned { get; set; } public string? SatDate { get; set; } }
+public class TransferRequest { public int? EngineerId { get; set; } public string? Reason { get; set; } }
 
 public class AppointmentRequest { public DateTime? AppointmentTime { get; set; } }
 

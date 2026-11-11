@@ -1,17 +1,24 @@
 // 工单详情抽屉（原型 16 右侧）：进度条、基本信息与定价、暂停提示、待审批申请、异常警示框 + 补录、
 // 处理人员（按人工时）、返厂流程时间线、附件（v1.2）、打卡记录、状态记录、底部操作。
-// 所有可执行动作都由服务端计算：detail.actions、requests[].canDecide、factory.nodes[].canRecord / canEdit、
-// canAddAttachment / canRestrictAttachment / attachments[].canDelete / canToggleRestricted，这里不推导规则。
+// v1.3（CHANGES-v1.3 §10.5）：设备资料区（项目编号 / SAT / 多台设备）与「修改 SAT」、转交待确认提示（主管可撤销）与转交记录、
+// 处理人员里的「已转交 / 已改派」、附件按三类分组（在哪一组点「添加」就归哪一类，可改类别，闭环后也能添加）。
+// 所有可执行动作都由服务端计算：detail.actions、requests[].canDecide、factory.nodes[].canRecord / canEdit、canEditSat、
+// canAddAttachment / canRestrictAttachment / attachments[].canDelete / canToggleRestricted / canChangeType，这里不推导规则。
 import * as api from '../api.js';
 import { toast, toastError, confirm, preview } from '../ui.js';
 import { fmtHM, fmtPrice, fmtMD, fmtMDHM, fmtTime, fmtDistance, isWarranty, parseTime, toApiDate, pad2, fmtSize, fileBadge } from '../format.js';
-import { ORDER_STATUS, SERVICE_TYPE, PUNCH_KIND, ORDER_ACTIONS, PROGRESS_STEPS, REQUEST_TYPE, FACTORY_NODE, PARTICIPANT_ROLE, label } from '../enums.js';
+import { ORDER_STATUS, SERVICE_TYPE, PUNCH_KIND, ORDER_ACTIONS, PROGRESS_STEPS, REQUEST_TYPE, FACTORY_NODE, PARTICIPANT_ROLE,
+  ATTACHMENT_TYPE, ATTACHMENT_TYPE_OPTIONS, TRANSFER_STATUS, label } from '../enums.js';
 import OrdersAssignModal from './orders-assign.js';
 import OrdersHoldModal from './orders-hold.js';
 import OrdersPriceModal from './orders-price.js';
 import OrdersFactoryModal from './orders-factory.js';
-import AttachmentsUpload, { attUploading, attHasError, attDone } from './attachments-upload.js';
+import OrdersSatModal from './orders-sat.js';
+import AttachmentsUpload, { MAX_COUNT, attUploading, attHasError, attDone } from './attachments-upload.js';
 import { navigate } from '../router.js';
+
+/** 附件类别，顺序即分组顺序（Sat → RepairForm → Other） */
+const ATT_TYPES = Object.keys(ATTACHMENT_TYPE);
 
 /**
  * 原型按状态的按钮映射。每项：
@@ -46,7 +53,7 @@ const LAYOUT = {
 
 export default {
   name: 'OrdersDrawer',
-  components: { OrdersAssignModal, OrdersHoldModal, OrdersPriceModal, OrdersFactoryModal, AttachmentsUpload },
+  components: { OrdersAssignModal, OrdersHoldModal, OrdersPriceModal, OrdersFactoryModal, OrdersSatModal, AttachmentsUpload },
   props: {
     orderId: { type: Number, required: true },
     serverOffset: { type: Number, default: 0 },
@@ -69,9 +76,12 @@ export default {
       priceInitial: null, // 打开定价弹窗时预填的金额（采用建议）
       factoryNode: null, // 正在记录 / 更正的返厂节点（FactoryDto.nodes 项）
       attOpen: false, // 「添加附件」面板是否展开
+      attType: 'Other', // 展开的是哪一类（同一时间只展开一组）
       attItems: [], // 待添加的附件条目（attachments-upload.js）
       attSaving: false,
-      attBusy: 0, // 正在下载 / 删除 / 切换的附件 id
+      attBusy: 0, // 正在下载 / 删除 / 切换 / 改类别的附件 id
+      attTypeOptions: ATTACHMENT_TYPE_OPTIONS,
+      satOpen: false, // 「修改 SAT 信息」弹窗
     };
   },
   computed: {
@@ -80,7 +90,53 @@ export default {
     deviceLine() {
       const d = this.d;
       if (!d) return '';
-      return [d.deviceModel, d.deviceSn, label(SERVICE_TYPE, d.serviceType)].filter(Boolean).join(' · ');
+      // 设备汇总文字用服务端的 deviceText，不自己拼
+      return [d.deviceText, label(SERVICE_TYPE, d.serviceType)].filter(Boolean).join(' · ');
+    },
+    /** 设备资料区：项目编号 / SAT / 逐台设备 */
+    deviceInfo() {
+      const d = this.d;
+      if (!d) return null;
+      const signed = d.satSigned === true;
+      return {
+        projectNo: d.projectNo || '—',
+        satText: d.satText || (signed ? '已完成' : '未完成'),
+        satDateLabel: d.satDateLabel || (signed ? 'SAT 完成时间' : '发货时间'),
+        satDate: d.satDate || '未填写',
+        satEmpty: !d.satDate,
+        devices: (d.devices || []).map((v, i) => ({
+          key: v.seq != null ? v.seq : i,
+          seq: v.seq != null ? v.seq : i + 1,
+          name: v.name || '—',
+          sn: v.sn || '—',
+          model: v.model || '—',
+        })),
+      };
+    },
+    /** 待确认的转交（提示块） */
+    transfer() {
+      const t = this.d && this.d.pendingTransfer;
+      if (!t) return null;
+      return {
+        t,
+        statusText: t.statusText || label(TRANSFER_STATUS, t.status, '待确认'),
+        time: fmtMDHM(t.createdAt),
+        text: t.text || '',
+        reason: t.reason || '',
+        canCancel: this.actions.includes('cancelTransfer'),
+        busy: this.busy === 'cancelTransfer',
+      };
+    },
+    /** 转交记录：按时间倒序（服务端给的是 createdAt、id 正序） */
+    transferRows() {
+      return ((this.d && this.d.transfers) || []).slice().reverse().map(t => ({
+        key: t.id,
+        text: t.text || '',
+        reason: t.reason || '',
+        time: fmtMDHM(t.createdAt),
+        statusText: t.statusText || label(TRANSFER_STATUS, t.status),
+        tone: t.status === 'Pending' ? 'warn' : 'neutral',
+      }));
     },
     actions() { return (this.d && this.d.actions) || []; },
     onsite() { return !!this.d && this.d.serviceType === 'Onsite'; },
@@ -182,6 +238,9 @@ export default {
           role: p.role,
           roleLabel: label(PARTICIPANT_ROLE, p.role),
           roleTone: p.role === 'Lead' ? 'dark' : 'neutral',
+          // v1.3：有退出记录的「已退出」带 已转交 / 已改派
+          exitText: p.role === 'Former' ? (p.exitText || '') : '',
+          exitTitle: p.role === 'Former' && p.exitedAt ? '退出时间 ' + fmtMDHM(p.exitedAt) : null,
           hours: this.onsite ? ((m || p.onSiteSince) ? fmtHM(m) : '—') : '—',
           onSite: !!p.onSiteSince,
           missing: !!p.missingPunch,
@@ -233,11 +292,29 @@ export default {
           media: a.kind === 'Image' || a.kind === 'Video',
           meta,
           fromOrderPhoto: a.source === 'OrderPhoto',
+          // 附件类别：未知 / 缺失一律归「其他附件」
+          type: ATTACHMENT_TYPE[a.attachmentType] ? a.attachmentType : 'Other',
           restricted: !!a.restricted,
           canDelete: !!a.canDelete,
           canToggle: !!a.canToggleRestricted,
+          canChangeType: !!a.canChangeType,
           toggleLabel: a.restricted ? '设为所有人可见' : '设为仅销售和主管可见',
           busy: this.attBusy === a.id,
+        };
+      });
+    },
+    /** 附件按类别分三组（顺序 Sat → RepairForm → Other，组内保持服务端顺序）；空组也显示标题 */
+    attGroups() {
+      const rows = this.attRows;
+      return ATT_TYPES.map(type => {
+        const items = rows.filter(r => r.type === type);
+        return {
+          type,
+          label: ATTACHMENT_TYPE[type].label,
+          short: ATTACHMENT_TYPE[type].short,
+          count: items.length,
+          items,
+          adding: this.attOpen && this.attType === type,
         };
       });
     },
@@ -249,6 +326,11 @@ export default {
     attRemaining() {
       const n = this.d ? Number(this.d.attachmentRemaining) : 0;
       return isFinite(n) ? Math.max(0, n) : 0;
+    },
+    /** 每单附件上限（服务端 attachmentLimit，v1.3 为 50） */
+    attLimit() {
+      const n = this.d ? Number(this.d.attachmentLimit) : 0;
+      return isFinite(n) && n > 0 ? n : MAX_COUNT;
     },
     attUploading() { return attUploading(this.attItems); },
     attReady() { return attDone(this.attItems); },
@@ -447,6 +529,32 @@ export default {
       }
     },
 
+    // ------------------------------------------------ 转交（v1.3：主管只查看与撤销，换人用改派）
+    async cancelTransfer() {
+      if (this.busy) return;
+      const d = this.d;
+      const t = d && d.pendingTransfer;
+      if (!t) return;
+      const from = (t.from && t.from.name) || '发起人';
+      const to = (t.to && t.to.name) || '接手人';
+      if (!(await confirm('撤销转交', `确定撤销 ${from} 转交给 ${to} 的请求？工单仍由 ${from} 负责。`, { okText: '撤销', danger: true }))) return;
+      this.busy = 'cancelTransfer';
+      try {
+        const res = await api.orders.cancelTransfer(d.id, t.id);
+        this.applied(res, '已撤销转交');
+      } catch (e) {
+        this.failed(e);
+      } finally {
+        this.busy = '';
+      }
+    },
+
+    // ------------------------------------------------ SAT 信息（v1.3）
+    onSatSaved(res) {
+      this.satOpen = false;
+      this.applied(res, 'SAT 信息已保存');
+    },
+
     // ------------------------------------------------ 协助人
     openAssign(mode) {
       this.assignMode = mode;
@@ -529,10 +637,34 @@ export default {
         this.attBusy = 0;
       }
     },
-    openAttAdd() {
-      if (this.attOpen) return;
-      if (this.attRemaining <= 0) { toast('附件最多 20 个，本单已达上限', 'error'); return; }
+    /** 改附件类别（下拉）：成功后该行移到对应分组；失败还原选项 */
+    async changeAttType(row, e) {
+      const el = e.target;
+      const type = el.value;
+      if (type === row.type) return;
+      if (this.attBusy || !ATTACHMENT_TYPE[type]) { el.value = row.type; return; }
+      this.attBusy = row.a.id;
+      try {
+        const res = await api.orders.setAttachmentType(this.d.id, row.a.id, type);
+        this.applied(res, `已归为「${ATTACHMENT_TYPE[type].short}」`);
+      } catch (err) {
+        el.value = row.type;
+        this.failed(err);
+      } finally {
+        this.attBusy = 0;
+      }
+    },
+    /** 在某一类下展开上传区（同一时间只展开一组）；本次添加的附件整批归入该类 */
+    async openAttAdd(type) {
+      if (this.attSaving || !ATTACHMENT_TYPE[type]) return;
+      if (this.attOpen && this.attType === type) return;
+      if (this.attRemaining <= 0) { toast(`附件最多 ${this.attLimit} 个，本单已达上限`, 'error'); return; }
+      if (this.attOpen && this.attItems.length) {
+        const ok = await confirm('放弃已选的附件？', '换到另一类后，已选但未提交的附件不会保存。', { okText: '放弃', danger: true });
+        if (!ok || this.attSaving) return;
+      }
       this.attItems = [];
+      this.attType = type;
       this.attOpen = true;
     },
     cancelAttAdd() {
@@ -712,9 +844,36 @@ export default {
         <button v-if="suggestion.pending && canSetPrice" type="button" class="btn btn-secondary btn-sm" @click="openPrice(suggestion.amount)">采用</button>
       </div>
 
+      <h3 class="section-title orders-dr-sec">设备资料
+        <button v-if="d.canEditSat" type="button" class="btn-link orders-dr-link" @click="satOpen = true">修改 SAT</button></h3>
+      <dl class="kv dev-kv">
+        <div><dt>项目编号</dt><dd :class="{ 'dev-empty': deviceInfo.projectNo === '—' }">{{ deviceInfo.projectNo }}</dd></div>
+        <div><dt>是否已完成 SAT</dt><dd>{{ deviceInfo.satText }}</dd></div>
+        <div><dt>{{ deviceInfo.satDateLabel }}</dt><dd :class="{ 'dev-empty': deviceInfo.satEmpty }">{{ deviceInfo.satDate }}</dd></div>
+      </dl>
+      <table v-if="deviceInfo.devices.length" class="dev-list">
+        <thead><tr><th class="dev-col-no">#</th><th>设备名称</th><th>设备编号</th><th>设备型号</th></tr></thead>
+        <tbody>
+          <tr v-for="v in deviceInfo.devices" :key="v.key">
+            <td class="dev-col-no num">{{ v.seq }}</td><td>{{ v.name }}</td><td class="mono">{{ v.sn }}</td><td>{{ v.model }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-else class="orders-dr-empty dev-none">未填设备</div>
+
       <div v-if="holdInfo" class="alert alert-info orders-dr-hold" role="note">
         <div class="alert-row"><span class="orders-dr-pause" aria-hidden="true"></span><span>暂停搁置 · {{ holdInfo.text }}</span></div>
         <div class="alert-note">{{ holdInfo.sub }}</div>
+      </div>
+
+      <div v-if="transfer" class="alert alert-warn orders-dr-req" role="note">
+        <div class="orders-dr-req-head"><span class="orders-dr-req-title">转交待确认</span><span class="tag tag-warn">{{ transfer.statusText }}</span>
+          <span class="orders-dr-req-time num">{{ transfer.time }}</span></div>
+        <div class="orders-dr-req-text">{{ transfer.text }}</div>
+        <div class="orders-dr-req-text tr-reason">原因：{{ transfer.reason }}</div>
+        <div v-if="transfer.canCancel" class="alert-actions">
+          <button type="button" class="btn btn-secondary" :disabled="!!busy" @click="cancelTransfer">{{ transfer.busy ? '处理中…' : '撤销转交' }}</button>
+        </div>
       </div>
 
       <div v-for="q in pendingRequests" :key="'rq' + q.key" class="alert alert-warn orders-dr-req" role="note">
@@ -760,10 +919,24 @@ export default {
           <Avatar :user="p.user" :size="24" />
           <span class="orders-dr-person-name ellipsis">{{ p.name }}</span>
           <Tag :tone="p.roleTone">{{ p.roleLabel }}</Tag>
+          <span v-if="p.exitText" class="tr-exit" :title="p.exitTitle">{{ p.exitText }}</span>
           <span v-if="p.onSite" class="hours-live"><i></i>现场中</span>
           <Tag v-if="p.missing" tone="missing">缺卡</Tag>
           <span class="orders-dr-person-hours num" :title="onsite ? '此人在本单的累计现场工时' : '非现场工单不计工时'">{{ p.hours }}</span>
         </div>
+      </template>
+
+      <template v-if="transferRows.length">
+        <h3 class="section-title">转交记录</h3>
+        <ul class="tr-list">
+          <li v-for="t in transferRows" :key="t.key" class="tr-row">
+            <div class="tr-main">
+              <div class="tr-text">{{ t.text }}</div>
+              <div class="tr-reason">原因：{{ t.reason }}</div>
+            </div>
+            <div class="tr-side"><Tag :tone="t.tone">{{ t.statusText }}</Tag><span class="tr-time num">{{ t.time }}</span></div>
+          </li>
+        </ul>
       </template>
 
       <template v-if="d.factory">
@@ -797,37 +970,48 @@ export default {
 
       <h3 class="section-title orders-dr-sec"><span>附件<span class="att-count num">（{{ attRows.length }}）</span></span>
         <span class="att-head-links">
-          <button v-if="d.canAddAttachment" type="button" class="btn-link orders-dr-link" @click="openAttAdd">添加附件</button>
           <button type="button" class="btn-link orders-dr-link" title="查看本单的全部文件（含完工照片、签字件等）" @click="openAllFiles">全部文件</button>
         </span></h3>
-      <div v-if="attOpen" class="att-add">
-        <AttachmentsUpload v-model="attItems" :limit="attRemaining" :can-restrict="!!d.canRestrictAttachment" :disabled="attSaving" />
-        <div class="field-hint">支持图片、视频、Word、Excel、PPT、PDF、TXT、CSV；图片单个不超过 20MB，其他不超过 100MB。</div>
-        <div class="att-add-actions">
-          <button type="button" class="btn btn-primary" :disabled="attSaving || attUploading || !attReady.length" @click="submitAtt">
-            {{ attSaving ? '提交中…' : (attUploading ? '上传中…' : '确定添加') }}</button>
-          <button type="button" class="btn btn-secondary" :disabled="attSaving" @click="cancelAttAdd">取消</button>
+      <section v-for="g in attGroups" :key="g.type" class="att-group" :aria-label="g.short">
+        <div class="att-group-head">
+          <span class="att-group-title">{{ g.label }}<span class="att-count num">（{{ g.count }}）</span></span>
+          <button v-if="d.canAddAttachment" type="button" class="btn-link orders-dr-link" :disabled="attSaving"
+                  :aria-label="'添加' + g.short" @click="openAttAdd(g.type)">添加</button>
         </div>
-      </div>
-      <div v-if="!attRows.length" class="orders-dr-empty">暂无附件</div>
-      <ul v-else class="att-list">
-        <li v-for="r in attRows" :key="r.key" class="att-row" :class="{ 'att-row-busy': r.busy }">
-          <span class="att-badge" :style="{ background: r.badge.color }" aria-hidden="true">{{ r.badge.text }}</span>
-          <div class="att-main">
-            <div class="att-name-line">
-              <button type="button" class="att-name ellipsis" :title="(r.media ? '预览 ' : '下载 ') + r.name" @click="openAtt(r)">{{ r.name }}</button>
-              <Tag v-if="r.fromOrderPhoto" tone="neutral">建单照片</Tag>
-              <Tag v-if="r.restricted" tone="warn">仅销售和主管可见</Tag>
+        <div v-if="!g.items.length" class="att-group-empty">暂无</div>
+        <ul v-else class="att-list">
+          <li v-for="r in g.items" :key="r.key" class="att-row" :class="{ 'att-row-busy': r.busy }">
+            <span class="att-badge" :style="{ background: r.badge.color }" aria-hidden="true">{{ r.badge.text }}</span>
+            <div class="att-main">
+              <div class="att-name-line">
+                <button type="button" class="att-name ellipsis" :title="(r.media ? '预览 ' : '下载 ') + r.name" @click="openAtt(r)">{{ r.name }}</button>
+                <Tag v-if="r.fromOrderPhoto" tone="neutral">建单照片</Tag>
+                <Tag v-if="r.restricted" tone="warn">仅销售和主管可见</Tag>
+              </div>
+              <div class="att-meta num">{{ r.meta }}</div>
+              <div class="att-actions">
+                <button type="button" class="btn-link att-link" :disabled="!!attBusy" @click="downloadAtt(r)">下载</button>
+                <button v-if="r.canToggle" type="button" class="btn-link att-link" :disabled="!!attBusy" @click="toggleAtt(r)">{{ r.toggleLabel }}</button>
+                <button v-if="r.canDelete" type="button" class="btn-link att-link att-link-danger" :disabled="!!attBusy" @click="deleteAtt(r)">删除</button>
+                <select v-if="r.canChangeType" class="select att-type-select" aria-label="附件类别" title="修改附件类别"
+                        :value="r.type" :disabled="!!attBusy" @change="changeAttType(r, $event)">
+                  <option v-for="o in attTypeOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+                </select>
+              </div>
             </div>
-            <div class="att-meta num">{{ r.meta }}</div>
-            <div class="att-actions">
-              <button type="button" class="btn-link att-link" :disabled="!!attBusy" @click="downloadAtt(r)">下载</button>
-              <button v-if="r.canToggle" type="button" class="btn-link att-link" :disabled="!!attBusy" @click="toggleAtt(r)">{{ r.toggleLabel }}</button>
-              <button v-if="r.canDelete" type="button" class="btn-link att-link att-link-danger" :disabled="!!attBusy" @click="deleteAtt(r)">删除</button>
-            </div>
+          </li>
+        </ul>
+        <div v-if="g.adding" class="att-add">
+          <div class="att-add-title">添加到「{{ g.short }}」</div>
+          <AttachmentsUpload v-model="attItems" :type="g.type" :limit="attRemaining" :can-restrict="!!d.canRestrictAttachment" :disabled="attSaving" />
+          <div class="field-hint">支持图片、视频、Word、Excel、PPT、PDF、TXT、CSV；图片单个不超过 20MB，其他不超过 100MB。</div>
+          <div class="att-add-actions">
+            <button type="button" class="btn btn-primary" :disabled="attSaving || attUploading || !attReady.length" @click="submitAtt">
+              {{ attSaving ? '提交中…' : (attUploading ? '上传中…' : '确定添加') }}</button>
+            <button type="button" class="btn btn-secondary" :disabled="attSaving" @click="cancelAttAdd">取消</button>
           </div>
-        </li>
-      </ul>
+        </div>
+      </section>
 
       <h3 class="section-title">打卡记录</h3>
       <div v-if="!punchRows.length" class="orders-dr-empty">{{ emptyPunchText }}</div>
@@ -866,5 +1050,6 @@ export default {
   <OrdersPriceModal v-if="priceOpen && d" :order="d" :initial="priceInitial" @close="priceOpen = false; closeAfterPrice = false" @done="onPriced" />
   <OrdersFactoryModal v-if="factoryNode && d" :key="factoryNode.node" :order="d" :node="factoryNode"
                       @close="factoryNode = null" @done="onFactoryDone" />
+  <OrdersSatModal v-if="satOpen && d" :order="d" @close="satOpen = false" @done="onSatSaved" />
   `,
 };

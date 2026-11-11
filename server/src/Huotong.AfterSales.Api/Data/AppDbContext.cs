@@ -16,6 +16,9 @@ public class AppDbContext : DbContext
     public DbSet<OrderRequest> OrderRequests => Set<OrderRequest>();
     public DbSet<PriceSuggestion> PriceSuggestions => Set<PriceSuggestion>();
     public DbSet<FactoryRecord> FactoryRecords => Set<FactoryRecord>();
+    public DbSet<OrderDevice> OrderDevices => Set<OrderDevice>();
+    public DbSet<OrderTransfer> OrderTransfers => Set<OrderTransfer>();
+    public DbSet<OrderExit> OrderExits => Set<OrderExit>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -51,6 +54,9 @@ public class AppDbContext : DbContext
             // PriceSet：不要 HasDefaultValue(true)（EF 会吞掉显式的 false）；列默认值只写在迁移里
             e.Property(x => x.HoldReasonType).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.HoldFromStatus).HasConversion<string>().HasMaxLength(20);
+            // v1.3：DeviceText / PendingTransferToId 都不要 HasDefaultValue；PendingTransferToId 是普通整数列（无外键）
+            e.Property(x => x.DeviceText).HasMaxLength(250);
+            e.HasIndex(x => x.PendingTransferToId);
             e.HasOne(x => x.Creator).WithMany().HasForeignKey(x => x.CreatorId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Assignee).WithMany().HasForeignKey(x => x.AssigneeId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -80,6 +86,8 @@ public class AppDbContext : DbContext
             e.Property(x => x.Path).HasMaxLength(260);
             e.Property(x => x.MimeType).HasMaxLength(100);
             e.Property(x => x.DisplayName).HasMaxLength(200);
+            // v1.3：不要 HasDefaultValue（EF 会吞掉与 CLR 默认值相同的显式值）；列默认值 'Other' 只写在迁移里
+            e.Property(x => x.AttachmentType).HasConversion<string>().HasMaxLength(20);
             e.HasIndex(x => x.OrderId);
             e.HasIndex(x => x.CreatedAt);
             // v1.2 软删除：已删除的文件对所有读取路径都视为不存在（需要看到时用 IgnoreQueryFilters）
@@ -128,6 +136,39 @@ public class AppDbContext : DbContext
             e.HasIndex(x => new { x.OrderId, x.Node }).IsUnique();
             e.HasOne(x => x.Order).WithMany().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Operator).WithMany().HasForeignKey(x => x.OperatorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ---------- v1.3 ----------
+
+        b.Entity<OrderDevice>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(100);
+            e.Property(x => x.Sn).HasMaxLength(100);
+            e.Property(x => x.Model).HasMaxLength(100);
+            e.HasIndex(x => x.OrderId);
+            e.HasOne(x => x.Order).WithMany(o => o.Devices).HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<OrderTransfer>(e =>
+        {
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Reason).HasMaxLength(200);
+            e.Property(x => x.Reply).HasMaxLength(200);
+            e.HasIndex(x => x.OrderId);
+            e.HasIndex(x => new { x.ToEngineerId, x.Status });
+            e.HasOne(x => x.Order).WithMany().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.From).WithMany().HasForeignKey(x => x.FromEngineerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.To).WithMany().HasForeignKey(x => x.ToEngineerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.DecidedBy).WithMany().HasForeignKey(x => x.DecidedById).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<OrderExit>(e =>
+        {
+            e.Property(x => x.Via).HasConversion<string>().HasMaxLength(20);
+            e.HasIndex(x => new { x.OrderId, x.EngineerId }).IsUnique();
+            e.HasIndex(x => x.EngineerId);
+            e.HasOne(x => x.Order).WithMany(o => o.Exits).HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Engineer).WithMany().HasForeignKey(x => x.EngineerId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

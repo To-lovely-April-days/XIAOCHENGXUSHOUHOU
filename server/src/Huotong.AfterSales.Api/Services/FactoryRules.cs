@@ -29,9 +29,13 @@ public static class FactoryRules
 
     public static bool NeedsCourier(FactoryNode node) => node is FactoryNode.CustomerShipped or FactoryNode.ShippedBack;
 
-    /// <summary>第 3 步：权限。节点 1、5：建单人 / 负责人 / 主管；节点 2、4：负责人 / 主管</summary>
+    /// <summary>
+    /// 第 3 步：权限。节点 1、5：建单人 / 负责人 / 主管；节点 2、4：负责人 / 主管。
+    /// v1.3：本单「已退出」的工程师一律不可以（即使他是建单人）；o 须带 Exits。
+    /// </summary>
     public static BizException? Permission(FactoryNode node, WorkOrder o, CurrentUser user)
     {
+        if (OrderViewBuilder.IsFormer(o, user)) return BizException.Forbidden(OrderViewBuilder.FormerDenied);
         var lead = o.AssigneeId == user.Id;
         var supervisor = user.Role == Role.Supervisor;
         if (node is FactoryNode.CustomerShipped or FactoryNode.CustomerSigned)

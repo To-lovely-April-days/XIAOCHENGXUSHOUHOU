@@ -7,24 +7,34 @@
  * @typedef {{id:number,name:string,surname:string,avatarUrl:?string,role:'Engineer'|'Sales'|'Supervisor'}} UserBrief
  * @typedef {UserBrief & {roleName:string,department:string,phoneMasked:string,phone:string}} User
  * @typedef {{id:number,url:string,category:string,mimeType:string,createdAt:string,name:string,size:number,kind:'Image'|'Video'|'Document',ext:string}} FileDto
- * @typedef {FileDto & {source:'Attachment'|'OrderPhoto',sourceLabel:string,restricted:boolean,uploader:?UserBrief,canDelete:boolean,canToggleRestricted:boolean}} AttachmentDto
- *   v1.2 工单附件；restricted = 仅销售和主管可见（工程师从任何接口都拿不到）
+ * @typedef {FileDto & {source:'Attachment'|'OrderPhoto',sourceLabel:string,restricted:boolean,uploader:?UserBrief,canDelete:boolean,canToggleRestricted:boolean,
+ *   attachmentType:'Sat'|'RepairForm'|'Other',attachmentTypeLabel:string,attachmentTypeShort:string,canChangeType:boolean}} AttachmentDto
+ *   v1.2 工单附件；restricted = 仅销售和主管可见（工程师从任何接口都拿不到）；v1.3 attachmentType = 附件类别
+ * @typedef {{seq:number,name:string,sn:string,model:string,title:string}} DeviceDto  v1.3 工单的一台设备；三项没填的为 ''
+ * @typedef {{id:number,orderId:number,status:'Pending'|'Accepted'|'Rejected'|'Cancelled'|'Expired',statusText:string,from:UserBrief,to:UserBrief,
+ *   reason:string,createdAt:string,decidedAt:?string,decidedBy:?UserBrief,reply:?string,text:string}} TransferDto
+ *   v1.3 转交；text 为可直接展示的一句话；能不能接手 / 拒绝 / 撤回只看 OrderDetail.actions
  * @typedef {Object} OrderListItem  id, orderNo, status, urgency, serviceType, problemType, customerName, city, region,
- *   deviceModel, deviceSn, symptom, price:?number, priceSet:?boolean（工程师恒为 null）, assignee:?UserBrief（负责人）,
- *   assistants:UserBrief[], myRole:?('Lead'|'Assistant'), myMinutes:?number, myOnSiteSince:?string, creator:UserBrief,
+ *   projectNo:?string（旧单为 null）, deviceText（设备汇总文字，永不为空；列表、标题一律显示它）,
+ *   deviceModel, deviceSn（仅保留给旧客户端，v1.3 不再读）, symptom, price:?number, priceSet:?boolean（工程师恒为 null）, assignee:?UserBrief（负责人）,
+ *   assistants:UserBrief[], myRole:?('Lead'|'Assistant'|'Former'), myExitText:?('已转交'|'已改派')（仅 Former）,
+ *   pendingTransfer:?TransferDto（本单待确认的转交）, myMinutes:?number, myOnSiteSince:?string, creator:UserBrief,
  *   createdAt, claimedAt, appointmentTime, submittedAt, closedAt, totalMinutes（所有人合计）, onSiteSince, lastArriveTime,
  *   issues:string[], progressStep:number(0-5), holdReasonType, holdText, holdFromStatus, pendingRequestCount, factoryText
- * @typedef {Object} OrderDetail  OrderListItem + source, contactName, contactPhone, address, latitude, longitude, satDate,
- *   satSigned, productStage, projectNo, faultTime, customerTried, siteEnvironment, customerRequest, holdReason(=holdText),
+ * @typedef {Object} OrderDetail  OrderListItem + source, contactName, contactPhone, address, latitude, longitude,
+ *   devices:DeviceDto[], satSigned（是否已完成 SAT）, satDate（'yyyy-MM-dd' | 旧数据 'yyyy-MM' | ''）, satText, satDateLabel,
+ *   canEditSat:boolean, transfers:TransferDto[], readOnlyText:?string（当前用户已退出本单时非 null）,
+ *   productStage, faultTime, customerTried, siteEnvironment, customerRequest, holdReason(=holdText),
  *   priceSetAt, priceSuggestion:?{id,amount,note,by:UserBrief,createdAt,pending}, hold:?{reasonType,reasonText,note,text,fromStatus,at,by},
  *   requests:RequestDto[], participants:ParticipantDto[], factory:?{nodes:FactoryNodeDto[]}, closeBlockedReason:?string,
  *   closeHints:string[], completion, files{orderPhotos,punchPhotos,processPhotos,signatures,factoryPhotos},
  *   punches:PunchDto[], logs:StatusLogDto[]（含 kind）, issueDetails[]（含 engineer）, actions:string[],
  *   v1.2：attachments:AttachmentDto[]（当前用户可见的附件）, canAddAttachment:boolean, canRestrictAttachment:boolean,
- *   attachmentLimit:number(20), attachmentRemaining:number（files.orderPhotos 仅保留给 v1.1 客户端，v1.2 不再读）
+ *   attachmentLimit:number(50), attachmentRemaining:number（files.orderPhotos 仅保留给 v1.1 客户端，v1.2 不再读）
  * @typedef {Object} RequestDto  id, orderId, type:'Hold'|'AddAssistant', status, requester:UserBrief, createdAt, reasonType,
  *   reasonText, note, text, engineer:?UserBrief, decider, decidedAt, reply, canDecide:boolean, canCancel:boolean
- * @typedef {{user:UserBrief,role:'Lead'|'Assistant'|'Former',totalMinutes:number,onSiteSince:?string,missingPunch:boolean}} ParticipantDto
+ * @typedef {{user:UserBrief,role:'Lead'|'Assistant'|'Former',totalMinutes:number,onSiteSince:?string,missingPunch:boolean,
+ *   exitText:?('已转交'|'已改派'),exitedAt:?string}} ParticipantDto  exitText / exitedAt 只有带退出记录的 Former 有值
  * @typedef {Object} FactoryNodeDto  node, label, state:'done'|'current'|'todo'|'skipped', recorded, time, operator:?UserBrief,
  *   courier, trackingNo, note, photos:FileDto[], canRecord:boolean, canEdit:boolean
  * @typedef {Object} PunchDto  id, orderId, engineer, kind, time, latitude, longitude, address, distanceMeters, outOfRange,
@@ -112,9 +122,9 @@ const orders = {
     return get('/api/orders/hall', { filter: filter || 'all' }, opts);
   },
   /**
-   * GET /api/orders/mine 工程师本人负责或协助的工单（每项带 myRole）
-   * @param {'doing'|'check'|'closed'|'all'} [group='doing']
-   * @returns {Promise<{items:OrderListItem[],counts:{doing:number,check:number,closed:number,all:number}}>}
+   * GET /api/orders/mine 工程师本人负责、协助或已退出（已转交 / 已改派）的工单（每项带 myRole）
+   * @param {'doing'|'check'|'closed'|'former'|'all'} [group='doing'] former = 本人已退出的工单（v1.3）
+   * @returns {Promise<{items:OrderListItem[],counts:{doing:number,check:number,closed:number,former:number,all:number}}>}
    */
   mine(group, opts) {
     return get('/api/orders/mine', { group: group || 'doing' }, opts);
@@ -140,7 +150,8 @@ const orders = {
   },
   /**
    * GET /api/orders/recent-customers 最近客户（最多 5 个）
-   * @returns {Promise<Array<{customerName,contactName,contactPhone,address,latitude,longitude,deviceModel,deviceSn,satDate,satSigned,projectNo}>>}
+   * @returns {Promise<Array<{customerName,contactName,contactPhone,address,latitude,longitude,devices:Array<{name,sn,model}>,
+   *   deviceModel,deviceSn,satDate,satSigned,projectNo}>>}  v1.3：devices = 该客户最近一张工单的设备清单
    */
   recentCustomers(opts) {
     return get('/api/orders/recent-customers', null, opts);
@@ -156,9 +167,10 @@ const orders = {
   /**
    * POST /api/orders 新建工单
    * @param {Object} body 字段见 API.md：source, problemType, urgency, serviceType, customerName, contactName, contactPhone,
-   *   address, latitude, longitude, deviceModel, deviceSn, satDate('yyyy-MM'), satSigned, projectNo, faultTime, symptom,
-   *   customerTried, siteEnvironment, customerRequest, attachments:[{fileId:number,restricted?:boolean}]
-   *   （v1.2 起用 attachments，不再传 photoFileIds；v1.1 起不含 price，定价由主管在详情操作）
+   *   address, latitude, longitude, projectNo（必填）, devices:[{name,sn,model}]（选填，可为 []）, satSigned（必填：是否已完成 SAT）,
+   *   satDate('yyyy-MM-dd' | ''，选填：SAT 完成时间 / 发货时间）, faultTime, symptom,
+   *   customerTried, siteEnvironment, customerRequest, attachments:[{fileId:number,restricted?:boolean,type?:'Sat'|'RepairForm'|'Other'}]
+   *   （v1.3 起不再传 deviceModel / deviceSn；v1.2 起用 attachments，不再传 photoFileIds；v1.1 起不含 price，定价由主管在详情操作）
    * @returns {Promise<OrderDetail>}
    */
   create(body, opts) {
@@ -338,9 +350,10 @@ const orders = {
     return post('/api/orders/' + id + '/close', {}, opts);
   },
   /**
-   * POST /api/orders/{id}/attachments 添加附件（v1.2；服务端按建单人 / 负责人 / 协助人 / 主管判权）
+   * POST /api/orders/{id}/attachments 添加附件（v1.2；服务端按建单人 / 负责人 / 协助人 / 主管判权；v1.3 起已闭环也能添加）
    * @param {number} id
-   * @param {Array<{fileId:number,restricted?:boolean}>} attachments 先用 files.upload(path,'Attachment') 上传得到 fileId
+   * @param {Array<{fileId:number,restricted?:boolean,type?:'Sat'|'RepairForm'|'Other'}>} attachments
+   *   先用 files.upload(path,'Attachment') 上传得到 fileId；type = 附件类别，省略 = Other
    * @returns {Promise<OrderDetail>}
    */
   addAttachments(id, attachments, opts) {
@@ -362,6 +375,60 @@ const orders = {
    */
   setAttachmentRestricted(id, fileId, restricted, opts) {
     return post('/api/orders/' + id + '/attachments/' + fileId + '/restricted', { restricted: !!restricted }, opts);
+  },
+  /**
+   * POST /api/orders/{id}/attachments/{fileId}/type 修改附件类别（v1.3；上传人本人或主管）
+   * @param {number} id
+   * @param {number} fileId
+   * @param {'Sat'|'RepairForm'|'Other'} type
+   * @returns {Promise<OrderDetail>}
+   */
+  setAttachmentType(id, fileId, type, opts) {
+    return post('/api/orders/' + id + '/attachments/' + fileId + '/type', { type: type }, opts);
+  },
+  /**
+   * POST /api/orders/{id}/sat 修改「是否已完成 SAT」与对应时间（v1.3；建单人 / 负责人 / 主管，两项整体覆盖）
+   * @param {number} id
+   * @param {boolean} satSigned 是否已完成 SAT
+   * @param {string} [satDate] 'yyyy-MM-dd'；'' = 清空
+   * @returns {Promise<OrderDetail>}
+   */
+  setSat(id, satSigned, satDate, opts) {
+    return post('/api/orders/' + id + '/sat', { satSigned: satSigned, satDate: satDate || '' }, opts);
+  },
+  /**
+   * POST /api/orders/{id}/transfers 发起转交（v1.3；负责工程师，Accepted / InProgress / OnHold）
+   * @param {number} id
+   * @param {number} engineerId 接手人（启用中的工程师，不能是自己）
+   * @param {string} reason 转交原因，必填，≤ 200 字
+   * @returns {Promise<OrderDetail>}
+   */
+  transfer(id, engineerId, reason, opts) {
+    return post('/api/orders/' + id + '/transfers', { engineerId: engineerId, reason: reason || '' }, opts);
+  },
+  /**
+   * POST /api/orders/{id}/transfers/{transferId}/accept 确认接手（v1.3；接手人）
+   * @returns {Promise<OrderDetail>} 此时当前用户已是负责人
+   */
+  acceptTransfer(id, transferId, opts) {
+    return post('/api/orders/' + id + '/transfers/' + transferId + '/accept', {}, opts);
+  },
+  /**
+   * POST /api/orders/{id}/transfers/{transferId}/reject 拒绝接手（v1.3；接手人）
+   * @param {number} id
+   * @param {number} transferId
+   * @param {string} [reply] 拒绝理由，选填，≤ 200 字
+   * @returns {Promise<?OrderDetail>} 拒绝后仍能查看该工单 → 最新详情；否则 **null**（已无查看权，要离开详情页）
+   */
+  rejectTransfer(id, transferId, reply, opts) {
+    return post('/api/orders/' + id + '/transfers/' + transferId + '/reject', { reply: reply || null }, opts);
+  },
+  /**
+   * POST /api/orders/{id}/transfers/{transferId}/cancel 撤回（发起人）/ 撤销（主管）待确认的转交（v1.3）
+   * @returns {Promise<OrderDetail>}
+   */
+  cancelTransfer(id, transferId, opts) {
+    return post('/api/orders/' + id + '/transfers/' + transferId + '/cancel', {}, opts);
   }
 };
 /** orders.void 的别名（避免部分编辑器对保留字属性报警） */
@@ -423,8 +490,9 @@ const home = {
    * GET /api/home/engineer
    * @returns {Promise<{user:User,today:Object,state:'working'|'next'|'idle',current:?OrderListItem,
    *   next:?(OrderListItem & {address,contactName,contactPhone,latitude,longitude}),upcoming:OrderListItem[],
-   *   hall:{count:number,urgentCount:number,items:OrderListItem[]},recentDone:OrderListItem[],onHold:OrderListItem[],monthMinutes:number}>}
-   *   today 结构同 hours.today()
+   *   hall:{count:number,urgentCount:number,items:OrderListItem[]},recentDone:OrderListItem[],onHold:OrderListItem[],monthMinutes:number,
+   *   transfersToMe:OrderListItem[]}>}
+   *   today 结构同 hours.today()；v1.3 transfersToMe = 待我确认的转交（每项带 pendingTransfer）
    */
   engineer(opts) {
     return get('/api/home/engineer', null, opts);

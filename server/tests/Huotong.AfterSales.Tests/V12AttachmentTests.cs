@@ -39,8 +39,8 @@ public sealed class V12AttachmentTests : V12TestBase
             Assert.True(a.CanDelete);
             Assert.False(a.CanToggleRestricted);
         });
-        Assert.Equal(17, d.AttachmentRemaining);
-        Assert.Equal(20, d.AttachmentLimit);
+        Assert.Equal(47, d.AttachmentRemaining); // v1.3：上限 20 → 50
+        Assert.Equal(50, d.AttachmentLimit);
         Assert.True(d.CanAddAttachment);
         Assert.True(d.CanRestrictAttachment);
         // 旧字段：只含图片 / 视频
@@ -76,7 +76,7 @@ public sealed class V12AttachmentTests : V12TestBase
         Assert.StartsWith("建单照片_", a.Name);
         Assert.Equal(new[] { photo }, d.Files.OrderPhotos.Select(f => f.Id));
         Assert.Equal(FileCategory.OrderPhoto, d.Files.OrderPhotos[0].Category);
-        Assert.Equal(19, d.AttachmentRemaining);
+        Assert.Equal(49, d.AttachmentRemaining);
 
         // 旧校验不变
         var ten = NewOrder("十张照片");
@@ -98,17 +98,17 @@ public sealed class V12AttachmentTests : V12TestBase
     {
         var wm = U("王敏");
         var li = U("李工");
-        // attachments + photoFileIds 共 21 个
+        // attachments + photoFileIds 共 51 个（v1.3：上限 50）
         var req = NewOrder("超限");
         req.PhotoFileIds = Enumerable.Range(0, 9).Select(_ => NewFile(wm, FileCategory.OrderPhoto)).ToList();
-        req.Attachments = Enumerable.Range(0, 12).Select(_ => new AttachmentItem { FileId = NewFile(wm, FileCategory.Attachment) }).ToList();
-        await Fails(40000, "附件最多 20 个", () => Orders.Create(req, wm));
+        req.Attachments = Enumerable.Range(0, 42).Select(_ => new AttachmentItem { FileId = NewFile(wm, FileCategory.Attachment) }).ToList();
+        await Fails(40000, "附件最多 50 个", () => Orders.Create(req, wm));
         req.Attachments.RemoveAt(0);
-        Assert.Equal(20, (await Orders.Create(req, wm)).Attachments.Count);
+        Assert.Equal(50, (await Orders.Create(req, wm)).Attachments.Count);
 
-        var only21 = NewOrder("超限2");
-        only21.Attachments = Enumerable.Range(0, 21).Select(_ => new AttachmentItem { FileId = NewFile(wm, FileCategory.Attachment) }).ToList();
-        await Fails(40000, "附件最多 20 个", () => Orders.Create(only21, wm));
+        var only51 = NewOrder("超限2");
+        only51.Attachments = Enumerable.Range(0, 51).Select(_ => new AttachmentItem { FileId = NewFile(wm, FileCategory.Attachment) }).ToList();
+        await Fails(40000, "附件最多 50 个", () => Orders.Create(only51, wm));
 
         // 工程师建单不能设受限
         var eng = NewOrder("工程师建单");
@@ -179,16 +179,26 @@ public sealed class V12AttachmentTests : V12TestBase
         var closed = await NewClosed("闭环单");
         var wg = U("王工");
         var wm = U("王敏");
-        await Fails(40900, "工单已闭环，只有主管可以添加附件", async () => await Orders.AddAttachments(closed, Att(await UpPdf(wg, "a.pdf")), wg));
-        await Fails(40900, "工单已闭环，只有主管可以添加附件", async () => await Orders.AddAttachments(closed, Att(await UpPdf(wm, "a.pdf")), wm));
-        // 闭环 + 非参与方销售：先报状态（第 5 步在第 6 步之前）
+        // v1.3：闭环之后负责人、建单人也能继续添加（附件随时可传）
+        var d = await Orders.AddAttachments(closed, Att(await UpPdf(wg, "闭环后补传.pdf")), wg);
+        Assert.Contains(d.Attachments, a => a.Name == "闭环后补传.pdf");
+        Assert.True(d.CanAddAttachment);
+        d = await Orders.AddAttachments(closed, Att(await UpPdf(wm, "签字验收单.pdf")), wm);
+        Assert.Contains(d.Attachments, a => a.Name == "签字验收单.pdf");
+        Assert.True(d.CanAddAttachment);
+        // 闭环 + 非参与方销售：不再报状态，按「不是参与方」拒绝
         var sl = U("孙磊");
-        await Fails(40900, "工单已闭环，只有主管可以添加附件", async () => await Orders.AddAttachments(closed, Att(await UpPdf(sl, "a.pdf")), sl));
-        var d = await Orders.AddAttachments(closed, Att(await UpPdf(Sup, "结算单.pdf")), Sup);
+        await Fails(40300, "只有建单人、负责工程师、协助人或主管可以添加附件",
+            async () => await Orders.AddAttachments(closed, Att(await UpPdf(sl, "a.pdf")), sl));
+        Assert.False((await Orders.Detail(closed, sl)).CanAddAttachment);
+        d = await Orders.AddAttachments(closed, Att(await UpPdf(Sup, "结算单.pdf")), Sup);
         Assert.Contains(d.Attachments, a => a.Name == "结算单.pdf");
         Assert.True(d.CanAddAttachment);
-        Assert.False((await Orders.Detail(closed, wg)).CanAddAttachment);
-        Assert.False((await Orders.Detail(closed, wm)).CanAddAttachment);
+        Assert.True((await Orders.Detail(closed, wg)).CanAddAttachment);
+        Assert.True((await Orders.Detail(closed, wm)).CanAddAttachment);
+        // 闭环后只能新增不能删除（主管除外）——规则不变
+        var after = d.Attachments.Single(a => a.Name == "闭环后补传.pdf").Id;
+        await Fails(40900, "工单已闭环，只有主管可以删除附件", () => Orders.DeleteAttachment(closed, after, wg));
 
         var voided = await NewPending("作废单");
         await Orders.Void(voided, new ReasonRequest(), Sup);
@@ -235,30 +245,30 @@ public sealed class V12AttachmentTests : V12TestBase
     }
 
     [Fact]
-    public async Task AddRespectsLimitOfTwenty()
+    public async Task AddRespectsLimitOfFifty()
     {
         var wm = U("王敏");
         var req = NewOrder("上限");
         req.PhotoFileIds = Enumerable.Range(0, 9).Select(_ => NewFile(wm, FileCategory.OrderPhoto)).ToList();
-        req.Attachments = Enumerable.Range(0, 9).Select(i => new AttachmentItem { FileId = NewFile(wm, FileCategory.Attachment), Restricted = i == 0 }).ToList();
+        req.Attachments = Enumerable.Range(0, 39).Select(i => new AttachmentItem { FileId = NewFile(wm, FileCategory.Attachment), Restricted = i == 0 }).ToList();
         var d = await Orders.Create(req, wm);
         Assert.Equal(2, d.AttachmentRemaining);
         int[] Fresh(int n) => Enumerable.Range(0, n).Select(_ => NewFile(wm, FileCategory.Attachment)).ToArray();
 
-        await Fails(40000, "附件最多 20 个，本单还可添加 2 个", () => Orders.AddAttachments(d.Id, Att(Fresh(3)), wm));
+        await Fails(40000, "附件最多 50 个，本单还可添加 2 个", () => Orders.AddAttachments(d.Id, Att(Fresh(3)), wm));
         d = await Orders.AddAttachments(d.Id, Att(Fresh(2)), wm);
-        Assert.Equal(20, d.Attachments.Count);
+        Assert.Equal(50, d.Attachments.Count);
         Assert.Equal(0, d.AttachmentRemaining);
-        await Fails(40000, "附件最多 20 个，本单已达上限", () => Orders.AddAttachments(d.Id, Att(Fresh(1)), wm));
-        await Fails(40000, "附件最多 20 个，本单已达上限", () => Orders.AddAttachments(d.Id, Att(NewFile(Sup, FileCategory.Attachment)), Sup));
+        await Fails(40000, "附件最多 50 个，本单已达上限", () => Orders.AddAttachments(d.Id, Att(Fresh(1)), wm));
+        await Fails(40000, "附件最多 50 个，本单已达上限", () => Orders.AddAttachments(d.Id, Att(NewFile(Sup, FileCategory.Attachment)), Sup));
 
         // 名额含工程师看不到的受限附件
         await Orders.Claim(d.Id, U("王工"));
         var eng = await Orders.Detail(d.Id, U("王工"));
-        Assert.Equal(19, eng.Attachments.Count);
+        Assert.Equal(49, eng.Attachments.Count);
         Assert.Equal(0, eng.AttachmentRemaining);
         var wg = U("王工");
-        await Fails(40000, "附件最多 20 个，本单已达上限", () => Orders.AddAttachments(d.Id, Att(NewFile(wg, FileCategory.Attachment)), wg));
+        await Fails(40000, "附件最多 50 个，本单已达上限", () => Orders.AddAttachments(d.Id, Att(NewFile(wg, FileCategory.Attachment)), wg));
 
         // 删除后名额释放
         d = await Orders.DeleteAttachment(d.Id, d.Attachments[0].Id, wm);
@@ -369,7 +379,7 @@ public sealed class V12AttachmentTests : V12TestBase
         // 主管可以删任何人的
         d = await Orders.DeleteAttachment(id, sales, Sup);
         Assert.Empty(d.Attachments);
-        Assert.Equal(20, d.AttachmentRemaining);
+        Assert.Equal(50, d.AttachmentRemaining);
         Assert.Equal("赵主管 删除附件 销售的.pdf", d.Logs[^1].Text);
     }
 
@@ -487,7 +497,7 @@ public sealed class V12AttachmentTests : V12TestBase
         Assert.Equal(3, d.Files.OrderPhotos.Count);
         Assert.DoesNotContain(d.Files.OrderPhotos, p => p.Id == img);
         Assert.DoesNotContain(d.Logs, l => l.Kind == LogKind.AttachmentPrivate);
-        Assert.Equal(13, d.AttachmentRemaining); // 20 − 7：名额含受限附件
+        Assert.Equal(43, d.AttachmentRemaining); // 50 − 7：名额含受限附件
         Assert.False(d.CanRestrictAttachment);
         Assert.True(d.CanAddAttachment);
         // 序列化后的整个详情不含受限文件的任何信息
@@ -523,7 +533,7 @@ public sealed class V12AttachmentTests : V12TestBase
             Assert.Equal(3, full.Attachments.Count(a => a.Restricted));
             Assert.Contains(full.Files.OrderPhotos, p => p.Id == img);
             Assert.Contains(full.Logs, l => l.Kind == LogKind.AttachmentPrivate && l.Text == "王敏 上传附件 合同底价.pdf、机密照片.jpg（仅销售和主管可见）");
-            Assert.Equal(13, full.AttachmentRemaining);
+            Assert.Equal(43, full.AttachmentRemaining);
             Assert.Equal("报价单.pdf", (await Files.ResolveDownload(secret.Id, u)).Name);
         }
     }
@@ -541,7 +551,7 @@ public sealed class V12AttachmentTests : V12TestBase
         await Orders.SetAttachmentRestricted(id, f, new RestrictedRequest { Restricted = true }, Sup);
         d = await Orders.Detail(id, wg);
         Assert.Empty(d.Attachments);
-        Assert.Equal(19, d.AttachmentRemaining);
+        Assert.Equal(49, d.AttachmentRemaining);
         await Fails(40400, "附件不存在", () => Orders.DeleteAttachment(id, f, wg));
         await Fails(40400, "文件不存在", () => Files.ResolveDownload(f, wg));
         Assert.DoesNotContain(d.Logs, l => l.Text.Contains("设为仅销售和主管可见"));
@@ -570,8 +580,8 @@ public sealed class V12AttachmentTests : V12TestBase
             Assert.Equal(delSales, d.Attachments.Single(a => a.Id == fSales).CanDelete);
             Assert.Equal(delEng, d.Attachments.Single(a => a.Id == fEng).CanDelete);
             Assert.All(d.Attachments, a => Assert.Equal(toggle, a.CanToggleRestricted));
-            Assert.Equal(18, d.AttachmentRemaining);
-            Assert.Equal(20, d.AttachmentLimit);
+            Assert.Equal(48, d.AttachmentRemaining);
+            Assert.Equal(50, d.AttachmentLimit);
         }
         await Check("王敏", true, true, true, false, false);    // 建单销售
         await Check("孙磊", false, true, false, false, false);  // 其他销售：不能加，但角色上可设受限
@@ -708,7 +718,7 @@ public sealed class V12AttachmentTests : V12TestBase
         d = await Orders.DeleteAttachment(id, img, wm);
         Assert.Empty(d.Attachments);
         Assert.Empty(d.Files.OrderPhotos);
-        Assert.Equal(20, d.AttachmentRemaining);
+        Assert.Equal(50, d.AttachmentRemaining);
         var center = new FileCenterService(Db, View);
         Assert.Equal(0, (await center.Query(new FileCenterQuery { OrderId = id }, Sup)).Total);
         Assert.Equal(1, Db.Files.IgnoreQueryFilters().Count(f => f.OrderId == id && f.DeletedAt != null));

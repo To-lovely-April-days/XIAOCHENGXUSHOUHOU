@@ -45,6 +45,9 @@ builder.Services.AddDbContext<AppDbContext>(o =>
 {
     if (isSqlite) o.UseSqlite(connStr);
     else o.UseSqlServer(connStr);
+    // v1.3：工单查询同时 Include 协助人与退出记录两个小集合（协助人 ≤ 5、退出记录通常 0–2 条），按契约保持单条查询、不拆分；
+    // 关掉 EF 对「多个集合 Include」的提示，避免每种查询都在日志里记一条警告
+    o.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.MultipleCollectionIncludeWarning));
 });
 
 // ---------- 服务 ----------

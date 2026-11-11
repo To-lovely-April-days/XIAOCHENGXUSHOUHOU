@@ -6,26 +6,30 @@ using Microsoft.EntityFrameworkCore;
 namespace Huotong.AfterSales.Api.Services;
 
 /// <summary>
-/// v1.2 工单附件：添加 / 删除（软删除）/ 切换「仅销售和主管可见」（CHANGES-v1.2 §4）。权限判断在 AttachmentRules。
+/// v1.2 工单附件：添加 / 删除（软删除）/ 切换「仅销售和主管可见」（CHANGES-v1.2 §4）；v1.3：附件类别（添加时选、事后可改）。权限判断在 AttachmentRules。
 /// 与 OrderService 共用加载、状态记录等内部方法，故以 partial 并入 OrderService。
 /// </summary>
 public partial class OrderService
 {
-    /// <summary>请求里的附件项：去重（同一 fileId 取第一次的 restricted）；有项缺 fileId 返回 null</summary>
-    private static List<(int FileId, bool Restricted)>? NormalizeAttachments(List<AttachmentItem>? items)
+    /// <summary>
+    /// 请求里的附件项：去重（同一 fileId 取第一次的 restricted 与 type）；有项缺 fileId 返回 null（由调用方报各自的文案）；
+    /// 任一项 type 非法 → 40000「附件类别不正确」（同一项两者都有问题时先报缺 fileId）。type 省略 / 空白 = Other。
+    /// </summary>
+    private static List<(int FileId, bool Restricted, AttachmentType Type)>? NormalizeAttachments(List<AttachmentItem>? items)
     {
-        var result = new List<(int, bool)>();
+        var result = new List<(int, bool, AttachmentType)>();
         var seen = new HashSet<int>();
         foreach (var it in items ?? new())
         {
             if (it?.FileId == null) return null;
-            if (seen.Add(it.FileId.Value)) result.Add((it.FileId.Value, it.Restricted == true));
+            if (!AttachmentRules.TryParseType(it.Type, out var type)) throw BizException.BadRequest("附件类别不正确");
+            if (seen.Add(it.FileId.Value)) result.Add((it.FileId.Value, it.Restricted == true, type ?? AttachmentType.Other));
         }
         return result;
     }
 
     /// <summary>§4.4 第 8 步：逐个文件校验，按请求顺序返回实体（已跟踪）</summary>
-    private async Task<List<StoredFile>> LoadNewAttachments(List<(int FileId, bool Restricted)> items, CurrentUser user)
+    private async Task<List<StoredFile>> LoadNewAttachments(List<(int FileId, bool Restricted, AttachmentType Type)> items, CurrentUser user)
     {
         var ids = items.Select(x => x.FileId).ToList();
         var map = (await _db.Files.Where(f => ids.Contains(f.Id)).ToListAsync()).ToDictionary(f => f.Id);
@@ -45,13 +49,14 @@ public partial class OrderService
     private Task<int> AttachmentCount(int orderId) =>
         _db.Files.CountAsync(f => f.OrderId == orderId && (f.Category == FileCategory.OrderPhoto || f.Category == FileCategory.Attachment));
 
-    private static void Mount(List<StoredFile> files, List<(int FileId, bool Restricted)> items, int orderId)
+    private static void Mount(List<StoredFile> files, List<(int FileId, bool Restricted, AttachmentType Type)> items, int orderId)
     {
         for (var i = 0; i < files.Count; i++)
         {
             files[i].OrderId = orderId;
             files[i].Category = FileCategory.Attachment;
             files[i].Restricted = items[i].Restricted;
+            files[i].AttachmentType = items[i].Type;
         }
     }
 
@@ -81,7 +86,9 @@ public partial class OrderService
         var files = await LoadNewAttachments(items, user);
         var left = AttachmentRules.Limit - await AttachmentCount(id);
         if (files.Count > left)
-            throw BizException.BadRequest(left <= 0 ? "附件最多 20 个，本单已达上限" : $"附件最多 20 个，本单还可添加 {left} 个");
+            throw BizException.BadRequest(left <= 0
+                ? $"附件最多 {AttachmentRules.Limit} 个，本单已达上限"
+                : $"附件最多 {AttachmentRules.Limit} 个，本单还可添加 {left} 个");
 
         Mount(files, items, id);
         var me = await _view.LoadEmployee(user.Id);
@@ -150,6 +157,33 @@ public partial class OrderService
         }
         else
             AddLog(o, me, $"{me.Name} 将附件 {name} 设为所有人可见", o.Status, _clock.Now, LogKind.Attachment);
+        await _db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return await _view.BuildDetail(id, user);
+    }
+
+    /// <summary>
+    /// v1.3：修改附件类别（上传人本人或主管；传错类时不用删了重传）。任何角色都可调用，按 AttachmentRules.ChangeTypeDenied 判权。
+    /// </summary>
+    public async Task<OrderDetail> SetAttachmentType(int id, int fileId, AttachmentTypeRequest r, CurrentUser user)
+    {
+        // 1. 请求体：缺失（空白）与非法值同一文案
+        if (!AttachmentRules.TryParseType(r.Type, out var parsed) || parsed == null) throw BizException.BadRequest("请选择附件类别");
+        var type = parsed.Value;
+
+        await using var tx = await WriteLock();
+        var o = await Load(id);
+        OrderViewBuilder.EnsureCanView(o, user);
+        var f = await LoadAttachment(id, fileId, user);
+        var denied = AttachmentRules.ChangeTypeDenied(f, o, user);
+        if (denied != null) throw denied;
+        if (f.AttachmentType == type) return await _view.BuildDetail(id, user);
+
+        var me = await _view.LoadEmployee(user.Id);
+        f.AttachmentType = type;
+        // 文件名不截短：与「设为受限时收起旧记录」的按名称匹配逻辑保持兼容
+        AddLog(o, me, $"{me.Name} 将附件 {FileService.NameOf(f)} 归为「{EnumText.AttachmentShort(type)}」", o.Status, _clock.Now,
+            f.Restricted ? LogKind.AttachmentPrivate : LogKind.Attachment);
         await _db.SaveChangesAsync();
         await tx.CommitAsync();
         return await _view.BuildDetail(id, user);

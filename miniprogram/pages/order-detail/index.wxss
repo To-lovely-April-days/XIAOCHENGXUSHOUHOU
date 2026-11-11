@@ -9,7 +9,7 @@
 .od-head-top { gap: 20rpx; }
 .od-no { font-size: 26rpx; color: var(--text-2); }
 .od-customer { margin-top: 16rpx; font-size: 44rpx; line-height: 60rpx; font-weight: 700; word-break: break-all; }
-.od-device { margin-top: 4rpx; font-size: 28rpx; color: var(--text-2); }
+.od-device { margin-top: 4rpx; font-size: 28rpx; color: var(--text-2); word-break: break-all; }
 .od-grid { display: flex; gap: 16rpx; margin-top: 28rpx; padding-top: 24rpx; border-top: 2rpx solid var(--divider); }
 .od-cell { flex: 1; min-width: 0; }
 .od-cell-label { font-size: 24rpx; color: var(--text-2); }
@@ -245,3 +245,30 @@
 .od-att-op { flex-shrink: 0; padding: 16rpx 0 16rpx 20rpx; font-size: 26rpx; font-weight: 600; color: var(--text); text-decoration: underline; }
 .od-att-op.muted { color: var(--text-2); }
 .od-att-btn { margin-top: 28rpx; }
+
+/* ========== v1.3 ========== */
+/* 已退出只读提示（灰色） */
+.od-readonly { margin-top: 24rpx; padding: 20rpx 28rpx; border-radius: 24rpx; background: #ECECEA; font-size: 26rpx; line-height: 40rpx; color: var(--gray); }
+/* 转交卡片（沿用 od-req） */
+.od-req-reason { margin-top: 4rpx; font-size: 26rpx; line-height: 40rpx; color: var(--text-body); word-break: break-all; }
+/* 设备资料 */
+.od-dev-title { padding: 20rpx 0 4rpx; border-top: 2rpx solid var(--divider); font-size: 26rpx; font-weight: 600; color: var(--text-2); }
+.od-dev-kv { padding: 8rpx 0; border-top: none; }
+.od-dev-kv.last { padding-bottom: 20rpx; }
+.od-kv-value.muted { color: var(--text-3); }
+/* 处理人员：已转交 / 已改派 */
+.od-person-exit { flex-shrink: 0; font-size: 24rpx; color: var(--text-3); }
+/* 附件按类别分组 */
+.od-att-group { display: flex; align-items: flex-start; gap: 16rpx; padding: 24rpx 0 4rpx; border-top: 2rpx solid var(--divider); }
+.od-att-group.first { border-top: none; padding-top: 8rpx; }
+.od-att-group-title { font-size: 28rpx; line-height: 40rpx; font-weight: 600; color: var(--text); word-break: break-all; }
+.od-att-none { padding: 12rpx 0 24rpx; font-size: 26rpx; color: var(--text-3); }
+.od-att-type-label { margin-top: 20rpx; }
+/* 修改 SAT 信息弹层 */
+.od-sat-row { margin-top: 20rpx; gap: 16rpx; }
+.od-sat-pick { gap: 24rpx; min-height: 104rpx; }
+.od-sat-label { flex-shrink: 0; font-size: 30rpx; color: var(--text-2); }
+.od-sat-value { min-width: 0; text-align: right; font-size: 30rpx; color: var(--text); }
+.od-sat-value.placeholder { color: var(--text-3); }
+.od-sat-clear { flex-shrink: 0; padding: 16rpx 0 16rpx 8rpx; font-size: 26rpx; font-weight: 600; color: var(--text-2); text-decoration: underline; }
+.od-sat-legacy { margin-top: 12rpx; font-size: 24rpx; line-height: 36rpx; color: var(--text-2); }

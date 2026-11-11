@@ -47,6 +47,8 @@ public class WorkOrder
     public string SatDate { get; set; } = "";
     public bool SatSigned { get; set; }
     public string? ProjectNo { get; set; }
+    /// <summary>设备汇总文字（v1.3，DeviceRules.Summary）：建单时写入，之后不变；列表 / 通知 / 导出一律读它。不要配置 HasDefaultValue</summary>
+    public string DeviceText { get; set; } = "";
 
     public string FaultTime { get; set; } = "";
     public string Symptom { get; set; } = "";
@@ -64,6 +66,11 @@ public class WorkOrder
     public Employee? Creator { get; set; }
     public int? AssigneeId { get; set; }
     public Employee? Assignee { get; set; }
+    /// <summary>
+    /// 待确认转交的接手人 id（v1.3）；null = 没有待确认的转交。普通整数列，无外键、无导航。
+    /// 与 OrderTransfers 的 Pending 行保持一致（不变量 I1）：只通过 TransferService.cs 里的 StartTransfer / TransferRules.End 修改
+    /// </summary>
+    public int? PendingTransferToId { get; set; }
 
     public DateTime CreatedAt { get; set; }
     public DateTime? ClaimedAt { get; set; }
@@ -92,6 +99,10 @@ public class WorkOrder
     public List<Punch> Punches { get; set; } = new();
     public List<StatusLog> Logs { get; set; } = new();
     public List<OrderAssistant> Assistants { get; set; } = new();
+    /// <summary>设备清单（v1.3）：建单时写入，本期没有修改入口</summary>
+    public List<OrderDevice> Devices { get; set; } = new();
+    /// <summary>退出记录（v1.3）：曾是本单负责人、后来被转交或改派换掉的工程师（只读）</summary>
+    public List<OrderExit> Exits { get; set; } = new();
 }
 
 public class Punch
@@ -152,6 +163,8 @@ public class StoredFile
     public DateTime? DeletedAt { get; set; }
     /// <summary>删除人 id（普通整数列，无外键）</summary>
     public int? DeletedById { get; set; }
+    /// <summary>附件类别（v1.3）：只对附件有意义，其余文件恒为 Other。不要配置 HasDefaultValue；列默认值 'Other' 只写在迁移里</summary>
+    public AttachmentType AttachmentType { get; set; }
 }
 
 /// <summary>工单协助人（当前有效的；移除 = 删除行）</summary>
@@ -217,4 +230,51 @@ public class FactoryRecord
     public string? Courier { get; set; }
     public string? TrackingNo { get; set; }
     public string? Note { get; set; }
+}
+
+/// <summary>工单的设备（v1.3）：一张工单可以有多台；三项至少一项非空（服务层保证）</summary>
+public class OrderDevice
+{
+    public int Id { get; set; }
+    public int OrderId { get; set; }
+    public WorkOrder? Order { get; set; }
+    /// <summary>从 1 开始的序号（= 表单里的顺序）</summary>
+    public int Seq { get; set; }
+    public string Name { get; set; } = "";
+    public string Sn { get; set; } = "";
+    public string Model { get; set; } = "";
+}
+
+/// <summary>转交记录（v1.3），保留全部历史；每张工单同一时间最多一行 Pending</summary>
+public class OrderTransfer
+{
+    public int Id { get; set; }
+    public int OrderId { get; set; }
+    public WorkOrder? Order { get; set; }
+    public int FromEngineerId { get; set; }
+    public Employee? From { get; set; }
+    public int ToEngineerId { get; set; }
+    public Employee? To { get; set; }
+    public string Reason { get; set; } = "";
+    public TransferStatus Status { get; set; }
+    public DateTime CreatedAt { get; set; }
+    /// <summary>结束时间（接手 / 拒绝 / 撤回 / 失效）</summary>
+    public DateTime? DecidedAt { get; set; }
+    /// <summary>结束它的人：接手、拒绝 = 接手人；撤回 = 发起人或主管；系统失效 = null</summary>
+    public int? DecidedById { get; set; }
+    public Employee? DecidedBy { get; set; }
+    /// <summary>拒绝理由，或系统失效的原因</summary>
+    public string? Reply { get; set; }
+}
+
+/// <summary>退出记录（v1.3）：每张工单每个「已退出」的人最多一行；一定不是当前负责人 / 协助人（不变量 I2）</summary>
+public class OrderExit
+{
+    public int Id { get; set; }
+    public int OrderId { get; set; }
+    public WorkOrder? Order { get; set; }
+    public int EngineerId { get; set; }
+    public Employee? Engineer { get; set; }
+    public ExitVia Via { get; set; }
+    public DateTime ExitedAt { get; set; }
 }

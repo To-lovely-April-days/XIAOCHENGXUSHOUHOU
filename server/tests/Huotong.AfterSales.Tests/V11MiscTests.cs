@@ -205,7 +205,7 @@ public sealed class V11MiscTests : V11TestBase
         var factory = await Orders.Detail(OrderId("常熟某研究院"), U("王工"));
         Assert.Equal(new[] { "done", "done", "current", "current", "todo" }, States(factory));
         Assert.Equal("检测/维修中", factory.FactoryText);
-        Assert.Equal(new[] { "appoint", "factory", "requestHold", "requestAssistant" }, factory.Actions);
+        Assert.Equal(new[] { "appoint", "factory", "requestHold", "requestAssistant", "transfer" }, factory.Actions);
 
         // 未定价 + 价格建议
         var unpriced = await Orders.Detail(OrderId("无锡某制药企业"), Sup);

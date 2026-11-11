@@ -20,10 +20,15 @@ public class OrderViewBuilder
         _files = files;
     }
 
+    /// <summary>
+    /// 详情与所有列表的工单查询：带建单人、负责人、协助人、退出记录（v1.3，权限判断与参与人列表都要用）。
+    /// 不 Include 设备（列表只用 DeviceText；详情单独查）。两个集合都很小，保持单条查询，不用 AsSplitQuery。
+    /// </summary>
     public IQueryable<WorkOrder> Orders() => _db.Orders
         .Include(o => o.Creator).ThenInclude(e => e!.AvatarFile)
         .Include(o => o.Assignee).ThenInclude(e => e!.AvatarFile)
-        .Include(o => o.Assistants).ThenInclude(a => a.Engineer).ThenInclude(e => e!.AvatarFile);
+        .Include(o => o.Assistants).ThenInclude(a => a.Engineer).ThenInclude(e => e!.AvatarFile)
+        .Include(o => o.Exits).ThenInclude(x => x.Engineer).ThenInclude(e => e!.AvatarFile);
 
     public UserBrief Brief(Employee e) => new()
     {
@@ -56,8 +61,15 @@ public class OrderViewBuilder
         return rows.GroupBy(r => r.OrderId).ToDictionary(g => g.Key, g => g.ToList());
     }
 
-    /// <summary>列表计算字段所需的批量数据：待审批申请数、返厂已记录节点</summary>
-    public record ListExtras(Dictionary<int, int> PendingRequests, Dictionary<int, List<FactoryNode>> FactoryNodes);
+    /// <summary>列表计算字段所需的批量数据：待审批申请数、返厂已记录节点、待确认的转交（v1.3，每单最多一条）</summary>
+    public record ListExtras(Dictionary<int, int> PendingRequests, Dictionary<int, List<FactoryNode>> FactoryNodes,
+        Dictionary<int, OrderTransfer> PendingTransfers);
+
+    /// <summary>转交查询：带发起人 / 接手人 / 结束人及头像（TransferToDto 需要）</summary>
+    public IQueryable<OrderTransfer> Transfers() => _db.OrderTransfers
+        .Include(t => t.From).ThenInclude(e => e!.AvatarFile)
+        .Include(t => t.To).ThenInclude(e => e!.AvatarFile)
+        .Include(t => t.DecidedBy).ThenInclude(e => e!.AvatarFile);
 
     public async Task<ListExtras> Extras(IEnumerable<int> orderIds)
     {
@@ -67,10 +79,13 @@ public class OrderViewBuilder
             .GroupBy(x => x).ToDictionary(g => g.Key, g => g.Count());
         var nodes = (await _db.FactoryRecords.Where(r => ids.Contains(r.OrderId)).Select(r => new { r.OrderId, r.Node }).ToListAsync())
             .GroupBy(x => x.OrderId).ToDictionary(g => g.Key, g => g.Select(x => x.Node).ToList());
-        return new ListExtras(pending, nodes);
+        // 待确认的转交：批量查一次（不变量 I1 保证每单最多一行；防御性地取最新一行）
+        var transfers = (await Transfers().Where(t => ids.Contains(t.OrderId) && t.Status == TransferStatus.Pending).ToListAsync())
+            .GroupBy(t => t.OrderId).ToDictionary(g => g.Key, g => g.OrderByDescending(t => t.Id).First());
+        return new ListExtras(pending, nodes, transfers);
     }
 
-    /// <summary>orders 必须来自 Orders()（带负责人、协助人导航）</summary>
+    /// <summary>orders 必须来自 Orders()（带负责人、协助人、退出记录导航）</summary>
     public async Task<List<OrderListItem>> BuildList(IEnumerable<WorkOrder> orders, CurrentUser user)
     {
         var list = orders.ToList();
@@ -78,7 +93,8 @@ public class OrderViewBuilder
         var map = await PunchMap(ids);
         var extras = await Extras(ids);
         return list.Select(o => FillList(new OrderListItem(), o, map.GetValueOrDefault(o.Id) ?? new(), user,
-            extras.PendingRequests.GetValueOrDefault(o.Id), extras.FactoryNodes.GetValueOrDefault(o.Id))).ToList();
+            extras.PendingRequests.GetValueOrDefault(o.Id), extras.FactoryNodes.GetValueOrDefault(o.Id),
+            extras.PendingTransfers.GetValueOrDefault(o.Id))).ToList();
     }
 
     public async Task<OrderListItem> BuildOne(WorkOrder o, CurrentUser user) => (await BuildList(new[] { o }, user))[0];
@@ -89,19 +105,62 @@ public class OrderViewBuilder
         var map = await PunchMap(new[] { o.Id });
         var extras = await Extras(new[] { o.Id });
         return FillList(dto, o, map.GetValueOrDefault(o.Id) ?? new(), user,
-            extras.PendingRequests.GetValueOrDefault(o.Id), extras.FactoryNodes.GetValueOrDefault(o.Id));
+            extras.PendingRequests.GetValueOrDefault(o.Id), extras.FactoryNodes.GetValueOrDefault(o.Id),
+            extras.PendingTransfers.GetValueOrDefault(o.Id));
     }
 
-    /// <summary>当前用户在工单中的角色（非参与人为 null）</summary>
+    /// <summary>
+    /// 当前用户在工单中的角色（非参与人为 null）。只返回 Lead / Assistant / null，绝不返回 Former：
+    /// 打卡权限、PunchContextDto.myRole、详情里的 IsAssistant 都靠它判断。
+    /// </summary>
     public static ParticipantRole? RoleIn(WorkOrder o, int userId) =>
         o.AssigneeId == userId ? ParticipantRole.Lead
         : o.Assistants.Any(a => a.EngineerId == userId) ? ParticipantRole.Assistant : null;
 
+    /// <summary>已退出的人做任何写操作时的统一文案（40300）</summary>
+    public const string FormerDenied = "你已退出本单，只能查看";
+
+    /// <summary>
+    /// 当前用户是否为本单「已退出」的人（v1.3）：工程师且有退出记录。全系统判断「当前用户是否已退出」只用这个方法；
+    /// 销售、主管永远不是（曾是工程师、后来改了角色的人按新角色对待）。o 须带 Exits。
+    /// </summary>
+    public static bool IsFormer(WorkOrder o, CurrentUser user) =>
+        user.Role == Role.Engineer && o.Exits.Any(x => x.EngineerId == user.Id);
+
+    /// <summary>转交 → TransferDto（详情的 transfers、列表的 pendingTransfer 共用）。调用方负责 Include From / To / DecidedBy（各带头像）</summary>
+    public TransferDto TransferToDto(OrderTransfer t) => new()
+    {
+        Id = t.Id, OrderId = t.OrderId, Status = t.Status, StatusText = EnumText.TransferStatusName(t.Status),
+        From = t.From == null ? new UserBrief() : Brief(t.From), To = t.To == null ? new UserBrief() : Brief(t.To),
+        Reason = t.Reason, CreatedAt = t.CreatedAt, DecidedAt = t.DecidedAt,
+        DecidedBy = t.DecidedBy == null ? null : Brief(t.DecidedBy), Reply = t.Reply,
+        Text = TransferText(t)
+    };
+
+    /// <summary>转交的一句话描述（CHANGES-v1.3 §2.2 固定规则）</summary>
+    public static string TransferText(OrderTransfer t)
+    {
+        var from = t.From?.Name;
+        var to = t.To?.Name;
+        var head = $"{from} 转交给 {to}，";
+        return t.Status switch
+        {
+            TransferStatus.Pending => head + $"待 {to} 确认",
+            TransferStatus.Accepted => head + $"{to} 已接手",
+            TransferStatus.Rejected => head + $"{to} 已拒绝" + (string.IsNullOrEmpty(t.Reply) ? "" : $"：{t.Reply}"),
+            TransferStatus.Cancelled => t.DecidedById == t.FromEngineerId ? head + "已撤回" : head + $"已由 {t.DecidedBy?.Name} 撤销",
+            TransferStatus.Expired => head + $"已失效：{t.Reply}",
+            _ => head.TrimEnd('，')
+        };
+    }
+
     /// <summary>
     /// 实体 → OrderListItem。价格可见性在此统一处理：Engineer 永远拿不到 price / priceSet（CHANGES-v1.1 §2.1 硬规则）。
+    /// o 必须来自 Orders()（读 o.Exits）。v1.3 的 projectNo / deviceText / myRole(Former) / myExitText / pendingTransfer 都在这里统一写，
+    /// 详情与列表走同一处。
     /// </summary>
     public T FillList<T>(T dto, WorkOrder o, List<PunchInfo> punches, CurrentUser user,
-        int pendingRequests = 0, IEnumerable<FactoryNode>? factoryNodes = null) where T : OrderListItem
+        int pendingRequests = 0, IEnumerable<FactoryNode>? factoryNodes = null, OrderTransfer? pendingTransfer = null) where T : OrderListItem
     {
         var today = _clock.Now.Date;
         var pairs = PunchCalculator.Pair(punches);
@@ -114,6 +173,10 @@ public class OrderViewBuilder
         dto.CustomerName = o.CustomerName;
         dto.City = o.City;
         dto.Region = o.Region;
+        dto.ProjectNo = o.ProjectNo;
+        // 设备汇总文字：永不为空；列为空白时（防御）退回兼容列，仍为空则「未填设备」
+        dto.DeviceText = !string.IsNullOrWhiteSpace(o.DeviceText) ? o.DeviceText
+            : !string.IsNullOrWhiteSpace(o.DeviceModel) ? o.DeviceModel : DeviceRules.None;
         dto.DeviceModel = o.DeviceModel;
         dto.DeviceSn = o.DeviceSn;
         dto.Symptom = o.Symptom;
@@ -142,6 +205,12 @@ public class OrderViewBuilder
         dto.Issues = PunchCalculator.Issues(punches, today);
 
         dto.MyRole = RoleIn(o, user.Id);
+        if (dto.MyRole == null && IsFormer(o, user))
+        {
+            dto.MyRole = ParticipantRole.Former;
+            dto.MyExitText = EnumText.ExitText(o.Exits.First(x => x.EngineerId == user.Id).Via);
+        }
+        dto.PendingTransfer = pendingTransfer == null ? null : TransferToDto(pendingTransfer);
         if (dto.MyRole != null)
         {
             var minePairs = pairs.Where(p => p.Arrive.EngineerId == user.Id).ToList();
@@ -225,8 +294,11 @@ public class OrderViewBuilder
             .Include(r => r.TargetEngineer).ThenInclude(e => e!.AvatarFile)
             .Include(r => r.Decider).ThenInclude(e => e!.AvatarFile)
             .Where(r => r.OrderId == id).OrderBy(r => r.CreatedAt).ThenBy(r => r.Id).ToListAsync();
+        // 本单全部转交记录（含已结束的）；其中 Pending 的那一条同时作为列表字段 pendingTransfer
+        var transfers = await Transfers().Where(t => t.OrderId == id).OrderBy(t => t.CreatedAt).ThenBy(t => t.Id).ToListAsync();
         var d = FillList(new OrderDetail(), o, infos, user,
-            requests.Count(r => r.Status == RequestStatus.Pending), factoryRecords.Select(r => r.Node));
+            requests.Count(r => r.Status == RequestStatus.Pending), factoryRecords.Select(r => r.Node),
+            transfers.LastOrDefault(t => t.Status == TransferStatus.Pending));
 
         d.Source = o.Source;
         d.ContactName = o.ContactName;
@@ -236,8 +308,16 @@ public class OrderViewBuilder
         d.Longitude = o.Longitude;
         d.SatDate = o.SatDate;
         d.SatSigned = o.SatSigned;
+        d.SatText = DeviceRules.SatText(o.SatSigned);
+        d.SatDateLabel = DeviceRules.SatDateLabel(o.SatSigned);
         d.ProductStage = o.SatSigned ? "老产品" : "新产品";
-        d.ProjectNo = o.ProjectNo;
+        d.CanEditSat = DeviceRules.SatEditDenied(o, user) == null;
+        d.Devices = (await _db.OrderDevices.AsNoTracking().Where(x => x.OrderId == id).OrderBy(x => x.Seq).ThenBy(x => x.Id).ToListAsync())
+            .Select(x => new DeviceDto { Seq = x.Seq, Name = x.Name, Sn = x.Sn, Model = x.Model, Title = DeviceRules.Title(x) }).ToList();
+        d.Transfers = transfers.Select(TransferToDto).ToList();
+        var isFormer = IsFormer(o, user);
+        if (isFormer)
+            d.ReadOnlyText = $"你已退出本单（{EnumText.ExitText(o.Exits.First(x => x.EngineerId == user.Id).Via)}），只能查看；你的打卡和工时记录已保留。";
         d.FaultTime = o.FaultTime;
         d.CustomerTried = o.CustomerTried;
         d.SiteEnvironment = o.SiteEnvironment;
@@ -325,7 +405,9 @@ public class OrderViewBuilder
         d.Actions = OrderStateMachine.Actions(new OrderStateMachine.ActionContext(user.Role, user.Id, o.Status, o.AssigneeId, o.ServiceType,
             hasMissing, d.MyRole == ParticipantRole.Assistant, o.PriceSet,
             requests.Any(r => r.Type == OrderRequestType.Hold && r.Status == RequestStatus.Pending),
-            d.Factory?.Nodes.Any(n => n.CanRecord) ?? false, recorded.Contains(FactoryNode.ShippedBack)));
+            d.Factory?.Nodes.Any(n => n.CanRecord) ?? false, recorded.Contains(FactoryNode.ShippedBack),
+            IsFormer: isFormer, HasPendingTransfer: o.PendingTransferToId != null,
+            PendingTransferToMe: isEngineer && o.PendingTransferToId == user.Id));
 
         if (user.Role == Role.Supervisor && o.Status == OrderStatus.Submitted)
         {
@@ -357,6 +439,14 @@ public class OrderViewBuilder
         dto.Uploader = uploader == null ? null : Brief(uploader);
         dto.CanDelete = AttachmentRules.CanDelete(f, o, user);
         dto.CanToggleRestricted = AttachmentRules.CanToggleRestricted(f, user);
+        // v1.3 附件类别：只对附件来源有值
+        if (AttachmentRules.IsAttachment(f.Category))
+        {
+            dto.AttachmentType = f.AttachmentType;
+            dto.AttachmentTypeLabel = EnumText.AttachmentLabel(f.AttachmentType);
+            dto.AttachmentTypeShort = EnumText.AttachmentShort(f.AttachmentType);
+            dto.CanChangeType = AttachmentRules.CanChangeType(f, o, user);
+        }
         return dto;
     }
 
@@ -394,7 +484,12 @@ public class OrderViewBuilder
         return dto;
     }
 
-    /// <summary>参与人：负责人 → 协助人（按添加时间）→ 已退出（在本单有打卡但已不是负责人/协助人，按首次打卡时间）</summary>
+    /// <summary>
+    /// 参与人：负责人 → 协助人（按添加时间）→ 已退出。
+    /// 已退出 = 「本单有退出记录的人」∪「在本单有打卡的人」，去掉当前负责人与协助人；同一个人只出现一次（有退出记录的以退出记录为准）。
+    /// 排序：有退出记录的按 ExitedAt、没有的按首次打卡时间，混在一起正序，时间相同按员工 id。
+    /// 有退出记录的人即使一次卡都没打过也要出现（远程 / 返厂单）。
+    /// </summary>
     private List<ParticipantDto> Participants(WorkOrder o, List<PunchInfo> infos, List<Punch> punches, DateTime today)
     {
         var result = new List<ParticipantDto>();
@@ -417,9 +512,20 @@ public class OrderViewBuilder
             result.Add(Make(a.Engineer!, ParticipantRole.Assistant));
             current.Add(a.EngineerId);
         }
-        foreach (var g in punches.Where(p => !current.Contains(p.EngineerId) && p.Engineer != null)
-                     .GroupBy(p => p.EngineerId).OrderBy(g => g.Min(p => p.Time)).ThenBy(g => g.Key))
-            result.Add(Make(g.First().Engineer!, ParticipantRole.Former));
+        var former = new List<(DateTime At, int EngineerId, ParticipantDto Dto)>();
+        var exited = new HashSet<int>();
+        foreach (var x in o.Exits.Where(x => !current.Contains(x.EngineerId) && x.Engineer != null))
+        {
+            if (!exited.Add(x.EngineerId)) continue;
+            var dto = Make(x.Engineer!, ParticipantRole.Former);
+            dto.ExitText = EnumText.ExitText(x.Via);
+            dto.ExitedAt = x.ExitedAt;
+            former.Add((x.ExitedAt, x.EngineerId, dto));
+        }
+        foreach (var g in punches.Where(p => !current.Contains(p.EngineerId) && !exited.Contains(p.EngineerId) && p.Engineer != null)
+                     .GroupBy(p => p.EngineerId))
+            former.Add((g.Min(p => p.Time), g.Key, Make(g.First().Engineer!, ParticipantRole.Former)));
+        result.AddRange(former.OrderBy(f => f.At).ThenBy(f => f.EngineerId).Select(f => f.Dto));
         return result;
     }
 
@@ -451,12 +557,22 @@ public class OrderViewBuilder
         return result;
     }
 
-    /// <summary>详情权限：主管/销售任意；工程师只能看待认领、本人负责、本人协助或本人创建的工单（o 须带 Assistants）</summary>
+    /// <summary>
+    /// 详情权限：主管 / 销售任意；工程师只能看待认领、本人负责、本人创建、本人协助的工单，
+    /// 以及（v1.3）本人「已退出」的工单、待本人确认转交的工单（后者在转交被拒绝 / 撤回 / 失效的那一刻自动消失）。
+    /// o 须带 Assistants 与 Exits。
+    /// </summary>
+    public static bool CanView(WorkOrder o, CurrentUser user)
+    {
+        if (user.Role != Role.Engineer) return true;
+        return o.Status == OrderStatus.Pending || o.AssigneeId == user.Id || o.CreatorId == user.Id
+               || o.Assistants.Any(a => a.EngineerId == user.Id)
+               || o.Exits.Any(x => x.EngineerId == user.Id)
+               || o.PendingTransferToId == user.Id;
+    }
+
     public static void EnsureCanView(WorkOrder o, CurrentUser user)
     {
-        if (user.Role != Role.Engineer) return;
-        if (o.Status == OrderStatus.Pending || o.AssigneeId == user.Id || o.CreatorId == user.Id
-            || o.Assistants.Any(a => a.EngineerId == user.Id)) return;
-        throw BizException.Forbidden("无权查看该工单");
+        if (!CanView(o, user)) throw BizException.Forbidden("无权查看该工单");
     }
 }

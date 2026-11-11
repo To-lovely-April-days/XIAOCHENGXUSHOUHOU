@@ -80,7 +80,8 @@ export default {
         </select>
       </label>
       <div class="field-hint">列与 SOP 进度台账一致：工单号、客户、设备、故障描述、处理人、进度状态、服务价格（未定价的工单显示「未定价」）、现场工时（小时，1 位小数）等；
-        末尾新增 5 列：协助人、人员工时（每人各自的小时数）、暂停原因、返厂进度、寄回单号。</div>
+        末尾新增 5 列：协助人、人员工时（每人各自的小时数）、暂停原因、返厂进度、寄回单号；
+        再追加 3 列：设备台数、SAT 完成时间、发货时间。一张工单有多台设备时，「设备型号」「设备编号」两列里用「；」连接。</div>
       <div v-if="error" class="field-error">{{ error }}</div>
       <button type="submit" hidden></button>
     </form>

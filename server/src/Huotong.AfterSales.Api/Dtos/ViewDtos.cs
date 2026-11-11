@@ -23,6 +23,15 @@ public class RecentCustomerDto
     public string SatDate { get; set; } = "";
     public bool SatSigned { get; set; }
     public string? ProjectNo { get; set; }
+    /// <summary>v1.3：该客户最近一张工单的设备清单</summary>
+    public List<DeviceItemDto> Devices { get; set; } = new();
+}
+
+public class DeviceItemDto
+{
+    public string Name { get; set; } = "";
+    public string Sn { get; set; } = "";
+    public string Model { get; set; } = "";
 }
 
 public class PunchContextDto
@@ -125,6 +134,8 @@ public class EngineerHomeDto
     public List<OrderListItem> RecentDone { get; set; } = new();
     /// <summary>本人参与的暂停搁置工单，按 HoldAt 倒序</summary>
     public List<OrderListItem> OnHold { get; set; } = new();
+    /// <summary>v1.3：待我确认的转交（每项带 pendingTransfer），按转交发起时间正序</summary>
+    public List<OrderListItem> TransfersToMe { get; set; } = new();
     public int MonthMinutes { get; set; }
 }
 

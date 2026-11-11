@@ -2,7 +2,7 @@
 // 路由 query（均可选）：
 //   quick=missing|distance|submitted|requests|unpriced  侧栏「待处理」快捷筛选（见 enums.QUICK_FILTERS）
 //   status=<OrderStatus>              状态 tab（'' = 全部，不含已作废）
-//   keyword=<string>                  搜索工单号/客户/设备
+//   keyword=<string>                  搜索工单号/客户/项目编号/设备（v1.3：任意一台设备的名称、编号、型号）
 //   assigneeId=<id>                   处理人
 //   range=week|month                  建单时间：本周（本周一~今天）/ 本月
 //   abnormal=1                        只看异常（缺卡 ∪ 距离异常）
@@ -186,7 +186,8 @@ export default {
         key: o.id,
         no: o.orderNo,
         customer: o.customerName,
-        device: [o.deviceModel, o.symptom].filter(Boolean).join(' · '),
+        // v1.3：设备用服务端的汇总文字 deviceText（多台时形如「型号A 等 3 台」），不自己拼
+        device: [o.projectNo, o.deviceText, o.symptom].filter(Boolean).join(' · '),
         urgent: o.urgency === 'Urgent',
         issues: o.issues || [],
         type: label(SERVICE_TYPE, o.serviceType),
@@ -197,6 +198,9 @@ export default {
         holdLine: o.status === 'OnHold' ? '暂停搁置' + (o.holdText ? ' · ' + o.holdText : '') : '',
         pendingReq: (o.pendingRequestCount || 0) > 0,
         reqTitle: `有 ${o.pendingRequestCount || 0} 条申请待审批`,
+        // v1.3：有待确认的转交（工程师之间转交，主管可在抽屉里撤销）
+        pendingTransfer: !!o.pendingTransfer,
+        transferTitle: (o.pendingTransfer && o.pendingTransfer.text) || '',
         price: fmtPrice(o.price, { priceSet: o.priceSet }),
         unpriced: o.priceSet === false,
         warranty: isWarranty(o.price, o.priceSet),
@@ -387,7 +391,7 @@ export default {
   },
   template: `
   <PageHeader :crumbs="['工单', crumb]">
-    <SearchBox v-model="keywordInput" placeholder="搜索工单号、客户、设备编号" @search="onSearch" />
+    <SearchBox v-model="keywordInput" placeholder="搜索工单号、客户、项目编号、设备" @search="onSearch" />
     <button type="button" class="btn btn-secondary" @click="showExport = true"><Icon name="download" :size="15" />导出台账</button>
     <button type="button" class="btn btn-primary" @click="showCreate = true"><Icon name="plus" :size="15" :stroke="2.2" />新建工单</button>
   </PageHeader>
@@ -509,8 +513,9 @@ export default {
                 <Tag v-if="r.urgent" tone="urgent">紧急</Tag>
                 <IssueTag v-for="t in r.issues" :key="t" :type="t" />
                 <Tag v-if="r.pendingReq" tone="warn" :title="r.reqTitle">待审批</Tag>
+                <Tag v-if="r.pendingTransfer" tone="warn" :title="r.transferTitle">转交待确认</Tag>
               </span>
-              <span class="cell-sub">{{ r.device }}</span>
+              <span class="cell-sub" :title="r.device">{{ r.device }}</span>
             </span>
             <span role="cell" class="orders-type">{{ r.type }}<span v-if="r.factoryText" class="cell-sub" :title="'返厂进度：' + r.factoryText">{{ r.factoryText }}</span></span>
             <span role="cell" class="cell-user" :class="{ unassigned: !r.o.assignee }">

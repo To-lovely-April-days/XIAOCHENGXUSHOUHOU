@@ -46,7 +46,7 @@ public sealed class V11FactoryTests : V11TestBase
         Assert.Equal(new[] { "suggestPrice", "factory" }, d.Actions);
 
         d = await Orders.Claim(id, Wang);
-        Assert.Equal(new[] { "appoint", "factory", "requestHold", "requestAssistant" }, d.Actions); // 返厂单没有 start
+        Assert.Equal(new[] { "appoint", "factory", "requestHold", "requestAssistant", "transfer" }, d.Actions); // 返厂单没有 start
         Assert.Equal(2, d.ProgressStep);
 
         // 1 客户寄出（建单销售）
@@ -93,7 +93,7 @@ public sealed class V11FactoryTests : V11TestBase
         Assert.False(repairing.CanRecord);
         Assert.False(repairing.CanEdit);
         Assert.Equal(n2.Time, repairing.Time);
-        Assert.Equal(new[] { "appoint", "factory", "requestHold", "requestAssistant" }, d.Actions);
+        Assert.Equal(new[] { "appoint", "factory", "requestHold", "requestAssistant", "transfer" }, d.Actions);
         Assert.Equal(Clock.Now, Db.Orders.AsNoTracking().Single(o => o.Id == id).StartedAt);
         Assert.Equal("工厂已收货", Notifier.Last.Title);
         Assert.Equal(new[] { Emp("王敏").Phone }, Notifier.Last.Mobiles);
@@ -106,7 +106,7 @@ public sealed class V11FactoryTests : V11TestBase
         Assert.Equal("已寄回客户", d.FactoryText);
         Assert.Equal(new[] { "done", "done", "done", "done", "current" }, States(d));
         Assert.Equal("王工 寄回客户（德邦 DB999）", d.Logs.Last().Text);
-        Assert.Equal(new[] { "appoint", "factory", "complete", "requestHold", "requestAssistant" }, d.Actions);
+        Assert.Equal(new[] { "appoint", "factory", "complete", "requestHold", "requestAssistant", "transfer" }, d.Actions);
         Assert.Equal("返厂设备已寄回", Notifier.Last.Title);
         Assert.Equal($"**返厂全流程客户**（{d.OrderNo}）已寄回客户：德邦 DB999", Notifier.Last.Text);
         Assert.Equal(new[] { p1, p2 }, d.Files.FactoryPhotos.Select(f => f.Id));
@@ -358,7 +358,7 @@ public sealed class V11FactoryTests : V11TestBase
         // 处理中暂停 → 恢复回处理中；已寄回后暂停期间可记录签收
         await Orders.RecordFactoryNode(id, Node(Back, "顺丰", "SF2", Photo(Wang)), Wang);
         await Orders.Hold(id, HoldBody("WaitThirdParty"), Sup);
-        Assert.Equal(new[] { "factory" }, (await Orders.Detail(id, Wang)).Actions);
+        Assert.Equal(new[] { "factory", "transfer" }, (await Orders.Detail(id, Wang)).Actions);
         d = await Orders.RecordFactoryNode(id, Node(Signed), Wang);
         Assert.Equal("客户已签收", d.FactoryText);
         Assert.Equal(OrderStatus.InProgress, (await Orders.Resume(id, Sup)).Status);

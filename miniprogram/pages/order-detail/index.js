@@ -1,6 +1,8 @@
 /**
  * 工单详情（原型 06 工程师 / 13 销售主管 / 16 主管操作）。
  * query.id：工单 id。页面按当前角色与 OrderDetail.actions 渲染按钮。
+ * v1.3（docs/CHANGES-v1.3.md §9.6）：多台设备与「修改 SAT 信息」、附件按三类分组（上传选类别 / 改类别，闭环后也能添加）、
+ *   转交（发起 / 撤回 / 确认接手 / 拒绝）、已退出只读提示。按钮与入口一律以服务端的 actions / can* 为准，不在前端推导权限。
  */
 const api = require('../../api/index.js');
 const auth = require('../../utils/auth.js');
@@ -14,8 +16,9 @@ const ENGINEER_FACTORY_TABS = [{ key: 'info', label: '信息' }, { key: 'factory
 const VIEWER_TABS = [{ key: 'progress', label: '进度' }, { key: 'info', label: '信息' }, { key: 'files', label: '附件资料' }];
 
 // 底部按钮顺序：越靠后越主要（最后一个可用按钮为主按钮）。
-// setPrice / suggestPrice / assistants / requestAssistant 是页面内链接，不进底部栏。
-const ENGINEER_ORDER = ['requestHold', 'appoint', 'checkin', 'start', 'claim', 'factory', 'complete'];
+// setPrice / suggestPrice / assistants / requestAssistant 是页面内链接，不进底部栏；
+// acceptTransfer / rejectTransfer / cancelTransfer 只在「转交待确认」卡片里。transfer 最不优先，按钮多时进「更多」。
+const ENGINEER_ORDER = ['transfer', 'requestHold', 'appoint', 'checkin', 'start', 'claim', 'factory', 'complete'];
 const SUPERVISOR_ORDER = ['void', 'hold', 'reject', 'reassign', 'resume', 'assign', 'factory', 'close'];
 const SALES_ORDER = ['factory'];
 const MAX_BUTTONS = 3; // 超过时把顺序靠前的多余项收进「更多」
@@ -24,6 +27,18 @@ const LABEL_OVERRIDE = { appoint: '设置预约', reject: '退回处理中', hol
 const SALES_NOTE = '销售可查看进度、提价格建议；改派、作废、定价、补录由主管操作。';
 const HOLD_NOTE_PLACEHOLDER = '如：客户下周一才能安排停机';
 const MAX_AMOUNT = 100000000;
+const HOME = '/pages/home/index';
+/** 附件类别的展示顺序：Sat → RepairForm → Other */
+const ATT_TYPES = Object.keys(enums.ATTACHMENT_TYPE);
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function satDateLabelOf(satSigned) {
+  return satSigned ? 'SAT 完成时间' : '发货时间';
+}
+
+function emptySatSheet() {
+  return { show: false, satSigned: false, satDate: '', label: satDateLabelOf(false), legacy: '', pickerValue: '' };
+}
 
 function timeMs(t) {
   const d = format.parseTime(t);
@@ -332,28 +347,98 @@ function buildFiles(d, isEngineerView) {
   });
 }
 
+function attTypeOf(a) {
+  return ATT_TYPES.indexOf(a && a.attachmentType) >= 0 ? a.attachmentType : 'Other';
+}
+
 /**
- * 附件列表（v1.2）。只展示服务端返回的内容与 can* 标记，不在前端推导权限；
+ * 附件列表（v1.2；v1.3 按类别分三组，空组也保留）。只展示服务端返回的内容与 can* 标记，不在前端推导权限；
  * 工程师拿不到「仅销售和主管可见」的附件。
+ * @returns {Array<{type:string,label:string,count:number,items:Object[]}>} 顺序 Sat → RepairForm → Other，组内保持服务端顺序
  */
 function buildAttachments(d) {
-  return (d.attachments || []).map((a) => {
-    const b = attachments.badge(a);
-    const sub = [attachments.fmtSize(a.size), (a.uploader && a.uploader.name) || '', monthDayHm(a.createdAt)].filter(Boolean).join(' · ');
-    return {
-      id: a.id,
-      name: a.name || '',
-      badgeText: b.text,
-      badgeColor: b.color,
-      sub: sub,
-      restricted: !!a.restricted,
-      hasMenu: !!(a.canDelete || a.canToggleRestricted)
-    };
+  const all = d.attachments || [];
+  return ATT_TYPES.map((type) => {
+    const items = all.filter((a) => attTypeOf(a) === type).map((a, i) => {
+      const b = attachments.badge(a);
+      const sub = [attachments.fmtSize(a.size), (a.uploader && a.uploader.name) || '', monthDayHm(a.createdAt)].filter(Boolean).join(' · ');
+      return {
+        id: a.id,
+        name: a.name || '',
+        badgeText: b.text,
+        badgeColor: b.color,
+        sub: sub,
+        restricted: !!a.restricted,
+        first: i === 0,
+        hasMenu: !!(a.canDelete || a.canToggleRestricted || a.canChangeType)
+      };
+    });
+    return { type: type, label: enums.ATTACHMENT_TYPE[type].label, count: items.length, items: items };
   });
 }
 
 function emptyAttachSheet() {
-  return { show: false, canRestrict: false, restricted: false, items: [], uploading: false, doneCount: 0 };
+  return { show: false, type: 'Other', canRestrict: false, restricted: false, items: [], uploading: false, doneCount: 0 };
+}
+
+/** 「设备资料」卡片：项目编号、逐台设备（只列填了的项）、SAT 信息 */
+function buildDeviceCard(d) {
+  const devices = (d.devices || []).map((x, i) => {
+    const seq = x.seq || i + 1;
+    const rows = [
+      { label: '名称', value: x.name },
+      { label: '编号', value: x.sn },
+      { label: '型号', value: x.model }
+    ].filter((r) => r.value);
+    rows.forEach((r, j) => { r.last = j === rows.length - 1; });
+    return { key: 'dv' + seq, title: '设备 ' + seq, rows: rows };
+  });
+  return {
+    projectNo: d.projectNo || '—',
+    devices: devices,
+    satText: d.satText || (d.satSigned ? '已完成' : '未完成'),
+    satDateLabel: d.satDateLabel || satDateLabelOf(d.satSigned),
+    satDate: d.satDate || '未填写',
+    satDateEmpty: !d.satDate
+  };
+}
+
+/**
+ * 转交（v1.3）：待确认的转交卡片（所有能看到本单的人可见，按钮只看 actions）；
+ * 负责工程师另显示本人最近一条被拒绝的转交（服务端文字）。
+ */
+function buildTransfer(d, role) {
+  const actions = d.actions || [];
+  const t = d.pendingTransfer;
+  let card = null;
+  if (t) {
+    const from = (t.from && t.from.name) || '';
+    const to = (t.to && t.to.name) || '';
+    const canAccept = actions.indexOf('acceptTransfer') >= 0;
+    const canReject = actions.indexOf('rejectTransfer') >= 0;
+    const canCancel = actions.indexOf('cancelTransfer') >= 0;
+    let text = from + ' 已发起转交，等待 ' + to + ' 确认';
+    if (canAccept) text = from + ' 请你接手本单';
+    else if (canCancel && role === 'Engineer') text = '已发起转交，等待 ' + to + ' 确认';
+    card = {
+      id: t.id,
+      time: format.formatDateTimeShort(t.createdAt),
+      text: text,
+      reason: t.reason || '',
+      canAccept: canAccept,
+      canReject: canReject,
+      canCancel: canCancel,
+      cancelLabel: role === 'Supervisor' ? '撤销转交' : '撤回转交'
+    };
+  }
+  let rejected = '';
+  // 与「申请被驳回」的提示一致：只在还能再转交的状态（待启动 / 处理中 / 暂停搁置）显示，待验收 / 闭环后不再挂着
+  if (!t && role === 'Engineer' && d.myRole === 'Lead' && ['Accepted', 'InProgress', 'OnHold'].indexOf(d.status) >= 0) {
+    const all = d.transfers || [];
+    const last = all[all.length - 1];
+    if (last && last.status === 'Rejected' && last.from && d.assignee && last.from.id === d.assignee.id) rejected = last.text || '';
+  }
+  return { card: card, rejected: rejected };
 }
 
 /** 待审批的申请卡片（所有角色可见）；工程师另显示本人最近一条被驳回的申请 */
@@ -404,6 +489,8 @@ function buildParticipants(d) {
       name: (p.user && p.user.name) || '',
       roleLabel: role.short || role.label || '',
       roleClass: p.role === 'Lead' ? 'lead' : (p.role === 'Former' ? 'former' : ''),
+      // 带退出记录的「已退出」：已转交 / 已改派（由打卡推导出来的没有）
+      exitText: p.role === 'Former' && p.exitText ? p.exitText : '',
       hours: onsite ? format.formatDuration((p.totalMinutes || 0) + live) : '',
       onSite: !!p.onSiteSince,
       missing: !!p.missingPunch
@@ -480,6 +567,10 @@ Page({
     suggestion: null,   // { text, tag, tone:'amber'|'plain', tappable }
     requests: [],
     requestRejected: '',
+    transferCard: null,       // v1.3 待确认的转交（见 buildTransfer）
+    transferRejected: '',     // 负责工程师：本人最近一条转交被拒绝的提示
+    deviceCard: null,         // v1.3「设备资料」卡片（见 buildDeviceCard）
+    satSheet: emptySatSheet(),
     holdBar: null,
     participants: [],
     canAssistants: false,
@@ -499,7 +590,9 @@ Page({
     steps: [],
     progressNote: SALES_NOTE,
     files: [],
-    attachments: [],          // v1.2 附件列表（见 buildAttachments）
+    attachGroups: [],         // 附件按类别分三组（见 buildAttachments）
+    attachTotal: 0,
+    attachTypes: enums.ATTACHMENT_TYPE_OPTIONS,
     canAddAttachment: false,
     attachHint: attachments.HINT,
     attachSheet: emptyAttachSheet(),
@@ -552,7 +645,11 @@ Page({
     this.load().then(() => wx.stopPullDownRefresh(), () => wx.stopPullDownRefresh());
   },
 
-  load() {
+  /**
+   * @param {boolean} [afterActionError] 某个操作失败后的自动重新加载：那次失败的原因已经 toast 出来了，
+   *   这里即使发现已无查看权也不再弹「无权查看该工单」把它盖掉，直接带离页面
+   */
+  load(afterActionError) {
     const first = !this.detail;
     if (first) this.setData({ loading: true, error: '' });
     return api.orders.detail(this.orderId, { silent: true }).then((d) => {
@@ -560,6 +657,8 @@ Page({
     }).catch((err) => {
       const msg = (err && err.message) || '加载失败';
       if (first) this.setData({ loading: false, error: msg });
+      // 停在详情页期间失去了查看权（接手人：对方撤回了转交 / 主管改派了；大厅工单被别人认领）→ 带离页面
+      else if (err && err.code === 40300) this.leavePage(afterActionError === true ? '' : '无权查看该工单', afterActionError === true ? 1500 : 700);
       else wx.showToast({ title: msg, icon: 'none' });
       return Promise.reject(err);
     });
@@ -581,6 +680,8 @@ Page({
     }
     const actions = d.actions || [];
     const reqs = buildRequests(d, isEngineerView);
+    const transfer = buildTransfer(d, role);
+    const attachGroups = buildAttachments(d);
 
     this.setData(Object.assign({
       loading: false,
@@ -593,6 +694,9 @@ Page({
       tab: tab,
       requests: reqs.list,
       requestRejected: reqs.rejected,
+      transferCard: transfer.card,
+      transferRejected: transfer.rejected,
+      deviceCard: buildDeviceCard(d),
       holdBar: buildHoldBar(d),
       canAssistants: actions.indexOf('assistants') >= 0,
       canRequestAssistant: actions.indexOf('requestAssistant') >= 0,
@@ -607,15 +711,19 @@ Page({
       canNav: typeof d.latitude === 'number' && typeof d.longitude === 'number' && !(d.latitude === 0 && d.longitude === 0),
       contactPhoneText: format.formatPhone(d.contactPhone),
       files: buildFiles(d, isEngineerView),
-      attachments: buildAttachments(d),
+      attachGroups: attachGroups,
+      attachTotal: attachGroups.reduce((s, g) => s + g.count, 0),
       canAddAttachment: !!d.canAddAttachment,
       issues: this.buildIssues(d),
       buttons: this.buildButtons(d, role),
       progressNote: this.progressNote(d, isSupervisor)
     }, this.priceView(d, role), this.computeLive(d)));
 
-    // 添加附件弹层开着时权限没了（如工单已闭环 / 作废）→ 关闭并丢弃未提交的文件
+    // 添加附件弹层开着时权限没了（如工单已作废 / 本人已退出）→ 关闭并丢弃未提交的文件
     if (this.data.attachSheet.show && !d.canAddAttachment) this.closeAttachSheet();
+    if (this.data.satSheet.show && !d.canEditSat) this.closeSatSheet();
+    // 转交弹层开着时已不能转交（如已有待确认的转交 / 已不是负责人）→ 关闭
+    if (this.data.sheetShow && this.data.sheetMode === 'transfer' && actions.indexOf('transfer') < 0) this.setData({ sheetShow: false });
 
     // 页面数据变化后，补录表单若对应的缺卡已消失则收起
     const s = this.data.supp;
@@ -695,9 +803,15 @@ Page({
     let verb = '认领';
     let time = d.claimedAt;
     const logs = (d.logs || []).slice().reverse();
-    const hit = logs.find((l) => (l.text || '').indexOf(a.name) >= 0 && /认领|指派|改派/.test(l.text || ''));
+    const hit = logs.find((l) => {
+      const text = l.text || '';
+      // 跳过「转交已失效（…）：主管已改派」：文字里也有人名和「改派」，会被误当成改派记录；
+      // 发起 / 拒绝 / 撤回转交的记录带用户填写的原因，同样不参与匹配
+      if (text.indexOf('转交已失效') === 0 || /发起转交给|拒绝接手|撤回转交|撤销转交/.test(text)) return false;
+      return text.indexOf(a.name) >= 0 && /认领|指派|改派|确认接手/.test(text);
+    });
     if (hit) {
-      verb = /改派/.test(hit.text) ? '改派' : (/指派/.test(hit.text) ? '指派' : '认领');
+      verb = /确认接手/.test(hit.text) ? '接手' : (/改派/.test(hit.text) ? '改派' : (/指派/.test(hit.text) ? '指派' : '认领'));
       time = hit.time;
     }
     const roleName = enums.label(enums.ROLE, a.role);
@@ -714,15 +828,13 @@ Page({
     return rows.filter((r) => r.value).map((r, i) => Object.assign({ key: 'i' + i }, r));
   },
 
+  /** 「工单信息」卡片；项目编号、SAT 信息已移到「设备资料」卡片（v1.3） */
   orderRows(d) {
-    const sat = d.satDate ? d.satDate.replace(/^(\d{4})-(\d{1,2}).*$/, (m, y, mo) => y + '年' + Number(mo) + '月') : '';
     const rows = [
       { label: '工单来源', value: enums.label(enums.SOURCE, d.source) },
       { label: '问题类型', value: enums.label(enums.PROBLEM_TYPE, d.problemType) },
       { label: '维修类型', value: enums.label(enums.SERVICE_TYPE, d.serviceType) },
       { label: '紧急程度', value: enums.label(enums.URGENCY, d.urgency) },
-      { label: '购买/SAT', value: sat ? sat + ' · ' + (d.satSigned ? 'SAT 已签字' : 'SAT 未签字') : '' },
-      { label: '项目编号', value: d.projectNo },
       { label: '预约时间', value: d.appointmentTime ? format.formatDateTimeShort(d.appointmentTime) : '' },
       { label: '建单时间', value: d.createdAt ? format.formatDateTimeShort(d.createdAt) + (d.creator ? ' · ' + d.creator.name : '') : '' }
     ];
@@ -927,6 +1039,9 @@ Page({
       case 'reassign':
         this.setData({ sheetMode: 'assign', sheetShow: true });
         break;
+      case 'transfer':
+        this.setData({ sheetMode: 'transfer', sheetShow: true });
+        break;
       case 'void':
         this.askReason('作废工单', '请输入作废原因', '作废').then((r) => {
           this.run(api.orders.void(id, r, { loading: '提交中' }), '已作废');
@@ -978,7 +1093,7 @@ Page({
       return d;
     }).catch((err) => {
       this.setData({ busy: false });
-      if (reloadOnError || (err && err.code === 40900)) this.load().catch(() => {});
+      if (reloadOnError || (err && err.code === 40900)) this.load(true).catch(() => {});
       return Promise.reject(err);
     }).catch(() => {});
   },
@@ -995,7 +1110,11 @@ Page({
     });
   },
 
-  askReason(title, placeholder, confirmText) {
+  /**
+   * 弹出带输入框的确认框。
+   * @param {boolean} [optional] true 时允许空内容（resolve ''）
+   */
+  askReason(title, placeholder, confirmText, optional) {
     return new Promise((resolve) => {
       wx.showModal({
         title: title,
@@ -1006,13 +1125,141 @@ Page({
         success: (res) => {
           if (!res.confirm) return;
           const r = (res.content || '').trim();
-          if (!r) {
+          if (!r && !optional) {
             wx.showToast({ title: '请填写原因', icon: 'none' });
             return;
           }
           resolve(r);
         }
       });
+    });
+  },
+
+  /**
+   * 已无权查看本单（拒绝接手后 / 停在详情页时转交被撤回、失效）：离开详情页，没有上一页则回首页。
+   * @param {string} [toastText] 离开前的提示（不传 = 不另外提示，保留已经弹出的那条）
+   * @param {number} [delay=700] 多久之后离开（毫秒）
+   */
+  leavePage(toastText, delay) {
+    if (this.leaving) return;
+    this.leaving = true;
+    this.stopTimer();
+    this.setData({ busy: true, sheetShow: false });
+    if (toastText) wx.showToast({ title: toastText, icon: 'none' });
+    setTimeout(() => {
+      if (this.unloaded) return;
+      const pages = getCurrentPages();
+      // 这期间用户已经从本页进了别的页面：不能把那个页面退掉；等回到本页时 onShow 会重新加载并再次走到这里
+      const top = pages[pages.length - 1];
+      if (top && top !== this && top.route && this.route && top.route !== this.route) {
+        this.leaving = false;
+        this.setData({ busy: false });
+        return;
+      }
+      if (pages.length > 1) wx.navigateBack({ fail: () => wx.switchTab({ url: HOME }) });
+      else wx.switchTab({ url: HOME });
+    }, delay || 700);
+  },
+
+  /* ---------------- 转交（v1.3）：确认接手 / 拒绝 / 撤回（撤销） ---------------- */
+  /** 本单待确认的转交（TransferDto），没有为 null */
+  pendingTransfer() {
+    return (this.detail && this.detail.pendingTransfer) || null;
+  },
+
+  onAcceptTransfer() {
+    const t = this.pendingTransfer();
+    if (!t || this.data.busy) return;
+    const from = (t.from && t.from.name) || '';
+    this.confirm('确认接手', '接手后你将成为本单负责人，' + from + ' 退出本单（其打卡和工时记录保留）。', '确认接手').then(() => {
+      this.run(api.orders.acceptTransfer(this.orderId, t.id, { loading: '提交中' }), '已接手', true);
+    });
+  },
+
+  onRejectTransfer() {
+    const t = this.pendingTransfer();
+    if (!t || this.data.busy) return;
+    this.askReason('拒绝接手', '拒绝理由（选填）', '拒绝', true).then((reply) => {
+      if (reply.length > 200) {
+        wx.showToast({ title: '拒绝理由不能超过 200 个字', icon: 'none' });
+        return;
+      }
+      this.run(api.orders.rejectTransfer(this.orderId, t.id, reply, { loading: '提交中' }), '已拒绝', true).then((d) => {
+        // 拒绝成功且已无查看权 → 接口返回 null（失败时 run 给的是 undefined，不能用 !d 判断）
+        if (d === null) this.leavePage();
+      });
+    });
+  },
+
+  /** 发起人「撤回转交」/ 主管「撤销转交」（同一个接口） */
+  onCancelTransfer() {
+    const t = this.pendingTransfer();
+    if (!t || this.data.busy) return;
+    const from = (t.from && t.from.name) || '';
+    const to = (t.to && t.to.name) || '';
+    const id = this.orderId;
+    if (this.data.role === 'Supervisor') {
+      this.confirm('撤销转交', '确定撤销 ' + from + ' 转交给 ' + to + ' 的请求？工单仍由 ' + from + ' 负责。', '撤销').then(() => {
+        this.run(api.orders.cancelTransfer(id, t.id, { loading: '提交中' }), '已撤销转交', true);
+      });
+      return;
+    }
+    this.confirm('撤回转交', '确定撤回转交给 ' + to + ' 的请求？', '撤回').then(() => {
+      this.run(api.orders.cancelTransfer(id, t.id, { loading: '提交中' }), '已撤回', true);
+    });
+  },
+
+  /* ---------------- 修改 SAT 信息（v1.3；入口按 canEditSat） ---------------- */
+  openSatSheet() {
+    const d = this.detail;
+    if (!d || !d.canEditSat) return;
+    const raw = String(d.satDate || '');
+    const iso = ISO_DATE.test(raw);
+    this.satTouched = false;
+    this.setData({
+      satSheet: {
+        show: true,
+        satSigned: !!d.satSigned,
+        satDate: iso ? raw : '',
+        label: satDateLabelOf(!!d.satSigned),
+        legacy: !iso && raw ? raw : '', // 旧数据的 yyyy-MM 不带入，只做提示
+        pickerValue: format.today()
+      }
+    });
+  },
+
+  closeSatSheet() {
+    this.setData({ 'satSheet.show': false });
+  },
+
+  /** 切换「已完成 / 未完成」时清空时间（两个时间含义不同） */
+  onSatChoose(e) {
+    const v = String(e.currentTarget.dataset.v) === '1';
+    if (this.data.satSheet.satSigned === v) return;
+    this.satTouched = true;
+    this.setData({ 'satSheet.satSigned': v, 'satSheet.satDate': '', 'satSheet.label': satDateLabelOf(v) });
+  },
+
+  onSatDate(e) {
+    this.satTouched = true;
+    this.setData({ 'satSheet.satDate': e.detail.value });
+  },
+
+  onSatClear() {
+    this.satTouched = true;
+    this.setData({ 'satSheet.satDate': '' });
+  },
+
+  saveSat() {
+    const s = this.data.satSheet;
+    if (this.data.busy || !s.show) return;
+    // 旧数据的 yyyy-MM 没有带进日期框：什么都没改就点「保存」时不提交，否则会把原记录的时间清空
+    if (s.legacy && !this.satTouched) {
+      this.closeSatSheet();
+      return;
+    }
+    this.run(api.orders.setSat(this.orderId, !!s.satSigned, s.satDate || '', { loading: '保存中' }), '已保存').then((d) => {
+      if (d) this.setData({ 'satSheet.show': false });
     });
   },
 
@@ -1208,14 +1455,24 @@ Page({
   /** 点附件行：图片 / 视频原文件预览；文档下载后打开 */
   onAttachmentTap(e) {
     const att = this.findAttachment(e);
-    if (att) attachments.open(att, this.detail.attachments);
+    if (!att) return;
+    // 预览时左右滑动的顺序与页面上按类别分组后的顺序一致
+    const all = this.detail.attachments || [];
+    const ordered = ATT_TYPES.reduce((list, t) => list.concat(all.filter((a) => attTypeOf(a) === t)), []);
+    attachments.open(att, ordered);
   },
 
-  /** 点「…」：切换可见范围 / 删除（按服务端的 canToggleRestricted / canDelete） */
+  /** 点「…」：改类别 / 切换可见范围 / 删除（按服务端的 canChangeType / canToggleRestricted / canDelete） */
   onAttachmentMore(e) {
     const att = this.findAttachment(e);
     if (!att || this.data.busy) return;
     const items = [];
+    if (att.canChangeType) {
+      const cur = attTypeOf(att);
+      ATT_TYPES.filter((t) => t !== cur).forEach((t) => {
+        items.push({ key: 'type', type: t, label: '归为「' + enums.ATTACHMENT_TYPE[t].short + '」' });
+      });
+    }
     if (att.canToggleRestricted) items.push({ key: 'toggle', label: att.restricted ? '设为所有人可见' : '设为仅销售和主管可见' });
     if (att.canDelete) items.push({ key: 'delete', label: '删除' });
     if (!items.length) return;
@@ -1225,7 +1482,9 @@ Page({
       success: (res) => {
         const pick = items[res.tapIndex];
         if (!pick) return;
-        if (pick.key === 'toggle') {
+        if (pick.key === 'type') {
+          this.run(api.orders.setAttachmentType(id, att.id, pick.type, { loading: '提交中' }), '已更新', true);
+        } else if (pick.key === 'toggle') {
           this.run(api.orders.setAttachmentRestricted(id, att.id, !att.restricted, { loading: '提交中' }), '已更新', true);
         } else {
           this.confirm('删除附件', '确定删除「' + att.name + '」？删除后不可恢复。', '删除').then(() => {
@@ -1245,18 +1504,28 @@ Page({
   },
 
   attachLimitText(remaining) {
-    return remaining > 0 ? '附件最多 20 个，本单还可添加 ' + remaining + ' 个' : '附件最多 20 个，本单已达上限';
+    return remaining > 0 ? '附件最多 50 个，本单还可添加 ' + remaining + ' 个' : '附件最多 50 个，本单已达上限';
   },
 
-  openAttachSheet() {
+  /** 点某一组的「添加」：弹层带上该组的类别（data-att-type；弹层里可再切换） */
+  openAttachSheet(e) {
     const d = this.detail;
     if (!d || !d.canAddAttachment) return;
+    const t = e && e.currentTarget && e.currentTarget.dataset.attType;
+    const type = ATT_TYPES.indexOf(t) >= 0 ? t : 'Other';
     if (this.attachRemaining() === 0) {
       wx.showToast({ title: this.attachLimitText(0), icon: 'none' });
       return;
     }
     this.attachSeq = (this.attachSeq || 0) + 1;
-    this.setData({ attachSheet: Object.assign(emptyAttachSheet(), { show: true, canRestrict: !!d.canRestrictAttachment }) });
+    this.setData({ attachSheet: Object.assign(emptyAttachSheet(), { show: true, type: type, canRestrict: !!d.canRestrictAttachment }) });
+  },
+
+  /** 弹层里切换类别（data-att-type）：只改本次添加的归类，不影响已选的文件 */
+  onAttachType(e) {
+    const t = e.currentTarget.dataset.attType;
+    if (!this.data.attachSheet.show || ATT_TYPES.indexOf(t) < 0) return;
+    this.setData({ 'attachSheet.type': t });
   },
 
   /** 关闭弹层：未提交的文件直接丢弃（服务端留作未挂载文件，无需清理） */
@@ -1299,7 +1568,7 @@ Page({
     attachments.upload(Object.assign({}, item), (it, patch) => this.patchAttachItem(it.key, patch, seq));
   },
 
-  /** 弹层里的两个选择按钮：data-type = media | chat */
+  /** 弹层里的两个选择按钮：data-type = media | chat（附件类别用的是 data-att-type，两者不要混） */
   onAttachPick(e) {
     const type = e.currentTarget.dataset.type;
     const sheet = this.data.attachSheet;
@@ -1360,7 +1629,9 @@ Page({
       return;
     }
     const restricted = sheet.canRestrict && !!sheet.restricted;
-    const body = done.map((x) => ({ fileId: x.fileId, restricted: restricted }));
+    // 本次添加的附件整批归入弹层里选的类别
+    const type = ATT_TYPES.indexOf(sheet.type) >= 0 ? sheet.type : 'Other';
+    const body = done.map((x) => ({ fileId: x.fileId, restricted: restricted, type: type }));
     this.run(api.orders.addAttachments(this.orderId, body, { loading: '提交中' }), '已添加').then((d) => {
       if (!d) return;
       this.attachSeq = (this.attachSeq || 0) + 1;

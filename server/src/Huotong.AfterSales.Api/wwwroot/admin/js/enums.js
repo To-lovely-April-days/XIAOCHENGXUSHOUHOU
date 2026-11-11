@@ -77,11 +77,32 @@ export const FACTORY_NODE = {
   CustomerSigned: { label: '客户签收', action: '记录客户签收', courier: false, photo: 'optional', category: 'FactorySignPhoto' },
 };
 
-/** 工单参与人角色（v1.1） */
+/** 工单参与人角色（v1.1）。v1.3：Former 可能带 exitText（已转交 / 已改派） */
 export const PARTICIPANT_ROLE = {
   Lead: { label: '负责人' },
   Assistant: { label: '协助人' },
   Former: { label: '已退出' },
+};
+
+/**
+ * 附件类别（v1.3）。键的顺序即展示顺序；label = 完整标题（分组标题），short = 短标题（标签、表格列、下拉）。
+ * 文字与后端 EnumText、小程序 utils/enums.js 逐字一致。
+ */
+export const ATTACHMENT_TYPE = {
+  Sat: { label: 'SAT 验收单（签字版）', short: 'SAT 验收单' },
+  RepairForm: { label: '现场维修登记表/返厂维修登记表（签字版）', short: '维修登记表' },
+  Other: { label: '设备照片、沟通记录及其他附件', short: '其他附件' },
+};
+/** 附件类别下拉选项（短标题）：[{ value, label }] */
+export const ATTACHMENT_TYPE_OPTIONS = Object.keys(ATTACHMENT_TYPE).map(k => ({ value: k, label: ATTACHMENT_TYPE[k].short }));
+
+/** 转交状态（v1.3）。展示优先用服务端的 statusText / text */
+export const TRANSFER_STATUS = {
+  Pending: { label: '待确认' },
+  Accepted: { label: '已接手' },
+  Rejected: { label: '已拒绝' },
+  Cancelled: { label: '已撤回' },
+  Expired: { label: '已失效' },
 };
 
 export const ORDER_SOURCE = {
@@ -174,6 +195,8 @@ export const ORDER_ACTIONS = {
   assistants: { label: '调整协助人', kind: 'secondary' },
   setPrice: { label: '定价', kind: 'secondary' },
   factory: { label: '返厂流程', kind: 'secondary' },
+  // v1.3：只在抽屉的「转交待确认」提示块里用，不进底部按钮布局
+  cancelTransfer: { label: '撤销转交', kind: 'secondary' },
 };
 
 /**

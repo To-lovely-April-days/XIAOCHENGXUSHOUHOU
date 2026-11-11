@@ -1,5 +1,5 @@
 /**
- * 工单附件（v1.2，docs/CHANGES-v1.2.md §6.3）：建单页与工单详情页共用。
+ * 工单附件（v1.2，docs/CHANGES-v1.2.md §6.3；v1.3 增加附件类别 type）：建单页与工单详情页共用。
  * - 选择：pickMedia（相册 / 相机，原图不压缩）、pickChatFiles（从微信聊天选择文档）
  * - 预检：类型 / 大小（与服务端同一张表，服务端校验是最终依据）
  * - 上传：逐个排队（同一时间只传 1 个），带进度；失败可重试
@@ -8,13 +8,14 @@
  *
  * 统一条目：
  * { key, path, name, size, kind:'Image'|'Video'|'Document', ext, thumb, duration, status:'uploading'|'done'|'fail',
- *   fatal, error, percent, fileId, restricted, badgeText, badgeColor, sizeText }
+ *   fatal, error, percent, fileId, restricted, type:'Sat'|'RepairForm'|'Other', badgeText, badgeColor, sizeText }
+ * type = 附件类别（v1.3，默认 'Other'）：只是记在条目上，挂载到工单时才提交，不影响上传。
  */
 const api = require('../api/index.js');
 const http = require('./request.js');
 
 const MB = 1024 * 1024;
-const MAX_COUNT = 20;
+const MAX_COUNT = 50;
 const MAX_IMAGE = 20 * MB;
 const MAX_FILE = 100 * MB;
 const DOC_EXTS = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'pdf', 'txt', 'csv'];
@@ -99,7 +100,8 @@ function makeItem(o) {
     error: '',
     percent: 0,
     fileId: 0,
-    restricted: false
+    restricted: false,
+    type: o.type || 'Other'
   };
   const b = badge(item);
   item.badgeText = b.text;
@@ -115,9 +117,10 @@ function isCancel(err) {
 /**
  * 拍照或从相册选择图片 / 视频（原图，不压缩）。
  * @param {number} left 还能选几个
+ * @param {string} [type='Other'] 附件类别，写进生成的每个条目
  * @returns {Promise<Object[]>} 统一条目；取消 / 失败时为 []
  */
-function pickMedia(left) {
+function pickMedia(left, type) {
   const count = Math.min(PICK_ONCE, Math.floor(Number(left) || 0));
   if (count <= 0) return Promise.resolve([]);
   return new Promise((resolve) => {
@@ -138,7 +141,8 @@ function pickMedia(left) {
             kind: isVideo ? 'Video' : 'Image',
             ext: extOf(f.tempFilePath),
             thumb: isVideo ? (f.thumbTempFilePath || '') : f.tempFilePath,
-            duration: isVideo && f.duration ? Math.round(f.duration) : 0
+            duration: isVideo && f.duration ? Math.round(f.duration) : 0,
+            type: type
           });
         }));
       },
@@ -153,9 +157,10 @@ function pickMedia(left) {
 /**
  * 从微信聊天选择文档（小程序只能通过聊天文件选文档）。
  * @param {number} left 还能选几个
+ * @param {string} [type='Other'] 附件类别，写进生成的每个条目
  * @returns {Promise<Object[]>} 统一条目（带 name、size）；取消 / 失败时为 []
  */
-function pickChatFiles(left) {
+function pickChatFiles(left, type) {
   const count = Math.min(PICK_ONCE, Math.floor(Number(left) || 0));
   if (count <= 0) return Promise.resolve([]);
   if (!wx.chooseMessageFile) {
@@ -174,7 +179,8 @@ function pickChatFiles(left) {
           name: f.name || '',
           size: f.size,
           kind: 'Document',
-          ext: extOf(f.name || f.path)
+          ext: extOf(f.name || f.path),
+          type: type
         })));
       },
       fail(err) {
@@ -201,14 +207,15 @@ function pickChatFiles(left) {
 /**
  * 弹出「拍照或从相册选择 / 从微信聊天选择文件」并选择。
  * @param {number} left 还能选几个
+ * @param {string} [type='Other'] 附件类别，写进生成的每个条目
  * @returns {Promise<Object[]>}
  */
-function pick(left) {
+function pick(left, type) {
   return new Promise((resolve) => {
     wx.showActionSheet({
       itemList: PICK_ACTIONS,
       success(res) {
-        (res.tapIndex === 0 ? pickMedia(left) : pickChatFiles(left)).then(resolve);
+        (res.tapIndex === 0 ? pickMedia(left, type) : pickChatFiles(left, type)).then(resolve);
       },
       fail() { resolve([]); }
     });

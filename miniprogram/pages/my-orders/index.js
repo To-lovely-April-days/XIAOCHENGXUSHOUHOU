@@ -1,4 +1,5 @@
-// 我的工单（工程师，原型 10）：本人负责或协助的工单，含已闭环历史（v1.1：不显示价格）
+// 我的工单（工程师，原型 10）：本人负责、协助或已转交（已退出）的工单，含已闭环历史（v1.1：不显示价格）
+// v1.3：新增「已退出」分组（former）；已退出的行带「已转交 / 已改派」标记，只能查看
 const api = require('../../api/index.js');
 const auth = require('../../utils/auth.js');
 const format = require('../../utils/format.js');
@@ -8,6 +9,7 @@ const FILTERS = [
   { key: 'doing', label: '进行中' },
   { key: 'check', label: '待验收' },
   { key: 'closed', label: '已闭环' },
+  { key: 'former', label: '已退出' },
   { key: 'all', label: '全部' }
 ];
 
@@ -51,13 +53,18 @@ function hoursOf(o) {
 }
 
 function toRow(o) {
-  const note = noteOf(o);
+  const former = o.myRole === 'Former';
+  // 已退出：状态备注固定，不走 noteOf；工时仍显示本人工时
+  const note = former ? { text: '已退出本单 · 仅可查看' } : noteOf(o);
   return {
     id: o.id,
     customerName: o.customerName,
     status: o.status,
     assist: o.myRole === 'Assistant',
-    device: [o.orderNo, o.deviceModel, o.symptom].filter(Boolean).join(' · '),
+    exitText: former ? (o.myExitText || '已退出') : '',
+    // 本人是负责人且本单有待确认的转交
+    transferPending: !!o.pendingTransfer && o.myRole === 'Lead',
+    device: [o.orderNo, o.deviceText, o.symptom].filter(Boolean).join(' · '),
     note: note.text,
     running: !!note.running,
     hold: !!note.hold,

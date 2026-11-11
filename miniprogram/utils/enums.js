@@ -103,7 +103,27 @@ const FILE_CATEGORY = {
   Avatar:       { label: '头像' },
   FactoryReceivePhoto: { label: '收货照片' },
   FactoryShipPhoto:    { label: '寄回照片' },
-  FactorySignPhoto:    { label: '签收凭证' }
+  FactorySignPhoto:    { label: '签收凭证' },
+  Attachment:          { label: '附件' }
+};
+
+/**
+ * 附件类别（v1.3）。顺序即展示顺序；label 完整标题（分组标题、上传时的选项），short 短标题（标签、胶囊）。
+ * 与后端 EnumText、PC 后台 enums.js 逐字一致。
+ */
+const ATTACHMENT_TYPE = {
+  Sat:        { label: 'SAT 验收单（签字版）', short: 'SAT 验收单' },
+  RepairForm: { label: '现场维修登记表/返厂维修登记表（签字版）', short: '维修登记表' },
+  Other:      { label: '设备照片、沟通记录及其他附件', short: '其他附件' }
+};
+
+/** 转交状态（v1.3；展示优先用服务端的 statusText / text） */
+const TRANSFER_STATUS = {
+  Pending:   { label: '待确认' },
+  Accepted:  { label: '已接手' },
+  Rejected:  { label: '已拒绝' },
+  Cancelled: { label: '已撤回' },
+  Expired:   { label: '已失效' }
 };
 
 /** 暂停原因（v1.1） */
@@ -167,7 +187,11 @@ const ACTION = {
   requestAssistant: { label: '申请协助人' },
   assistants:       { label: '调整协助人' },
   setPrice:         { label: '定价' },
-  suggestPrice:     { label: '价格建议' }
+  suggestPrice:     { label: '价格建议' },
+  transfer:         { label: '转交' },
+  cancelTransfer:   { label: '撤回转交' },
+  acceptTransfer:   { label: '确认接手' },
+  rejectTransfer:   { label: '拒绝' }
 };
 
 /** 主管首页待办类型 */
@@ -239,6 +263,8 @@ module.exports = {
   ISSUE,
   PUNCH_KIND,
   FILE_CATEGORY,
+  ATTACHMENT_TYPE,
+  TRANSFER_STATUS,
   ACTION,
   TODO_TYPE,
   HOLD_REASON,
@@ -256,6 +282,8 @@ module.exports = {
   RUN_STATUS_OPTIONS: toOptions(RUN_STATUS),
   ROLE_OPTIONS: toOptions(ROLE),
   ISSUE_OPTIONS: toOptions(ISSUE),
+  /** [{ value, label, short }]，顺序 Sat → RepairForm → Other */
+  ATTACHMENT_TYPE_OPTIONS: Object.keys(ATTACHMENT_TYPE).map((k) => ({ value: k, label: ATTACHMENT_TYPE[k].label, short: ATTACHMENT_TYPE[k].short })),
   label,
   progressSegments,
   progressStepOf,

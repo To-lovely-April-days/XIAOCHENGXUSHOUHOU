@@ -149,7 +149,7 @@ WXML：`<ui-icon name="camera" color="#FFFFFF" size="24" stroke="2" />`（size �
 | `<status-tag>` | `status`、`size`('md'/'sm')、`text` | |
 | `<urgency-tag>` | `urgency`、`showNormal`、`size`('sm'/'md') | |
 | `<empty>` | `text`、`desc`、`card`；默认 slot 放按钮 | |
-| `<assign-sheet>` | `show`、`order`(OrderListItem：id/customerName/urgency/deviceModel/assignee) | `done`(detail=OrderDetail)、`close` |
+| `<assign-sheet>` | `show`、`order`(OrderListItem：id/customerName/urgency/deviceText/assignee) | `done`(detail=OrderDetail)、`close` |
 
 `assign-sheet` 用法：
 ```xml
@@ -177,13 +177,37 @@ CSS 变量：`--bg --card --text --text-2 --text-3 --text-body --divider --borde
 
 ## v1.2 工单附件（详见 docs/CHANGES-v1.2.md §6）
 
-- **建单页**：「现场照片 / 视频」改为「附件（照片 / 视频 / 文件）」，最多 20 个。点「+」选「拍照或从相册选择」（`wx.chooseMedia`，`sizeType: ['original']` 原图不压缩）或「从微信聊天选择文件」（`wx.chooseMessageFile`，仅 Word / Excel / PPT / PDF / TXT / CSV）。小程序里文档只能从微信聊天中选：先把文件发到「文件传输助手」再选。销售 / 主管长按格子可设为「仅销售和主管可见」。提交用 `attachments: [{fileId, restricted}]`，不再传 `photoFileIds`。
+- **建单页**：「现场照片 / 视频」改为「附件（照片 / 视频 / 文件）」，最多 50 个（v1.3 由 20 调整为 50）。点「+」选「拍照或从相册选择」（`wx.chooseMedia`，`sizeType: ['original']` 原图不压缩）或「从微信聊天选择文件」（`wx.chooseMessageFile`，仅 Word / Excel / PPT / PDF / TXT / CSV）。小程序里文档只能从微信聊天中选：先把文件发到「文件传输助手」再选。销售 / 主管长按格子可设为「仅销售和主管可见」。提交用 `attachments: [{fileId, restricted}]`，不再传 `photoFileIds`。
 - **工单详情**：tab「资料」改名「附件资料」，顶部是「附件」卡片（类型角标、名称、大小 · 上传人 · 时间、受限角标），其下「流程资料」保留打卡照片 / 处理照片 / 签字件 / 返厂照片（建单照片已并入附件）。添加、删除、切换可见范围只看服务端返回的 `canAddAttachment`、`canRestrictAttachment`、`attachments[].canDelete / canToggleRestricted`、`attachmentRemaining`，**页面不自行推导权限**。工程师从任何接口都拿不到受限附件。
 - **打开附件**：图片 / 视频用原文件地址 `wx.previewMedia`；文档先经 `GET /api/files/{id}/download`（`Authorization` 头）下载到 `USER_DATA_PATH/att/{id}/{name}`（每次下载前清空 `att/`），再 `wx.openDocument({ fileType, showMenu: true })`，右上角菜单可转发 / 保存；TXT / CSV 微信不支持预览，改为 `wx.shareFileMessage` 转发到聊天。
-- **utils/attachments.js**：`MAX_COUNT=20`、`MAX_IMAGE=20MB`、`MAX_FILE=100MB`、`DOC_EXTS`、`OPEN_DOC_EXTS`；`pickMedia(left)` / `pickChatFiles(left)` / `pick(left)`（先弹选择方式）→ 统一条目；`upload(item, onChange(item, patch))` 逐个排队上传（同一时间只传 1 个，`timeout` 10 分钟，带进度），`cancel(key)`；`fmtSize(bytes)`、`badge(att) → {text, color}`；`open(att, list)`（服务端附件）、`openLocal(item, list)`（未提交的本地条目）、`resetCache()`。预检文案：`不支持的文件类型` / `图片不能超过 20MB` / `文件不能超过 100MB`，服务端校验是最终依据。
+- **utils/attachments.js**：`MAX_COUNT=50`（v1.3 由 20 调整为 50）、`MAX_IMAGE=20MB`、`MAX_FILE=100MB`、`DOC_EXTS`、`OPEN_DOC_EXTS`；`pickMedia(left)` / `pickChatFiles(left)` / `pick(left)`（先弹选择方式）→ 统一条目；`upload(item, onChange(item, patch))` 逐个排队上传（同一时间只传 1 个，`timeout` 10 分钟，带进度），`cancel(key)`；`fmtSize(bytes)`、`badge(att) → {text, color}`；`open(att, list)`（服务端附件）、`openLocal(item, list)`（未提交的本地条目）、`resetCache()`。预检文案：`不支持的文件类型` / `图片不能超过 20MB` / `文件不能超过 100MB`，服务端校验是最终依据。
 - **大小与超时**：图片 ≤ 20 MB，视频与文档 ≤ 100 MB；附件上传与文档下载超时 10 分钟。完工照片、打卡照片、返厂照片、头像不变（压缩图、20 MB）。
 
 ### 上线前的手工步骤（小程序后台）
 1. 「设置 → 服务内容声明 → 用户隐私保护指引」新增一项 **选中的文件**（用途：`用于将聊天中的文件作为工单附件上传`）。不声明的话 `wx.chooseMessageFile` 在正式版会被拒绝。
 2. request / uploadFile / downloadFile 合法域名已有 `https://shouhou.sh-htlab.com`，无需改动。
 3. 小程序需重新提审发布。后端与 PC 后台先上线不影响 v1.1 小程序；v1.2 小程序依赖 v1.2 后端（`attachments` 等字段），**必须在后端升级之后发布**。服务器 nginx 的 `client_max_body_size` 需已改为 `110m`（见 deploy/README.md），否则超过 30 MB 的上传会被拦截并提示「文件不能超过 100MB」。
+
+## v1.3 设备资料（多台设备）+ 附件分类与随时可传 + 转交（详见 docs/CHANGES-v1.3.md §9）
+
+依赖 v1.3 后端（`devices`、`deviceText`、`attachmentType`、`pendingTransfer`、`transfers` 等字段与下列新接口），**必须在后端升级之后发布**；本期不新增页面、不新增 tab，也不需要新的隐私声明项。工程师端任何位置仍不展示价格。
+
+- **设备资料（建单页）**：分组改为「设备资料」，顺序固定为 `*项目编号 → 设备（可多台，选填）→ *是否已完成 SAT → 时间（选填）`。「+ 添加设备」逐台添加（最多 20 台，整行不填的忽略；只剩 1 台时「删除」= 清空）。时间栏标签随 SAT 变化（已完成 `SAT 完成时间` / 未完成 `发货时间`），在两者之间切换时清空已选时间（第一次选择不清空）。提交 `projectNo`、`devices:[{name,sn,model}]`、`satSigned`、`satDate('yyyy-MM-dd'|'')`，不再传 `deviceModel` / `deviceSn`。
+- **设备资料（详情页）**：「信息」tab 新增「设备资料」卡片（项目编号、逐台设备、SAT 信息）；`canEditSat` 为 true 时显示「修改 SAT」→ 弹层保存（`orders.setSat`）。列表、标题、选人弹层副标题一律显示服务端的 `deviceText`，**前端不自己拼设备汇总文字**。
+- **附件分类**：三类（`enums.ATTACHMENT_TYPE`：`Sat` SAT 验收单（签字版）/ `RepairForm` 现场维修登记表/返厂维修登记表（签字版）/ `Other` 设备照片、沟通记录及其他附件），只分类、不做任何强制检查。建单页按三个小节上传（数据仍是一个 `media` 数组，渲染用 `mediaGroups`）；详情页按三组展示（空组显示「暂无」），每组各有「添加」，弹层里可切换类别（整批归入所选类别）；「…」菜单里 `canChangeType` 时可「归为「…」」（`orders.setAttachmentType`）。类别在 WXML 里一律用 `data-att-type`（`data-type` 已被「拍照 / 聊天文件」两个按钮占用）。
+- **随时可传**：是否显示「添加」只看 `canAddAttachment`（已闭环也可以，前端不按状态隐藏）；每单上限 50（`attachments.MAX_COUNT`）。
+- **转交**：负责工程师底部「转交」（多时在「更多」里）→ `<assign-sheet mode="transfer">` 选同事 + 原因（必填）→ `orders.transfer`。详情页顶部「转交待确认」卡片按 `actions` 显示按钮：接手人「确认接手 / 拒绝」（`acceptTransfer` / `rejectTransfer`），发起人「撤回转交」、主管「撤销转交」（`cancelTransfer`）。`rejectTransfer` 可能返回 `null`（已无查看权）→ 离开详情页；停在详情页时失去查看权（非首次加载 40300）同样带离。有待确认转交时不能提交完工（首页按钮、完工页 `blockText` 都有提示）。
+- **已退出**：`order.readOnlyText` 非空时在头部下方显示只读提示条；参与人列表里 `Former` 带 `exitText`（已转交 / 已改派）；「我的工单」新增「已退出」分组（`mine('former')`），行上带「已转交 / 已改派」标记、备注固定为「已退出本单 · 仅可查看」。
+- **首页（工程师）**：最前面新增「待我确认的转交」（`transfersToMe`，红色描边卡片，点进详情确认 / 拒绝）；本人负责且有待确认转交的工单带「转交待确认」小标签（我的工单、全部工单同理）。
+
+```js
+// v1.3 新接口（api/index.js）
+api.orders.setSat(id, satSigned, satDate)               → OrderDetail   // POST /api/orders/{id}/sat
+api.orders.setAttachmentType(id, fileId, type)          → OrderDetail   // POST …/attachments/{fileId}/type
+api.orders.transfer(id, engineerId, reason)             → OrderDetail   // POST /api/orders/{id}/transfers
+api.orders.acceptTransfer(id, transferId)               → OrderDetail   // POST …/transfers/{transferId}/accept
+api.orders.rejectTransfer(id, transferId, reply)        → OrderDetail | null   // POST …/transfers/{transferId}/reject
+api.orders.cancelTransfer(id, transferId)               → OrderDetail   // POST …/transfers/{transferId}/cancel
+api.orders.mine('former')                               // 新分组；counts 多一个 former
+// utils/attachments.js：pick(left, type) / pickMedia(left, type) / pickChatFiles(left, type) 把 type 写进条目（默认 'Other'）
+```

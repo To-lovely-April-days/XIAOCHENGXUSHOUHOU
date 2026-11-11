@@ -87,9 +87,15 @@ public sealed class V11AssistTests : V11TestBase
         Assert.Equal(new[] { "陈工" }, d.Assistants.Select(a => a.Name));
         Assert.Equal("赵主管 改派给 刘工（原 王工）", d.Logs.Last().Text); // 转正不算移除，不写「移除协助人」
         Assert.DoesNotContain(d.Logs, l => l.Text.Contains("移除协助人"));
-        // 原负责人不会自动变成协助人
-        Assert.Equal(new[] { (ParticipantRole.Lead, "刘工"), (ParticipantRole.Assistant, "陈工") }, d.Participants.Select(p => (p.Role, p.User.Name)));
-        Assert.Equal(40300, (await Biz(() => Orders.Detail(id, U("王工")))).Code);
+        // 原负责人不会自动变成协助人；v1.3：他有退出记录（已改派），即使没打过卡也出现在参与人列表里，并且可以只读查看
+        Assert.Equal(new[] { (ParticipantRole.Lead, "刘工"), (ParticipantRole.Assistant, "陈工"), (ParticipantRole.Former, "王工") },
+            d.Participants.Select(p => (p.Role, p.User.Name)));
+        Assert.Equal("已改派", d.Participants.Last().ExitText);
+        var former = await Orders.Detail(id, U("王工"));
+        Assert.Equal(ParticipantRole.Former, former.MyRole);
+        Assert.Equal("已改派", former.MyExitText);
+        Assert.Empty(former.Actions);
+        Assert.Equal("你已退出本单（已改派），只能查看；你的打卡和工时记录已保留。", former.ReadOnlyText);
         Assert.Equal(ParticipantRole.Lead, (await Orders.Detail(id, U("刘工"))).MyRole);
 
         // 带 assistantIds 改派：新负责人从协助人转正，同时调整其余协助人
@@ -97,6 +103,15 @@ public sealed class V11AssistTests : V11TestBase
         Assert.Equal("陈工", d.Assignee!.Name);
         Assert.Equal(new[] { "王工" }, d.Assistants.Select(a => a.Name));
         Assert.Equal(new[] { "赵主管 改派给 陈工（原 刘工）", "赵主管 添加协助人 王工" }, d.Logs.TakeLast(2).Select(l => l.Text));
+        // v1.3：王工被加为协助人 → 退出记录删除；刘工被换掉 → 成为已退出
+        var asst = await Orders.Detail(id, U("王工"));
+        Assert.Equal(ParticipantRole.Assistant, asst.MyRole);
+        Assert.Null(asst.MyExitText);
+        Assert.Null(asst.ReadOnlyText);
+        Assert.Equal(new[] { (ParticipantRole.Lead, "陈工"), (ParticipantRole.Assistant, "王工"), (ParticipantRole.Former, "刘工") },
+            d.Participants.Select(p => (p.Role, p.User.Name)));
+        Assert.Equal(ParticipantRole.Former, (await Orders.Detail(id, U("刘工"))).MyRole);
+        Assert.Equal(new[] { U("刘工").Id }, Db.OrderExits.AsNoTracking().Where(x => x.OrderId == id).Select(x => x.EngineerId).ToArray());
     }
 
     [Fact]

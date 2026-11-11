@@ -31,13 +31,14 @@ admin/
     └── views/
         ├── login.js      登录页（已完成）
         ├── orders.js          工单列表 + 概况条 + 筛选
-        ├── orders-drawer.js   工单详情抽屉（进度条、定价、暂停、申请审批、处理人员、返厂流程、打卡、状态记录）
+        ├── orders-drawer.js   工单详情抽屉（进度条、定价、设备资料、暂停、转交、申请审批、处理人员、返厂流程、附件、打卡、状态记录）
+        ├── orders-sat.js      修改 SAT 信息弹窗（v1.3：是否已完成 SAT + 时间）
         ├── orders-assign.js   指派 / 改派（负责人 + 协助人）与「调整协助人」弹窗
         ├── orders-hold.js     暂停搁置弹窗（原因 + 说明）
         ├── orders-price.js    定价 / 改价弹窗（展示销售的价格建议）
         ├── orders-factory.js  返厂节点记录 / 更正弹窗（快递、照片上传）
-        ├── orders-create.js   新建工单（不含价格；v1.2 起带附件）
-        ├── attachments-upload.js  附件上传组件（v1.2，新建工单与抽屉共用）
+        ├── orders-create.js   新建工单（不含价格；v1.2 起带附件；v1.3 多台设备、附件分三类）
+        ├── attachments-upload.js  附件上传组件（v1.2，新建工单与抽屉共用；v1.3 带附件类别）
         ├── orders-export.js   导出台账
         ├── punches.js    打卡记录
         ├── hours.js      工时统计
@@ -61,7 +62,7 @@ PC 后台只有主管能登录，只实现主管视角的动作。所有可执�
 
 附件相关权限只看服务端返回的 `canAddAttachment`、`canRestrictAttachment`、`attachments[].canDelete / canToggleRestricted`，前端不推导规则。
 
-- **工单附件**：工单除图片、视频外可以带文档（Word / Excel / PPT / PDF / TXT / CSV）。图片单个 ≤ 20MB，视频和文档 ≤ 100MB，每单最多 20 个（建单照片也算在内）。
+- **工单附件**：工单除图片、视频外可以带文档（Word / Excel / PPT / PDF / TXT / CSV）。图片单个 ≤ 20MB，视频和文档 ≤ 100MB，每单最多 50 个（建单照片也算在内；v1.2 为 20 个，v1.3 调整为 50）。
   - 上传分两步：先 `api.files.upload(file, 'Attachment', { onProgress })`（带原始文件名与进度，XHR 超时 15 分钟），再 `api.orders.create({ attachments })` 或 `api.orders.addAttachments(id, [{ fileId, restricted }])` 挂到工单。
   - 公共组件 `views/attachments-upload.js`：`<AttachmentsUpload v-model="items" :limit :can-restrict :disabled />`，支持多选和拖入，上传前按扩展名 / 大小 / 数量预检，同时最多上传 2 个，每项有进度条、错误文字 + 重试、移除、「仅销售和主管可见」复选框。父组件用导出的 `attUploading(items)` / `attHasError(items)` / `attDone(items)`（→ `[{ fileId, restricted }]`）判断与取值（组件实例上也有同名的 `uploading` / `hasError` / `done`）。
   - 新建工单：原「现场照片」区块改为「附件」，提交体用 `attachments`，不再传 `photoFileIds`。
@@ -69,6 +70,26 @@ PC 后台只有主管能登录，只实现主管视角的动作。所有可执�
   - 下载一律走 `api.files.download(id, name)`（`GET /api/files/{id}/download`，带 Authorization，文件名取响应头里的原始文件名）。
 - **工单文件中心**（`#/files`，`views/files.js`）：汇总所有工单名下的文件（附件、建单照片、完工照片、签字件、打卡照片、返厂照片）。类型 tab（全部 / 图片 / 视频 / 文档，带数量）、搜索（文件名 / 工单号 / 客户）、来源、上传人、上传日期范围、`orderId` 筛选标签；汇总「共 N 个文件 · 总大小」；每页 30 条。≤ 2MB 的图片显示缩略图，其余显示类型角标。点工单号在本页打开工单抽屉。附件行可删除、切换可见范围（直接调工单的附件接口）。不做批量下载。
 - **上线注意**：超过 30MB 的上传需要把站点 nginx 的 `client_max_body_size` 提到 `110m`（见 `deploy/README.md`），否则会被 nginx 直接返回 413，页面提示「文件不能超过 100MB」。
+
+## v1.3 功能（契约见 `docs/CHANGES-v1.3.md`）
+
+三项变更：设备资料（多台设备）、附件分类 + 随时可传、转交。新增的权限同样只看服务端返回的 `canEditSat`、`canAddAttachment`、`attachments[].canChangeType`、`actions`（含 `cancelTransfer`），前端不推导规则；设备汇总文字一律显示服务端的 `deviceText`，前端不自己拼。
+
+- **设备资料**
+  - 新建工单的「设备资料」区顺序固定为：`项目编号 *` → 设备（选填，可添加多台，每台 设备名称 / 设备编号 / 设备型号，最多 20 台，整行不填的忽略）→ `是否已完成 SAT *`（已完成 / 未完成）→ 时间（选填；标签随上一项变为「SAT 完成时间」或「发货时间」，在「已完成 / 未完成」之间切换时清空，第一次选择不清空）。提交体用 `projectNo`、`devices: [{ name, sn, model }]`、`satSigned`、`satDate('yyyy-MM-dd' | '')`，不再传 `deviceModel` / `deviceSn`。
+  - 工单列表的副标题为 `项目编号 · deviceText · 故障现象`；搜索可按项目编号和任意一台设备的名称 / 编号 / 型号。
+  - 抽屉新增「设备资料」区：项目编号（空显示 `—`）、是否已完成 SAT、SAT 完成时间 / 发货时间（空显示 `未填写`）、设备表（`#` / 设备名称 / 设备编号 / 设备型号）。`canEditSat` 为 true 时可点「修改 SAT」（`orders-sat.js`，`api.orders.setSat`）；项目编号与设备清单建单后不能改。旧数据的 `yyyy-MM` 时间原样显示，在弹窗里以「原记录：…」提示；没切换「已完成 / 未完成」、也没重新选日期就保存时原样带回旧记录（不会因为点了「保存」被清空），切换后按规则清空。
+- **附件分类 + 随时可传**
+  - 三类（`enums.ATTACHMENT_TYPE`，文字与后端、小程序逐字一致）：`Sat` SAT 验收单（签字版）、`RepairForm` 现场维修登记表/返厂维修登记表（签字版）、`Other` 设备照片、沟通记录及其他附件。只分类，不做任何强制检查。
+  - 每单上限 50 个。新建工单里三类各一个上传区，三类合计最多 50 个；提交 `attachments: [{ fileId, restricted, type }]`。
+  - 抽屉「附件」区按三类分组，空组显示「暂无」；在哪一组点「添加」就归哪一类（同一时间只展开一组，换组前若有已选未提交的文件会先确认）。`canChangeType` 的附件行有类别下拉，可直接改类别（`api.orders.setAttachmentType`）。已闭环的工单只要 `canAddAttachment` 为 true 就照常显示「添加」。
+  - 上传组件新增 prop `type`：`<AttachmentsUpload v-model="items" type="Sat" :limit :can-restrict :disabled />`，`attDone(items)` 返回 `[{ fileId, restricted, type }]`；另导出 `attUsed(items)`（占名额的条目数，多个上传区合计上限时用）。
+  - 文件中心新增「附件类别」筛选（`attachmentType`，给了它只返回附件行）与「类别」列（非附件行显示 `—`），附件行同样可以用下拉改类别；搜索增加项目编号。
+- **转交**（工程师之间换人，不需要主管批准；主管在 PC 上不发起转交，换人仍用「改派」）
+  - 列表里有待确认转交的工单带「转交待确认」标（悬停看 `pendingTransfer.text`）。
+  - 抽屉里 `pendingTransfer` 非空时显示「转交待确认」提示块（文字、原因、时间）；`actions` 含 `cancelTransfer` 时可「撤销转交」（`api.orders.cancelTransfer`）。「处理人员」之后有「转交记录」区（全部历史，时间倒序）。
+  - 「处理人员」里有退出记录的「已退出」后面带灰字 `已转交` / `已改派`（`participants[].exitText`）。
+- **导出**：台账末尾再追加 3 列（设备台数、SAT 完成时间、发货时间），多台设备在「设备型号」「设备编号」两列里用「；」连接。导出由后端生成，前端只同步了导出弹窗里的说明文字。
 
 ## 路由
 
@@ -78,7 +99,7 @@ PC 后台只有主管能登录，只实现主管视角的动作。所有可执�
 | `#/orders` | 工单。`?quick=missing|distance|submitted|requests|unpriced` 对应侧栏「待处理」快捷筛选 |
 | `#/punches` | 打卡记录 |
 | `#/hours` | 工时统计 |
-| `#/files` | 工单文件中心（v1.2）。`?keyword=&type=Image|Video|Document&source=&uploaderId=&orderId=&from=&to=&page=`，`&id=` 为打开的工单抽屉 |
+| `#/files` | 工单文件中心（v1.2）。`?keyword=&type=Image|Video|Document&source=&attachmentType=Sat|RepairForm|Other&uploaderId=&orderId=&from=&to=&page=`，`&id=` 为打开的工单抽屉（`attachmentType` 为 v1.3 新增） |
 | `#/accounts` | 账号管理 |
 
 - 没有 token 时跳 `#/login?redirect=<原地址>`。登录后先 `GET /api/me`，角色不是 Supervisor 就清掉 token。
@@ -102,7 +123,7 @@ export default {
   data() { return { route, items: [], loading: false }; },
   template: `
     <PageHeader :crumbs="['工单', '全部工单']">
-      <SearchBox v-model="keyword" placeholder="搜索工单号、客户、设备编号" @search="load" />
+      <SearchBox v-model="keyword" placeholder="搜索工单号、客户、项目编号、设备" @search="load" />
       <button class="btn btn-secondary"><Icon name="download" :size="15" />导出台账</button>
       <button class="btn btn-primary"><Icon name="plus" :size="15" :stroke="2.2" />新建工单</button>
     </PageHeader>
@@ -137,6 +158,7 @@ export default {
   - `admin.exportOrders({from, to, status}, filename?)`、`admin.exportHours(year, month, filename?)`
   - `files.upload(file, category, { fileName?, onProgress?, signal? })`（FormData；传 `onProgress` 时用 XHR 并回调 0–100，`signal`（AbortSignal）可取消上传——上传组件在移除条目 / 卸载时会取消；`Attachment` 自动带 `fileName = file.name`）、`files.download(id, name?)`
   - v1.2：`orders.addAttachments(id, [{fileId, restricted}])`、`orders.deleteAttachment(id, fileId)`、`orders.setAttachmentRestricted(id, fileId, restricted)`、`admin.files({keyword, type, source, uploaderId, orderId, restricted, from, to, page, pageSize})`；`orders.create(body)` 的附件字段为 `attachments`
+  - v1.3：`orders.setSat(id, {satSigned, satDate})`、`orders.setAttachmentType(id, fileId, type)`、`orders.cancelTransfer(id, transferId)`；`orders.addAttachments(id, [{fileId, restricted, type}])` 的条目多了 `type`；`admin.files(params)` 多了 `attachmentType`；`orders.create(body)` 用 `projectNo` / `devices` / `satSigned` / `satDate`
 
 ### format.js
 
@@ -149,6 +171,7 @@ export default {
 - `QUICK_FILTERS`（`key` 对应 `?quick=`，`query` 是 orders.list 参数；v1.1 加了 `requests`、`unpriced`）。
 - v1.1：`PROGRESS_STEPS`（5 段进度条文字）、`HOLD_REASON`、`REQUEST_TYPE`、`REQUEST_STATUS`、`FACTORY_NODE`（`label` / `action` 按钮文案 / `courier` / `photo` / `category`）、`PARTICIPANT_ROLE`；`FILE_CATEGORY` 加了 3 类返厂照片。
 - v1.2：`FILE_CATEGORY` 加了 `Attachment`；`FILE_KIND`（图片 / 视频 / 文档）、`FILE_SOURCE`（文件中心的 6 种来源）。
+- v1.3：`ATTACHMENT_TYPE`（附件类别，`label` 完整标题 / `short` 短标题，键的顺序即展示顺序）、`ATTACHMENT_TYPE_OPTIONS`（短标题下拉选项）、`TRANSFER_STATUS`（待确认 / 已接手 / 已拒绝 / 已撤回 / 已失效）；`ORDER_ACTIONS` 加了 `cancelTransfer`（撤销转交，只在抽屉的转交提示块里用）。
 - `ORDER_ACTIONS`：action → 按钮文案和样式。
 - `label(map, v)`、`options(map)`。
 
@@ -191,6 +214,7 @@ export default {
 - 状态记录：`log-list` > `log-item` > `dot` + `log-text` + `log-time`
 - v1.1：5 段进度条 `progress5` > `progress5-seg(.on|.current|.paused)`；价格建议 `orders-suggest(.pending)`；申请卡片 `alert alert-warn orders-dr-req`；人员行 `orders-dr-person`；返厂时间线 `factory-line` > `factory-node.is-done|is-current|is-todo|is-skipped`
 - v1.2：类型角标 `att-badge`（背景色用 `fileBadge().color`）、文字操作链接 `btn-link att-link(.att-link-danger)`；上传组件 `att-up-*`；抽屉附件区 `att-list` > `att-row`；文件中心 `files-*`。v1.2 新增的类一律以 `att-` / `files-` 为前缀
+- v1.3：设备资料 `dev-*`（建单的设备表 `dev-table`、抽屉的 `kv dev-kv` + `dev-list`）；转交 `tr-*`（转交记录 `tr-list` > `tr-row`、退出方式 `tr-exit`）；附件分类 `att-zone`（建单的上传区）、`att-group` > `att-group-head` / `att-group-empty`（抽屉分组）、`att-type-select`（类别下拉）。v1.3 新增的类一律以 `dev-` / `tr-` / `att-` 为前缀
 - 表单：`field` > `field-label`（`<span class="req">*</span>`）+ `input` / `select` / `textarea`（`.invalid`）+ `field-hint` / `field-error`；布局用 `form-stack` / `form-grid`（`.span-2`）/ `form-section-title`；选项用 `radio-group` > `radio-chip(.active)`，复选用 `checkbox`
 - 菜单：`dropdown` > `menu` > `menu-item`
 - 工具类：`num`、`mono`、`text-muted` / `text-faint` / `text-danger` / `text-warn` / `text-success`、`text-right`、`ellipsis`、`nowrap`

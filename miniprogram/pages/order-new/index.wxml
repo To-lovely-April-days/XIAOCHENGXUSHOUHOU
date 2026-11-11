@@ -68,34 +68,53 @@
     </view>
   </view>
 
-  <!-- ========== 设备 ========== -->
-  <view class="grp-title">设备</view>
+  <!-- ========== 设备资料（v1.3：*项目编号 → 设备（可多台）→ *是否已完成 SAT → 时间） ========== -->
+  <view class="grp-title">设备资料</view>
   <view class="grp">
-    <view class="cell" id="f-deviceModel">
-      <view class="lbl {{errKey === 'deviceModel' ? 'err' : ''}}">设备型号 <text class="star">*</text></view>
-      <input class="ipt" value="{{form.deviceModel}}" data-key="deviceModel" bindinput="onInput" placeholder="如 高压反应釜 HTR-500" placeholder-class="placeholder" maxlength="100" />
+    <view class="cell" id="f-projectNo">
+      <view class="lbl {{errKey === 'projectNo' ? 'err' : ''}}">项目编号 <text class="star">*</text></view>
+      <input class="ipt" value="{{form.projectNo}}" data-key="projectNo" bindinput="onInput" placeholder="必填" placeholder-class="placeholder" maxlength="50" />
     </view>
-    <view class="cell" id="f-deviceSn">
-      <view class="lbl {{errKey === 'deviceSn' ? 'err' : ''}}">设备编号 <text class="star">*</text></view>
-      <input class="ipt num-font" value="{{form.deviceSn}}" data-key="deviceSn" bindinput="onInput" placeholder="铭牌上的序列号" placeholder-class="placeholder" maxlength="64" />
-    </view>
-    <picker mode="date" fields="month" value="{{form.satDate || monthEnd}}" end="{{monthEnd}}" bindchange="onPickSat">
-      <view class="cell" id="f-satDate" hover-class="cell-hover">
-        <view class="lbl flex1 {{errKey === 'satDate' ? 'err' : ''}}">购买 / SAT 时间 <text class="star">*</text></view>
-        <text class="val num-font {{form.satDate ? '' : 'placeholder'}}">{{form.satDate || '请选择'}}</text>
-        <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+
+    <view class="dev-area" id="f-devices">
+      <view wx:for="{{form.devices}}" wx:key="key" class="dev-card">
+        <view class="dev-head">
+          <text class="dev-title">设备 {{index + 1}}</text>
+          <view class="dev-del" hover-class="cell-hover" data-index="{{index}}" bindtap="onDeviceRemove" aria-role="button" aria-label="删除设备 {{index + 1}}">删除</view>
+        </view>
+        <view class="dev-row">
+          <view class="dev-lbl">设备名称</view>
+          <input class="ipt dev-ipt" value="{{item.name}}" data-index="{{index}}" data-field="name" bindinput="onDeviceInput" placeholder="如 高压反应釜" placeholder-class="placeholder" maxlength="100" />
+        </view>
+        <view class="dev-row">
+          <view class="dev-lbl">设备编号</view>
+          <input class="ipt dev-ipt num-font" value="{{item.sn}}" data-index="{{index}}" data-field="sn" bindinput="onDeviceInput" placeholder="铭牌上的序列号" placeholder-class="placeholder" maxlength="100" />
+        </view>
+        <view class="dev-row no-line">
+          <view class="dev-lbl">设备型号</view>
+          <input class="ipt dev-ipt" value="{{item.model}}" data-index="{{index}}" data-field="model" bindinput="onDeviceInput" placeholder="如 HTR-500" placeholder-class="placeholder" maxlength="100" />
+        </view>
       </view>
-    </picker>
-    <view class="cell">
-      <view class="lbl flex1">
-        <view>SAT 已签字</view>
-        <view class="hint">{{form.satSigned ? '已签字 · 老产品' : '未签字 · 新产品'}}</view>
-      </view>
-      <switch checked="{{form.satSigned}}" color="#1D1D1F" bindchange="onSatSigned" />
+      <view class="dev-add" hover-class="cell-hover" bindtap="onDeviceAdd" aria-role="button">+ 添加设备</view>
+      <view class="hint dev-hint">选填。一个项目多台设备同时维修时，点「+ 添加设备」逐台添加；整行不填的会被忽略。</view>
     </view>
-    <view class="cell no-line">
-      <view class="lbl">项目编号</view>
-      <input class="ipt" value="{{form.projectNo}}" data-key="projectNo" bindinput="onInput" placeholder="选填" placeholder-class="placeholder" maxlength="64" />
+
+    <view class="cell" id="f-satSigned">
+      <view class="lbl flex1 {{errKey === 'satSigned' ? 'err' : ''}}">是否已完成 SAT <text class="star">*</text></view>
+      <view class="sat-chips">
+        <view class="chip sat-chip {{form.satSigned === true ? 'active' : ''}}" data-v="1" bindtap="onSatChoose" aria-role="radio" aria-checked="{{form.satSigned === true}}">已完成</view>
+        <view class="chip sat-chip {{form.satSigned === false ? 'active' : ''}}" data-v="0" bindtap="onSatChoose" aria-role="radio" aria-checked="{{form.satSigned === false}}">未完成</view>
+      </view>
+    </view>
+    <view class="cell no-line" id="f-satDate">
+      <picker class="flex1" mode="date" fields="day" value="{{form.satDate || dayEnd}}" bindchange="onPickSat">
+        <view class="sat-date" hover-class="cell-hover">
+          <view class="lbl flex1">{{satDateLabel}}</view>
+          <text class="val num-font {{form.satDate ? 'sat-date-val' : 'placeholder'}}">{{form.satDate || '选填'}}</text>
+          <ui-icon wx:if="{{!form.satDate}}" name="right" color="#AEAEB2" size="18" stroke="2" />
+        </view>
+      </picker>
+      <view wx:if="{{form.satDate}}" class="sat-clear" hover-class="cell-hover" catchtap="onClearSat" aria-role="button">清除</view>
     </view>
   </view>
 
@@ -129,32 +148,35 @@
     </view>
   </view>
 
-  <!-- ========== 附件（v1.2：照片 / 视频 / 文件；v1.1 起建单不填价格，由主管在工单详情定价） ========== -->
+  <!-- ========== 附件（v1.3：按三类分小节上传；v1.1 起建单不填价格，由主管在工单详情定价） ========== -->
   <view class="grp-title">附件</view>
   <view class="grp grp-pb">
-    <view class="media-title media-title-first {{errKey === 'media' ? 'err' : ''}}" id="f-media">附件（照片 / 视频 / 文件） <text class="hint-inline">选填，最多 {{maxMedia}} 个</text></view>
-    <view class="media-grid">
-      <view wx:for="{{media}}" wx:key="key" class="media-item" data-index="{{index}}" bindtap="onMediaTap" bindlongpress="onMediaLongPress">
-        <image wx:if="{{item.thumb}}" class="media-img" src="{{item.thumb}}" mode="aspectFill" />
-        <view wx:if="{{item.kind === 'Video'}}" class="media-video">▶<text wx:if="{{item.duration}}"> {{item.duration}}″</text></view>
-        <view wx:if="{{item.kind === 'Document'}}" class="media-doc">
-          <view class="media-badge" style="background: {{item.badgeColor}};">{{item.badgeText}}</view>
-          <view class="media-name">{{item.name}}</view>
+    <view class="media-title media-title-first {{errKey === 'media' ? 'err' : ''}}" id="f-media">附件（照片 / 视频 / 文件） <text class="hint-inline">选填，三类合计最多 {{maxMedia}} 个</text></view>
+    <block wx:for="{{mediaGroups}}" wx:for-item="grp" wx:key="type">
+      <view class="media-sub">{{grp.label}}</view>
+      <view class="media-grid">
+        <view wx:for="{{grp.items}}" wx:for-item="m" wx:key="key" class="media-item" data-index="{{m.index}}" bindtap="onMediaTap" bindlongpress="onMediaLongPress">
+          <image wx:if="{{m.thumb}}" class="media-img" src="{{m.thumb}}" mode="aspectFill" />
+          <view wx:if="{{m.kind === 'Video'}}" class="media-video">▶<text wx:if="{{m.duration}}"> {{m.duration}}″</text></view>
+          <view wx:if="{{m.kind === 'Document'}}" class="media-doc">
+            <view class="media-badge" style="background: {{m.badgeColor}};">{{m.badgeText}}</view>
+            <view class="media-name">{{m.name}}</view>
+          </view>
+          <view wx:if="{{m.restricted}}" class="media-lock" aria-label="仅销售和主管可见">
+            <ui-icon name="lock" color="#FFFFFF" size="11" stroke="2.4" />
+          </view>
+          <view wx:if="{{m.status === 'uploading'}}" class="media-mask num-font">{{m.percent}}%</view>
+          <view wx:elif="{{m.status === 'fail' && m.fatal}}" class="media-mask media-fail media-fatal">{{m.error}}</view>
+          <view wx:elif="{{m.status === 'fail'}}" class="media-mask media-fail">点击重试</view>
+          <view class="media-del" data-index="{{m.index}}" catchtap="onMediaRemove" aria-role="button" aria-label="删除">
+            <ui-icon name="close" color="#FFFFFF" size="10" stroke="3" />
+          </view>
         </view>
-        <view wx:if="{{item.restricted}}" class="media-lock" aria-label="仅销售和主管可见">
-          <ui-icon name="lock" color="#FFFFFF" size="11" stroke="2.4" />
-        </view>
-        <view wx:if="{{item.status === 'uploading'}}" class="media-mask num-font">{{item.percent}}%</view>
-        <view wx:elif="{{item.status === 'fail' && item.fatal}}" class="media-mask media-fail media-fatal">{{item.error}}</view>
-        <view wx:elif="{{item.status === 'fail'}}" class="media-mask media-fail">点击重试</view>
-        <view class="media-del" data-index="{{index}}" catchtap="onMediaRemove" aria-role="button" aria-label="删除">
-          <ui-icon name="close" color="#FFFFFF" size="10" stroke="3" />
+        <view wx:if="{{media.length < maxMedia}}" class="media-add" hover-class="cell-hover" data-att-type="{{grp.type}}" bindtap="onAddMedia" aria-role="button" aria-label="添加{{grp.label}}">
+          <ui-icon name="plus" color="#6E6E73" size="24" stroke="2" />
         </view>
       </view>
-      <view wx:if="{{media.length < maxMedia}}" class="media-add" hover-class="cell-hover" bindtap="onAddMedia" aria-role="button" aria-label="添加照片、视频或文件">
-        <ui-icon name="plus" color="#6E6E73" size="24" stroke="2" />
-      </view>
-    </view>
+    </block>
     <view class="hint media-hint">{{mediaHint}}<text wx:if="{{canRestrict}}">{{mediaHintRestrict}}</text></view>
   </view>
 

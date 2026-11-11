@@ -38,7 +38,19 @@ public enum ParticipantRole { Lead, Assistant, Former }
 
 /// <summary>状态记录类别；库中 null = Status</summary>
 /// <remarks>AttachmentPrivate（受限附件的记录）与 Price 一样不返回给 Engineer</remarks>
-public enum LogKind { Status, Price, Hold, Assist, Factory, Attachment, AttachmentPrivate }
+/// <remarks>Info（v1.3）= 资料修改（SAT 信息），所有角色可见</remarks>
+public enum LogKind { Status, Price, Hold, Assist, Factory, Attachment, AttachmentPrivate, Info }
+
+/// <summary>
+/// 附件类别（v1.3，落库）。声明顺序必须是 Other 在最前（CLR 默认值 = 「其他」）；展示顺序见 AttachmentRules.TypeOrder。
+/// </summary>
+public enum AttachmentType { Other, Sat, RepairForm }
+
+/// <summary>转交状态（v1.3，落库）</summary>
+public enum TransferStatus { Pending, Accepted, Rejected, Cancelled, Expired }
+
+/// <summary>退出方式（v1.3，落库）：转交出去 / 被主管改派</summary>
+public enum ExitVia { Transfer, Reassign }
 
 /// <summary>工单动作（状态机输入）</summary>
 public enum OrderAction { Claim, Assign, Reassign, Start, FirstArrive, Complete, Void, Hold, Resume, Reject, Close }
@@ -143,6 +155,42 @@ public static class EnumText
         RequestStatus.Rejected => "已驳回",
         RequestStatus.Cancelled => "已撤销",
         _ => s.ToString()
+    };
+
+    /// <summary>附件类别的完整标题（分组标题、上传时的选项）；全系统唯一，两个前端的 enums.js 逐字一致</summary>
+    public static string AttachmentLabel(AttachmentType t) => t switch
+    {
+        AttachmentType.Sat => "SAT 验收单（签字版）",
+        AttachmentType.RepairForm => "现场维修登记表/返厂维修登记表（签字版）",
+        AttachmentType.Other => "设备照片、沟通记录及其他附件",
+        _ => t.ToString()
+    };
+
+    /// <summary>附件类别的短标题（标签、表格列、状态记录）</summary>
+    public static string AttachmentShort(AttachmentType t) => t switch
+    {
+        AttachmentType.Sat => "SAT 验收单",
+        AttachmentType.RepairForm => "维修登记表",
+        AttachmentType.Other => "其他附件",
+        _ => t.ToString()
+    };
+
+    public static string TransferStatusName(TransferStatus s) => s switch
+    {
+        TransferStatus.Pending => "待确认",
+        TransferStatus.Accepted => "已接手",
+        TransferStatus.Rejected => "已拒绝",
+        TransferStatus.Cancelled => "已撤回",
+        TransferStatus.Expired => "已失效",
+        _ => s.ToString()
+    };
+
+    /// <summary>退出方式的文字：已转交 / 已改派</summary>
+    public static string ExitText(ExitVia v) => v switch
+    {
+        ExitVia.Transfer => "已转交",
+        ExitVia.Reassign => "已改派",
+        _ => v.ToString()
     };
 
     /// <summary>暂停原因文字（全系统唯一规则）：Other / 无类型 → 只用说明（空则「其他」）；其余 → 类型中文[：说明]</summary>

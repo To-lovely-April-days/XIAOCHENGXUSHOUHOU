@@ -108,7 +108,7 @@ PC 后台（`http://localhost:5080/admin/`）用赵主管 `13900000001` / `Huoto
 
 ### 工单附件与文件中心（v1.2）
 
-- 「附件」= 挂在工单上、`Category` 为 `OrderPhoto`（建单照片 / v1.1 客户端）或 `Attachment` 的未删除文件，每单最多 20 个。接口：建单请求体的 `attachments`、`POST /api/orders/{id}/attachments`、`.../attachments/{fileId}/delete`、`.../attachments/{fileId}/restricted`（主管）。权限规则集中在 `Services/AttachmentRules.cs`（接口校验与详情里的 `canAddAttachment / canDelete / canToggleRestricted` 共用），实现在 `Services/AttachmentService.cs`（`partial class OrderService`）。
+- 「附件」= 挂在工单上、`Category` 为 `OrderPhoto`（建单照片 / v1.1 客户端）或 `Attachment` 的未删除文件，每单最多 50 个（v1.3 由 20 调整为 50）。接口：建单请求体的 `attachments`、`POST /api/orders/{id}/attachments`、`.../attachments/{fileId}/delete`、`.../attachments/{fileId}/restricted`（主管）。权限规则集中在 `Services/AttachmentRules.cs`（接口校验与详情里的 `canAddAttachment / canDelete / canToggleRestricted` 共用），实现在 `Services/AttachmentService.cs`（`partial class OrderService`）。
 - **「仅销售和主管可见」（`Restricted`）与价格同等严格**：工程师从详情（`attachments`、`files.orderPhotos`、`logs` 里的 `AttachmentPrivate` 记录）、下载、删除、文件中心都拿不到受限附件；过滤在 `OrderViewBuilder.BuildDetail`、`FileService.ResolveDownload`、`FileCenterService.Query`、`AttachmentService.LoadAttachment` 四处。静态地址 `/uploads/...` 本身不鉴权，保护手段是工程师拿不到记录与地址。
 - **软删除**：`DeletedAt / DeletedById`，磁盘文件保留。`AppDbContext` 给 `StoredFile` 配了全局查询过滤器（`DeletedAt == null`），已删除文件对所有读取路径都不存在；要看到它们用 `IgnoreQueryFilters()`。
 - **文件中心**：`GET /api/admin/files`（主管）= `StoredFiles` 与 `WorkOrders` 按 `OrderId` 关联的查询（`Services/FileCenterService.cs`），覆盖附件、建单照片、完工照片、签字件、打卡照片、返厂照片，不含头像与未挂工单的文件；支持 keyword / type / source / uploaderId / orderId / restricted / from / to 与分页，返回 `total`、`totalSize`、按类型的 `counts`。查询带当前用户，已按工程师可见性过滤，以后开放给其他角色不用改。
@@ -120,6 +120,19 @@ PC 后台（`http://localhost:5080/admin/`）用赵主管 `13900000001` / `Huoto
 - **设为受限会收起旧记录**：把附件设为「仅销售和主管可见」时，本单此前带该文件名的 `Attachment` 状态记录一并改为 `AttachmentPrivate`（工程师不再看到文件名；同一条记录里的其他文件名一起隐藏；取消受限后不恢复）。
 - **头像与工单文件互斥**：已挂工单的文件不能设为头像（`头像文件已用于工单，请重新上传`）；`Avatar` 类别的文件不能当附件 / 照片挂到工单（`…不存在，请重新上传`）。
 - **类型识别收紧**：BMP 还要求保留字段为 0；ISO-BMFF / QuickTime 要求首字节 ≤ 0x08（避免把「The free…」之类的文本误判成视频）；AVIF（`ftyp avif/avis`）拒绝；`category` 不接受数字；文件名清洗额外去掉不可见的格式字符（零宽字符、RLO 等）。
+
+### 设备资料 / 附件分类 / 转交（v1.3，契约见 `docs/CHANGES-v1.3.md`）
+
+- **设备资料**：一张工单可以带多台设备（表 `OrderDevices`，建单时写入，本期没有修改入口）。建单必填只有「项目编号」和「是否已完成 SAT」；设备 0–20 台，整行为空的忽略；时间（SAT 完成时间 / 发货时间，`yyyy-MM-dd`，也接受旧的 `yyyy-MM`）选填，之后可用 `POST /api/orders/{id}/sat` 补填 / 修改（建单人、当前负责人、主管；作废后不可改）。规则集中在 `Services/DeviceRules.cs`：归一化、`Title` / `Summary`（设备汇总文字，落在 `WorkOrders.DeviceText`，列表 / 通知 / 标题一律读它）、SAT 时间格式与修改权限。
+  - **旧客户端兼容**：请求里没有 `devices`（省略或 null）时，按旧字段 `deviceModel` / `deviceSn` 合成一台设备；`devices: []` 表示明确没有设备。`WorkOrders.DeviceModel / DeviceSn` 作为兼容列继续写入（= 第一台设备的 title / 编号），新代码不要再用它们做展示或搜索。项目编号对旧客户端同样必填（`请填写项目编号`）。
+  - 搜索（`GET /api/orders?keyword=`）匹配工单号 / 客户 / 项目编号 / 任意一台设备的名称、编号、型号 / 设备汇总文字 `DeviceText`（照着列表上的「名称 型号」整串也能搜到）；文件中心的 `keyword` 增加项目编号；导出在末尾追加「设备台数 / SAT 完成时间 / 发货时间」三列，多台设备在「设备型号」「设备编号」两列里用「；」连接。
+- **附件分类 + 随时可传**：`StoredFiles.AttachmentType`（`Sat` SAT 验收单 / `RepairForm` 维修登记表 / `Other` 其他，枚举里 `Other` 排第一 = 默认值）。上传时在附件项里带 `type`，事后用 `POST /api/orders/{id}/attachments/{fileId}/type` 改（上传人本人或主管）。只分类，不做任何强制检查。**闭环之后建单人 / 负责人 / 协助人 / 主管都能继续添加**（作废的不行）；闭环后非主管仍不能删除。类别字符串只有一个解析入口 `AttachmentRules.TryParseType`（数字一律非法）。文件中心支持 `attachmentType` 筛选。
+- **转交**（`Services/TransferService.cs`，`partial class OrderService` + 静态类 `TransferRules`）：负责工程师在 待启动 / 处理中 / 暂停搁置 的工单上把单子转给另一位启用中的工程师（原因必填，不需要主管批准）；对方「确认接手 / 拒绝」，发起人可撤回、主管可撤销。接口 `POST /api/orders/{id}/transfers`、`.../transfers/{transferId}/accept | reject | cancel`。拒绝后接手人若已无查看权，`reject` 返回 `data: null`（全系统唯一可能返回 null 的工单动作）。
+  - 两条不变量：**I1** `WorkOrders.PendingTransferToId != null` ⇔ 本单恰有一行 `OrderTransfers.Status = Pending`（两处只通过 `StartTransfer` / `TransferRules.End` 一起改）；**I2** `OrderExits`（退出记录）里的人一定不是当前负责人 / 协助人（让人成为负责人 / 协助人的路径都要 `RemoveExit`）。
+  - 待确认期间：提交完工被拦截（`本单有待确认的转交，请先撤回转交后再提交完工`）；主管改派、作废、接手人被停用 / 改角色 → 转交自动失效（`Expired`）并留一条状态记录。
+  - **已退出**：被转交或被主管改派换掉的原负责人写入 `OrderExits`，对这张单只读（`OrderViewBuilder.IsFormer` 是唯一判断入口；附件 / SAT / 返厂节点统一返回 `你已退出本单，只能查看`），在「我的工单」的 `former` 分组里能找到；打卡、工时原样保留并仍算在他名下。待确认转交的接手人在确认前也只读（与协助人相同的可见范围，不含价格与受限附件）；即使他以前在本单上传过附件，确认前也不能删除 / 改类别（`AttachmentRules.ReadOnlyViewer`）。
+  - 并发：四个转交接口与 `Assign` / `Void` / `Complete` / `SetAssistants` / `Appointment` / `Start` 都在 `WriteLock()` 事务里「加载 → 校验 → 写」，`PunchService.Create` 与 `AdminService.UpdateEmployee` 也包了数据库事务（SQLite 事务一开始就取写锁），所以「确认接手 / 撤回 / 改派 / 提交完工 / 打卡」同时到达会排队。
+- 迁移 `V13_DevicesTransfers`：已有表只加列（`WorkOrders.DeviceText / PendingTransferToId`、`StoredFiles.AttachmentType`，后者列默认值 `'Other'`）与索引，新建 `OrderDevices / OrderTransfers / OrderExits` 三张表；`Up` 末尾带旧数据回填（旧单的 型号 + 序列号 → 一台设备、`DeviceText`）。可直接在 v1.2 的库上升级，启动时自动执行；不回填退出记录（升级前被改派走的人没有查看权）。
 
 ## 导出
 

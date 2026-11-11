@@ -291,7 +291,7 @@ public sealed class V12FileCenterTests : V12TestBase
         conn.Open();
         using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseSqlite(conn).Options);
         db.GetService<IMigrator>().Migrate("V11_PriceHoldAssistFactory");
-        Assert.Equal(new[] { "V12_Attachments" }, db.Database.GetPendingMigrations().Select(m => m[(m.IndexOf('_') + 1)..]));
+        Assert.Equal(new[] { "V12_Attachments", "V13_DevicesTransfers" }, db.Database.GetPendingMigrations().Select(m => m[(m.IndexOf('_') + 1)..]));
 
         db.Database.ExecuteSqlRaw("""
             INSERT INTO Employees (Id, Name, Phone, Role, Department, Enabled, TokenVersion, CreatedAt)
@@ -350,7 +350,7 @@ public sealed class V12FileCenterTests : V12TestBase
         Assert.All(d.Attachments, a => Assert.Equal("OrderPhoto", a.Source));
         Assert.Equal(2, d.Files.OrderPhotos.Count);
         Assert.Single(d.Files.PunchPhotos);
-        Assert.Equal(18, d.AttachmentRemaining);
+        Assert.Equal(48, d.AttachmentRemaining);
         Assert.True(d.CanAddAttachment);
 
         var page = await new FileCenterService(db, view).Query(new FileCenterQuery(), sup);
@@ -366,6 +366,6 @@ public sealed class V12FileCenterTests : V12TestBase
         Assert.Single((await view.BuildDetail(1, eng)).Attachments);
         d = await orders.DeleteAttachment(1, 2, sup);
         Assert.Single(d.Attachments);
-        Assert.Equal(19, d.AttachmentRemaining);
+        Assert.Equal(49, d.AttachmentRemaining);
     }
 }

@@ -86,28 +86,40 @@ public partial class OrderService
 
     private static DateTime SortTime(WorkOrder o) => o.ClosedAt ?? o.SubmittedAt ?? o.ClaimedAt ?? o.CreatedAt;
 
+    /// <summary>
+    /// 我的工单：本人是负责人 / 协助人 / 已退出（v1.3）的工单，不含已作废、待认领。
+    /// doing / check / closed 只含本人是负责人或协助人的；former = 本人已退出的（按退出时间倒序）；all = 前三组 + former（排在最后）。
+    /// </summary>
     public async Task<ListResult<OrderListItem>> Mine(CurrentUser user, string? group)
     {
-        var orders = await _view.Orders()
-            .Where(o => (o.AssigneeId == user.Id || o.Assistants.Any(a => a.EngineerId == user.Id))
+        var all = await _view.Orders()
+            .Where(o => (o.AssigneeId == user.Id || o.Assistants.Any(a => a.EngineerId == user.Id) || o.Exits.Any(x => x.EngineerId == user.Id))
                         && o.Status != OrderStatus.Voided && o.Status != OrderStatus.Pending)
             .ToListAsync();
+        // 不变量 I2 保证一张单不会同时落在两堆里；万一同时有，按负责人 / 协助人对待
+        var orders = all.Where(o => OrderViewBuilder.RoleIn(o, user.Id) != null).ToList();
+        var former = all.Where(o => OrderViewBuilder.RoleIn(o, user.Id) == null)
+            .OrderByDescending(o => o.Exits.Where(x => x.EngineerId == user.Id).Select(x => x.ExitedAt).FirstOrDefault())
+            .ThenByDescending(o => o.Id).ToList();
         var counts = new Dictionary<string, int>
         {
             ["doing"] = orders.Count(o => Doing.Contains(o.Status)),
             ["check"] = orders.Count(o => o.Status == OrderStatus.Submitted),
             ["closed"] = orders.Count(o => o.Status == OrderStatus.Closed),
-            ["all"] = orders.Count,
+            ["former"] = former.Count,
+            ["all"] = orders.Count + former.Count,
         };
+        static IEnumerable<WorkOrder> Sorted(IEnumerable<WorkOrder> xs) =>
+            xs.OrderBy(o => MinePriority(o.Status)).ThenByDescending(SortTime).ThenByDescending(o => o.Id);
         IEnumerable<WorkOrder> q = (group ?? "all").ToLowerInvariant() switch
         {
-            "doing" => orders.Where(o => Doing.Contains(o.Status)),
-            "check" => orders.Where(o => o.Status == OrderStatus.Submitted),
-            "closed" => orders.Where(o => o.Status == OrderStatus.Closed),
-            "all" or "" => orders,
+            "doing" => Sorted(orders.Where(o => Doing.Contains(o.Status))),
+            "check" => Sorted(orders.Where(o => o.Status == OrderStatus.Submitted)),
+            "closed" => Sorted(orders.Where(o => o.Status == OrderStatus.Closed)),
+            "former" => former,
+            "all" or "" => Sorted(orders).Concat(former),
             _ => throw BizException.BadRequest("分组参数不正确")
         };
-        q = q.OrderBy(o => MinePriority(o.Status)).ThenByDescending(SortTime).ThenByDescending(o => o.Id);
         return new ListResult<OrderListItem> { Items = await _view.BuildList(q, user), Counts = counts };
     }
 
@@ -155,7 +167,12 @@ public partial class OrderService
     {
         if (string.IsNullOrWhiteSpace(keyword)) return q;
         var k = keyword.Trim();
-        return q.Where(o => o.OrderNo.Contains(k) || o.CustomerName.Contains(k) || o.DeviceModel.Contains(k) || o.DeviceSn.Contains(k));
+        // v1.3：项目编号 + 任意一台设备的名称 / 编号 / 型号（子查询，不需要 Include）；旧单的型号、序列号已回填进设备表。
+        // 另外匹配设备汇总文字 DeviceText：名称与型号分开存，照着列表上显示的「高压反应釜 HTR-250」整串搜也要能搜到
+        return q.Where(o => o.OrderNo.Contains(k) || o.CustomerName.Contains(k)
+                            || (o.ProjectNo != null && o.ProjectNo.Contains(k))
+                            || o.DeviceText.Contains(k)
+                            || o.Devices.Any(d => d.Name.Contains(k) || d.Sn.Contains(k) || d.Model.Contains(k)));
     }
 
     public async Task<PagedOrders> Query(OrderQuery p, CurrentUser user)
@@ -206,13 +223,15 @@ public partial class OrderService
 
     public async Task<List<RecentCustomerDto>> RecentCustomers(CurrentUser user)
     {
-        var orders = await _db.Orders.Where(o => o.CreatorId == user.Id)
+        var orders = await _db.Orders.AsNoTracking().Include(o => o.Devices).Where(o => o.CreatorId == user.Id)
             .OrderByDescending(o => o.CreatedAt).ThenByDescending(o => o.Id).Take(200).ToListAsync();
         return orders.GroupBy(o => o.CustomerName.Trim()).Select(g => g.First()).Take(5).Select(o => new RecentCustomerDto
         {
             CustomerName = o.CustomerName, ContactName = o.ContactName, ContactPhone = o.ContactPhone, Address = o.Address,
             Latitude = o.Latitude ?? 0, Longitude = o.Longitude ?? 0, DeviceModel = o.DeviceModel, DeviceSn = o.DeviceSn,
-            SatDate = o.SatDate, SatSigned = o.SatSigned, ProjectNo = o.ProjectNo
+            SatDate = o.SatDate, SatSigned = o.SatSigned, ProjectNo = o.ProjectNo,
+            Devices = o.Devices.OrderBy(d => d.Seq).ThenBy(d => d.Id)
+                .Select(d => new DeviceItemDto { Name = d.Name, Sn = d.Sn, Model = d.Model }).ToList()
         }).ToList();
     }
 
@@ -221,7 +240,6 @@ public partial class OrderService
     // ---------- 新建 ----------
 
     private static readonly Regex PhoneRe = new(@"^[0-9\-]{7,20}$", RegexOptions.Compiled);
-    private static readonly Regex SatRe = new(@"^\d{4}-(0[1-9]|1[0-2])$", RegexOptions.Compiled);
 
     private static string Req(string? v, string label, int max = 200)
     {
@@ -253,11 +271,12 @@ public partial class OrderService
         if (r.ServiceType == ServiceType.Onsite && (r.Latitude == null || r.Longitude == null))
             throw BizException.BadRequest("现场工单请在地图上选择客户地址");
         if (r.Latitude is < -90 or > 90 || r.Longitude is < -180 or > 180) throw BizException.BadRequest("经纬度不正确");
-        var model = Req(r.DeviceModel, "设备型号", 100);
-        var sn = Req(r.DeviceSn, "设备编号", 100);
-        var sat = Req(r.SatDate, "购买/SAT 时间", 7);
-        if (!SatRe.IsMatch(sat)) throw BizException.BadRequest("购买/SAT 时间格式应为 yyyy-MM");
-        if (r.SatSigned == null) throw BizException.BadRequest("请选择 SAT 是否已签字");
+        // v1.3 设备资料：必填只有项目编号与「是否已完成 SAT」；设备可多台（可为 0 台）；时间选填
+        var projectNo = Req(r.ProjectNo, "项目编号", 50);
+        var devices = DeviceRules.Normalize(r);
+        DeviceRules.Validate(devices);
+        if (r.SatSigned == null) throw BizException.BadRequest("请选择是否已完成 SAT");
+        var sat = DeviceRules.ParseSatDate(r.SatDate, r.SatSigned.Value);
         var faultTime = Req(r.FaultTime, "发生时间", 50);
         var symptom = Req(r.Symptom, "故障现象/报错", 1000);
         var tried = Req(r.CustomerTried, "客户已尝试的操作", 500);
@@ -267,7 +286,7 @@ public partial class OrderService
         var attIds = attItems.Select(x => x.FileId).ToHashSet();
         var photoIds = (r.PhotoFileIds ?? new List<int>()).Distinct().Where(x => !attIds.Contains(x)).ToList();
         if (photoIds.Count > 9) throw BizException.BadRequest("现场照片/视频最多 9 个");
-        if (attItems.Count + photoIds.Count > AttachmentRules.Limit) throw BizException.BadRequest("附件最多 20 个");
+        if (attItems.Count + photoIds.Count > AttachmentRules.Limit) throw BizException.BadRequest($"附件最多 {AttachmentRules.Limit} 个");
         if (attItems.Any(x => x.Restricted) && !AttachmentRules.CanRestrict(user)) throw BizException.Forbidden(AttachmentRules.RestrictDenied);
 
         var me = await _view.LoadEmployee(user.Id);
@@ -279,7 +298,9 @@ public partial class OrderService
             Status = OrderStatus.Pending, Source = r.Source.Value, ProblemType = r.ProblemType.Value, Urgency = r.Urgency.Value,
             ServiceType = r.ServiceType.Value, CustomerName = customer, ContactName = contact, ContactPhone = phone,
             Address = address, City = city, Region = region, Latitude = r.Latitude, Longitude = r.Longitude,
-            DeviceModel = model, DeviceSn = sn, SatDate = sat, SatSigned = r.SatSigned.Value, ProjectNo = Opt(r.ProjectNo, "项目编号", 50),
+            // DeviceModel / DeviceSn 是兼容列（旧客户端读）：第一台设备的 title / 编号；展示与搜索一律用 DeviceText 与设备表
+            DeviceModel = devices.Count == 0 ? "" : DeviceRules.Title(devices[0]), DeviceSn = devices.Count == 0 ? "" : devices[0].Sn,
+            DeviceText = DeviceRules.Summary(devices), SatDate = sat, SatSigned = r.SatSigned.Value, ProjectNo = projectNo,
             FaultTime = faultTime, Symptom = symptom, CustomerTried = tried, SiteEnvironment = env,
             CustomerRequest = Opt(r.CustomerRequest, "客户诉求与限制", 500),
             // v1.1：建单不定价（忽略请求里的 price），由主管在详情中定价
@@ -297,6 +318,8 @@ public partial class OrderService
                 var max = await _db.Orders.Where(o => o.OrderNo.StartsWith(prefix))
                     .OrderByDescending(o => o.OrderNo).Select(o => o.OrderNo).FirstOrDefaultAsync();
                 order.OrderNo = OrderNoGenerator.Next(now, max);
+                // 设备清单随工单一起写入（重试时重建，避免沿用上一次失败尝试留下的主键）
+                order.Devices = devices.Select(d => new OrderDevice { Seq = d.Seq, Name = d.Name, Sn = d.Sn, Model = d.Model }).ToList();
                 _db.Orders.Add(order);
                 await _db.SaveChangesAsync();
                 await _files.Attach(photoIds, order.Id, FileCategory.OrderPhoto, user, "现场照片");
@@ -319,7 +342,7 @@ public partial class OrderService
         if (order.Urgency == Urgency.Urgent)
         {
             await _notifier.NotifyAsync("紧急工单待认领",
-                $"**{order.CustomerName}**（{order.OrderNo}）\n\n{order.DeviceModel} · {order.Symptom}\n\n{EnumText.Service(order.ServiceType)} · {order.Region} · 建单人 {me.Name}");
+                $"**{order.CustomerName}**（{order.OrderNo}）\n\n{order.DeviceText} · {order.Symptom}\n\n{EnumText.Service(order.ServiceType)} · {order.Region} · 建单人 {me.Name}");
         }
         return await _view.BuildDetail(order.Id, user);
     }
@@ -328,9 +351,11 @@ public partial class OrderService
 
     private static readonly OrderStatus[] Active = { OrderStatus.Accepted, OrderStatus.InProgress };
 
+    /// <summary>所有工单动作、附件接口、返厂节点共用的加载：带协助人与退出记录（v1.3，判断「已退出」要用）</summary>
     private async Task<WorkOrder> Load(int id) =>
         await _db.Orders.Include(o => o.Assignee).Include(o => o.Creator)
             .Include(o => o.Assistants).ThenInclude(a => a.Engineer)
+            .Include(o => o.Exits)
             .FirstOrDefaultAsync(o => o.Id == id) ?? throw BizException.NotFound("工单不存在");
 
     private void AddLog(WorkOrder o, Employee actor, string text, OrderStatus to, DateTime time, LogKind kind = LogKind.Status) =>
@@ -410,6 +435,9 @@ public partial class OrderService
 
     public async Task<OrderDetail> Appointment(int id, AppointmentRequest r, CurrentUser user)
     {
+        // v1.3 验收补充：进写锁，与「确认接手 / 改派」排队——否则原负责人的预约与对方确认接手同时到达时，
+        // 会在他退出之后落下一条他的预约记录
+        await using var tx = await WriteLock();
         var o = await Load(id);
         EnsureAssignee(o, user);
         if (o.Status is not (OrderStatus.Accepted or OrderStatus.InProgress))
@@ -421,11 +449,14 @@ public partial class OrderService
         o.AppointmentTime = new DateTime(t.Year, t.Month, t.Day, t.Hour, t.Minute, 0);
         AddLog(o, me, $"{me.Name} 预约 {TimeText.MdHm(o.AppointmentTime.Value)}", o.Status, now);
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
         return await _view.BuildDetail(id, user);
     }
 
     public async Task<OrderDetail> Start(int id, CurrentUser user)
     {
+        // v1.3 验收补充：进写锁（理由同 Appointment）——否则可能在原负责人退出之后把工单改成「处理中」
+        await using var tx = await WriteLock();
         var o = await Load(id);
         EnsureAssignee(o, user);
         if (o.Status == OrderStatus.OnHold) throw BizException.Conflict("工单已暂停搁置，恢复后才能开始处理");
@@ -438,13 +469,18 @@ public partial class OrderService
         o.StartedAt ??= now;
         AddLog(o, me, $"{me.Name} 开始处理 → {EnumText.Status(to)}", to, now);
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
         return await _view.BuildDetail(id, user);
     }
 
     public async Task<OrderDetail> Complete(int id, CompleteRequest r, CurrentUser user)
     {
+        // v1.3：进写锁，与「确认接手 / 撤回 / 改派」排队
+        await using var tx = await WriteLock();
         var o = await Load(id);
         EnsureAssignee(o, user);
+        // 有待确认的转交时直接拦截（不自动撤销）：因此待验收 / 已闭环的工单上不可能有待确认的转交
+        if (o.PendingTransferToId != null) throw BizException.Conflict("本单有待确认的转交，请先撤回转交后再提交完工");
         if (o.Status == OrderStatus.OnHold) throw BizException.Conflict("工单已暂停搁置，恢复后才能提交完工");
         if (o.ServiceType == ServiceType.Factory
             && !await _db.FactoryRecords.AnyAsync(x => x.OrderId == id && x.Node == FactoryNode.ShippedBack))
@@ -487,6 +523,7 @@ public partial class OrderService
         AddLog(o, me, $"{me.Name} 提交完工 → {EnumText.Status(to)}", to, now);
         await AutoCancelRequests(o, now);
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
 
         await _notifier.NotifyAsync("工单待验收",
             $"{me.Name} 提交了 **{o.CustomerName}**（{o.OrderNo}）的完工资料，请确认闭环。\n\n运行状况：{EnumText.Run(r.RunStatus!.Value)}", await SupervisorPhones());
@@ -526,7 +563,11 @@ public partial class OrderService
     private void ApplyAssistants(WorkOrder o, AssistantPlan plan, Employee me, DateTime now)
     {
         foreach (var e in plan.ToAdd)
+        {
             o.Assistants.Add(new OrderAssistant { OrderId = o.Id, EngineerId = e.Id, Engineer = e, AddedById = me.Id, AddedAt = now });
+            // 不变量 I2：成为协助人的人不再是「已退出」
+            RemoveExit(o, e.Id);
+        }
         foreach (var a in plan.ToRemove)
         {
             o.Assistants.Remove(a);
@@ -542,13 +583,15 @@ public partial class OrderService
     {
         if (added.Count == 0) return;
         await _notifier.NotifyAsync("工单协助提醒",
-            $"{me.Name} 安排你协助 **{o.CustomerName}**（{o.OrderNo}），负责人 {o.Assignee?.Name}。\n\n{o.DeviceModel} · {o.Symptom}",
+            $"{me.Name} 安排你协助 **{o.CustomerName}**（{o.OrderNo}），负责人 {o.Assignee?.Name}。\n\n{o.DeviceText} · {o.Symptom}",
             added.Select(e => e.Phone).ToList());
     }
 
     public async Task<OrderDetail> Assign(int id, AssignRequest r, CurrentUser user)
     {
         if (r.EngineerId == null) throw BizException.BadRequest("请选择工程师");
+        // v1.3：进写锁，与转交的「确认接手 / 撤回 / 拒绝 / 再次发起」排队
+        await using var tx = await WriteLock();
         var o = await Load(id);
         var eng = await _db.Employees.FirstOrDefaultAsync(e => e.Id == r.EngineerId && e.Role == Role.Engineer && e.Enabled)
                   ?? throw BizException.BadRequest("所选工程师不存在或已停用");
@@ -567,6 +610,9 @@ public partial class OrderService
         // 协助人：先校验，全部通过后再修改
         var plan = r.AssistantIds == null ? null : await PlanAssistants(o, r.AssistantIds, eng.Id, now);
 
+        // v1.3：改派让待确认的转交自动失效（失效记录写在改派记录之前；改派给转交的接手人也一样）
+        if (!assign) await ExpirePendingTransfer(o, me, now, "主管已改派");
+
         o.Status = to;
         o.AssigneeId = eng.Id;
         o.Assignee = eng;
@@ -581,11 +627,16 @@ public partial class OrderService
             o.Assistants.Remove(promoted);
             _db.OrderAssistants.Remove(promoted);
         }
+        // v1.3 退出记录：被换掉的原负责人成为「已退出」（只读）；新负责人不再是「已退出」。
+        // 原负责人若在这次改派里被加为协助人，下面的 ApplyAssistants 会把他的退出记录删掉
+        if (!assign && oldLeadId != null && oldLeadId != eng.Id) AddExit(o, oldLeadId.Value, ExitVia.Reassign, now);
+        RemoveExit(o, eng.Id);
         if (plan != null) ApplyAssistants(o, plan, me, now);
         await AutoCancelRequests(o, now, oldLeadId);
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
         await _notifier.NotifyAsync("工单指派提醒",
-            $"{me.Name} 将 **{o.CustomerName}**（{o.OrderNo}）指派给 {eng.Name}。\n\n{o.DeviceModel} · {o.Symptom}", new[] { eng.Phone });
+            $"{me.Name} 将 **{o.CustomerName}**（{o.OrderNo}）指派给 {eng.Name}。\n\n{o.DeviceText} · {o.Symptom}", new[] { eng.Phone });
         if (plan != null) await NotifyNewAssistants(o, me, plan.ToAdd);
         return await _view.BuildDetail(id, user);
     }
@@ -595,19 +646,24 @@ public partial class OrderService
     {
         EnsureRole(user, Role.Supervisor, "只有主管可以调整协助人");
         if (r.EngineerIds == null) throw BizException.BadRequest("请选择协助人");
+        // v1.3 审查补充：进写锁，与「确认接手 / 改派」排队。否则主管把接手人加为协助人与对方确认接手同时到达时，
+        // 这里按旧的负责人校验、接手那边按旧的协助人名单转正，结果同一个人既是负责人又是协助人
+        await using var tx = await WriteLock();
         var o = await Load(id);
         if (!Doing.Contains(o.Status))
             throw BizException.Conflict($"工单当前为「{EnumText.Status(o.Status)}」，不能调整协助人");
         var me = await _view.LoadEmployee(user.Id);
         var now = _clock.Now;
         var plan = await PlanAssistants(o, r.EngineerIds, o.AssigneeId, now);
-        if (plan.ToAdd.Count > 0 || plan.ToRemove.Count > 0)
+        var changed = plan.ToAdd.Count > 0 || plan.ToRemove.Count > 0;
+        if (changed)
         {
             ApplyAssistants(o, plan, me, now);
             await AutoCancelRequests(o, now);
             await _db.SaveChangesAsync();
-            await NotifyNewAssistants(o, me, plan.ToAdd);
         }
+        await tx.CommitAsync();
+        if (changed) await NotifyNewAssistants(o, me, plan.ToAdd);
         return await _view.BuildDetail(id, user);
     }
 
@@ -618,16 +674,21 @@ public partial class OrderService
 
     public async Task<OrderDetail> Void(int id, ReasonRequest r, CurrentUser user)
     {
+        // v1.3：进写锁，与转交的「确认接手」等排队
+        await using var tx = await WriteLock();
         var o = await Load(id);
         var to = OrderStateMachine.Apply(o.Status, OrderAction.Void);
         var me = await _view.LoadEmployee(user.Id);
         var now = _clock.Now;
         var reason = Opt(r.Reason, "作废原因", 200);
+        // v1.3：作废让待确认的转交自动失效（失效记录在作废记录之前，ToStatus 为作废前的状态）
+        await ExpirePendingTransfer(o, me, now, "工单已作废");
         o.Status = to;
         o.VoidReason = reason;
         AddLog(o, me, $"{me.Name} 作废 → {EnumText.Status(to)}" + (reason == null ? "" : $"（{reason}）"), to, now);
         await AutoCancelRequests(o, now);
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
         return await _view.BuildDetail(id, user);
     }
 
@@ -671,6 +732,33 @@ public partial class OrderService
         o.ClosedAt = now;
         AddLog(o, me, $"{me.Name} 确认闭环 → {EnumText.Status(to)}", to, now);
         await AutoCancelRequests(o, now);
+        await _db.SaveChangesAsync();
+        return await _view.BuildDetail(id, user);
+    }
+
+    // ---------- SAT 信息（v1.3）----------
+
+    /// <summary>
+    /// 修改「是否已完成 SAT」与对应时间（两项一起提交，整体覆盖）。任何角色都可调用，按 DeviceRules.SatEditDenied 判权：
+    /// 主管、建单人、当前负责人可以改（已闭环也可以；作废后不可以；已退出的人不可以）。
+    /// </summary>
+    public async Task<OrderDetail> SetSat(int id, SatRequest r, CurrentUser user)
+    {
+        if (r.SatSigned == null) throw BizException.BadRequest("请选择是否已完成 SAT");
+        var signed = r.SatSigned.Value;
+        var date = DeviceRules.ParseSatDate(r.SatDate, signed);
+        var o = await Load(id);
+        OrderViewBuilder.EnsureCanView(o, user);
+        var denied = DeviceRules.SatEditDenied(o, user);
+        if (denied != null) throw denied;
+        if (o.SatSigned == signed && o.SatDate == date) return await _view.BuildDetail(id, user);
+
+        var me = await _view.LoadEmployee(user.Id);
+        o.SatSigned = signed;
+        o.SatDate = date;
+        var label = DeviceRules.SatDateLabel(signed);
+        AddLog(o, me, $"{me.Name} 修改 SAT 信息：{DeviceRules.SatText(signed)} SAT，" + (date.Length == 0 ? $"{label}未填" : $"{label} {date}"),
+            o.Status, _clock.Now, LogKind.Info);
         await _db.SaveChangesAsync();
         return await _view.BuildDetail(id, user);
     }
