@@ -433,6 +433,11 @@ function buildFactory(d) {
   return rows;
 }
 
+/** 待验收工单是否只差定价就能闭环（缺卡优先，由服务端的 closeBlockedReason 判定） */
+function needPriceToClose(d) {
+  return !!d && d.status === 'Submitted' && d.priceSet === false && String(d.closeBlockedReason || '').indexOf('价格') >= 0;
+}
+
 Page({
   data: {
     loading: true,
@@ -728,7 +733,10 @@ Page({
       disabled: false,
       tip: ''
     }));
-    if (role === 'Supervisor' && d.status === 'Submitted' && actions.indexOf('close') < 0) {
+    if (role === 'Supervisor' && d.status === 'Submitted' && actions.indexOf('close') < 0 && needPriceToClose(d) && actions.indexOf('setPrice') >= 0) {
+      // 只差定价：按钮可点，先弹出定价，保存后接着确认闭环
+      list.push({ key: 'close', label: '定价并闭环', kind: 'secondary', disabled: false, tip: '' });
+    } else if (role === 'Supervisor' && d.status === 'Submitted' && actions.indexOf('close') < 0) {
       list.push({ key: 'close', label: enums.label(enums.ACTION, 'close'), kind: 'disabled', disabled: true, tip: d.closeBlockedReason || '请先补录缺卡' });
     }
     // 最多 3 个按钮：顺序靠前的多余项收进「更多」
@@ -907,6 +915,11 @@ Page({
         break;
       }
       case 'close': {
+        if (needPriceToClose(d)) {
+          this.closeAfterPrice = true;
+          this.openPriceSheet('set');
+          break;
+        }
         const hints = d.closeHints || [];
         const content = '确认资料齐全并闭环此工单？闭环后不可再修改。' + (hints.length ? '\n提示：' + hints.join('；') : '');
         this.confirm('确认闭环', content, '确认闭环').then(() => {
@@ -1077,7 +1090,7 @@ Page({
     if (mode === 'set') {
       sheet.title = priced ? '改价' : '定价';
       sheet.amount = priced ? String(d.price) : '';
-      sheet.hint = '保内免费填 0。价格仅销售和主管可见，工程师看不到。';
+      sheet.hint = (this.closeAfterPrice ? '闭环前需要先确定服务价格。' : '') + '保内免费填 0。价格仅销售和主管可见，工程师看不到。';
       if (ps && ps.pending) {
         sheet.suggestText = ((ps.by && ps.by.name) || '销售') + ' 建议 ' + format.formatPrice(ps.amount, false, true) + (ps.note ? ' · ' + ps.note : '');
         sheet.suggestAmount = String(ps.amount);
@@ -1094,6 +1107,7 @@ Page({
   },
 
   closePriceSheet() {
+    this.closeAfterPrice = false;
     this.setData({ 'priceSheet.show': false });
   },
 
@@ -1139,8 +1153,13 @@ Page({
     const p = suggest
       ? api.orders.suggestPrice(id, amount, note, { loading: '提交中' })
       : api.orders.setPrice(id, amount, { loading: '保存中' });
+    const thenClose = !suggest && this.closeAfterPrice;
+    this.closeAfterPrice = false;
     this.run(p, suggest ? '已提交价格建议' : '价格已保存').then((d) => {
-      if (d) this.setData({ 'priceSheet.show': false });
+      if (!d) return;
+      this.setData({ 'priceSheet.show': false });
+      // 从「定价并闭环」进来：价格保存成功后接着走确认闭环
+      if (thenClose && (d.actions || []).indexOf('close') >= 0) this.doAction('close');
     });
   },
 

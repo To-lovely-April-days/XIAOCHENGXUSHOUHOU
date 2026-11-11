@@ -62,6 +62,7 @@ export default {
       assignMode: 'assign', // 'assign' | 'assistants'
       holdOpen: false,
       priceOpen: false,
+      closeAfterPrice: false, // 「定价并闭环」：定价成功后继续确认闭环
       priceInitial: null, // 打开定价弹窗时预填的金额（采用建议）
       factoryNode: null, // 正在记录 / 更正的返厂节点（FactoryDto.nodes 项）
     };
@@ -128,6 +129,8 @@ export default {
       return fmtHM(m);
     },
     unpriced() { return !!this.d && this.d.priceSet === false; },
+    /** 待验收工单只差定价就能闭环（缺卡优先，由服务端 closeBlockedReason 判定） */
+    needPriceToClose() { const d = this.d; return !!d && d.status === 'Submitted' && d.priceSet === false && String(d.closeBlockedReason || '').includes('价格'); },
     priceText() { return this.d ? fmtPrice(this.d.price, { free: true, priceSet: this.d.priceSet }) : ''; },
     warranty() { return this.d ? isWarranty(this.d.price, this.d.priceSet) : false; },
     canSetPrice() { return this.actions.includes('setPrice'); },
@@ -296,6 +299,9 @@ export default {
         }
         if (b.always || actions.includes(b.action)) {
           out.push({ key: b.action, label: text, kind: b.kind, disabled: false, tip: '' });
+        } else if (b.action === 'close' && this.needPriceToClose && this.canSetPrice) {
+          // 只差定价：按钮可点，先弹出定价，保存后接着确认闭环
+          out.push({ key: 'close', label: '定价并闭环', kind: b.kind, disabled: false, tip: '' });
         } else if (b.fallbackDisabled) {
           const tip = b.action === 'close' && d.status === 'Submitted' ? (d.closeBlockedReason || b.fallbackDisabled) : b.fallbackDisabled;
           out.push({ key: b.action, label: text, kind: b.kind, disabled: true, tip });
@@ -358,7 +364,11 @@ export default {
     },
     onPriced(res, price) {
       this.priceOpen = false;
+      const thenClose = this.closeAfterPrice;
+      this.closeAfterPrice = false;
       this.applied(res, '已定价 ' + fmtPrice(price, { free: true }));
+      // 从「定价并闭环」进来：价格保存后接着走确认闭环
+      if (thenClose) this.$nextTick(() => { if (this.actions.includes('close')) this.run({ key: 'close', disabled: false }); });
     },
 
     // ------------------------------------------------ 暂停
@@ -485,6 +495,7 @@ export default {
       try {
         if (b.key === 'assign' || b.key === 'reassign') { this.openAssign('assign'); return; }
         if (b.key === 'hold') { this.holdOpen = true; return; }
+        if (b.key === 'close' && this.needPriceToClose) { this.closeAfterPrice = true; this.openPrice(null); return; }
         if (b.key === 'factory') { this.openFactory(this.nextFactory); return; }
         if (b.key === 'export') {
           this.busy = 'export';
@@ -700,7 +711,7 @@ export default {
 
   <OrdersAssignModal v-if="assignOpen && d" :order="d" :mode="assignMode" @close="assignOpen = false" @done="onAssigned" />
   <OrdersHoldModal v-if="holdOpen && d" :order="d" @close="holdOpen = false" @done="onHeld" />
-  <OrdersPriceModal v-if="priceOpen && d" :order="d" :initial="priceInitial" @close="priceOpen = false" @done="onPriced" />
+  <OrdersPriceModal v-if="priceOpen && d" :order="d" :initial="priceInitial" @close="priceOpen = false; closeAfterPrice = false" @done="onPriced" />
   <OrdersFactoryModal v-if="factoryNode && d" :key="factoryNode.node" :order="d" :node="factoryNode"
                       @close="factoryNode = null" @done="onFactoryDone" />
   `,
