@@ -1,7 +1,7 @@
 <nav-bar back="{{false}}" />
-<view class="page tabbar-space">
+<view class="page tabbar-space {{role && role !== 'Engineer' ? 'page-all' : ''}}">
 
-  <!-- ============ 工程师：工单大厅 ============ -->
+  <!-- ============ 工程师：工单大厅（保持原样） ============ -->
   <block wx:if="{{role === 'Engineer'}}">
     <view class="head">
       <view class="flex1">
@@ -44,55 +44,242 @@
     </block>
   </block>
 
-  <!-- ============ 销售 / 主管：全部工单（只读） ============ -->
+  <!-- ============ 销售 / 主管：全部工单（手风琴聚焦清单，首标签 = 待认领） ============ -->
   <block wx:elif="{{role}}">
-    <view class="head-plain">
-      <view class="page-title">全部工单</view>
-      <view class="page-subtitle">共 {{allCount}} 张<text wx:if="{{role === 'Sales'}}"> · 可查看进度、提价格建议</text></view>
-    </view>
-
-    <view class="search">
-      <ui-icon name="search" color="#6E6E73" size="18" stroke="2" />
-      <input class="search-input" value="{{keyword}}" placeholder="搜索客户、设备、项目编号或工单号" placeholder-class="placeholder"
-             confirm-type="search" bindinput="onSearchInput" bindconfirm="onSearchConfirm" aria-label="搜索工单" />
-      <view wx:if="{{keyword}}" class="search-clear" bindtap="onSearchClear" aria-role="button" aria-label="清空搜索">
-        <ui-icon name="close" color="#AEAEB2" size="16" stroke="2.2" />
-      </view>
-    </view>
-
-    <scroll-view scroll-x enhanced show-scrollbar="{{false}}" class="chips-bleed" aria-label="按状态筛选">
-      <view class="chips-track">
-        <view wx:for="{{statusFilters}}" wx:key="countKey" class="chip {{status === item.key ? 'active' : ''}}"
-              data-key="{{item.key}}" bindtap="onStatusFilter" aria-role="tab" aria-selected="{{status === item.key}}">
-          {{item.label}}<text class="chip-count">{{item.count}}</text>
+    <!-- 吸顶头部：标题 + 折叠搜索 + 状态滑条 -->
+    <view class="sticky-head" style="top: {{navTotalHeight}}px;">
+      <!-- 展开态内联搜索栏 -->
+      <view wx:if="{{searchOpen}}" class="search-bar">
+        <view class="search-pill">
+          <ui-icon name="search" color="#8E8E93" size="16" stroke="2" />
+          <input class="search-input" value="{{keyword}}" focus="{{searchFocus}}"
+                 placeholder="搜索客户、设备、项目编号或工单号" placeholder-class="placeholder"
+                 confirm-type="search" bindinput="onSearchInput" bindconfirm="onSearchConfirm" aria-label="搜索工单" />
+          <view wx:if="{{keyword}}" class="search-clear" bindtap="onSearchClear" aria-role="button" aria-label="清空搜索">
+            <ui-icon name="close" color="#AEAEB2" size="15" stroke="2.2" />
+          </view>
         </view>
-        <view class="chips-end"></view>
+        <view class="search-cancel" hover-class="btn-hover" bindtap="onSearchCancel" aria-role="button">取消</view>
       </view>
-    </scroll-view>
 
+      <!-- 默认态大标题 + 右侧轻触搜索/筛选圆钮 -->
+      <view wx:else class="all-head">
+        <view class="all-title-wrap">
+          <text class="all-title">{{curTabLabel}}</text>
+          <text class="all-count num-plain">{{total}}</text>
+        </view>
+        <view class="head-actions">
+          <view class="icon-circle {{keyword ? 'is-on' : ''}}" hover-class="btn-hover" bindtap="onSearchOpen" aria-role="button" aria-label="搜索工单">
+            <ui-icon name="search" color="{{keyword ? '#FFFFFF' : '#1D1D1F'}}" size="16" stroke="2" />
+          </view>
+          <view class="icon-circle {{extraFilterCount ? 'is-on' : ''}}" hover-class="btn-hover" bindtap="onFilterOpen" aria-role="button" aria-label="筛选条件">
+            <ui-icon name="sliders" color="{{extraFilterCount ? '#FFFFFF' : '#1D1D1F'}}" size="16" stroke="2" />
+            <view wx:if="{{extraFilterCount}}" class="filter-dot"></view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 无边框状态导航条（首项 = 待认领） -->
+      <scroll-view scroll-x enhanced show-scrollbar="{{false}}" class="stage-scroll" aria-label="按状态筛选">
+        <view class="stage-track" aria-role="tablist">
+          <view wx:for="{{statusFilters}}" wx:key="countKey"
+                class="stage-tab {{status === item.key ? 'is-on' : ''}}"
+                data-key="{{item.key}}" bindtap="onStatusFilter"
+                aria-role="tab" aria-selected="{{status === item.key}}">
+            <text>{{item.label}}</text>
+            <text wx:if="{{item.count > 0}}" class="stage-num num-plain">{{item.count}}</text>
+          </view>
+          <view class="stage-end"></view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- 已激活的附加筛选条件胶囊 -->
+    <view wx:if="{{activePills.length || (keyword && !searchOpen)}}" class="active-pills">
+      <view wx:if="{{keyword && !searchOpen}}" class="active-pill" hover-class="btn-hover" bindtap="onSearchCancel" aria-role="button">
+        <text class="ellipsis pill-kw">“{{keyword}}”</text>
+        <text class="pill-x">×</text>
+      </view>
+      <view wx:for="{{activePills}}" wx:key="key" class="active-pill" hover-class="btn-hover"
+            data-key="{{item.key}}" bindtap="onRemovePill" aria-role="button">
+        <text>{{item.label}}</text>
+        <text class="pill-x">×</text>
+      </view>
+    </view>
+
+    <!-- 列表区域 -->
     <view wx:if="{{!ready}}" class="state">加载中…</view>
     <empty wx:elif="{{error}}" text="{{error}}">
       <view class="btn-secondary btn-sm" hover-class="btn-hover" bindtap="retry">重试</view>
     </empty>
-    <empty wx:elif="{{!items.length}}" text="{{keyword ? '没有找到相关工单' : '该状态下暂无工单'}}" desc="{{keyword ? '换个关键词试试' : ''}}" />
+    <empty wx:elif="{{!items.length}}" text="{{keyword || extraFilterCount ? '没有找到相关工单' : '该状态下暂无工单'}}" desc="{{keyword || extraFilterCount ? '换个关键词或调整筛选试试' : ''}}" />
     <block wx:else>
-      <view wx:for="{{items}}" wx:key="id" class="card order-card list-card" hover-class="card-hover" hover-stay-time="80"
-            data-id="{{item.id}}" bindtap="goDetail">
-        <view class="row gap8">
-          <text class="customer ellipsis">{{item.customerName}}</text>
-          <urgency-tag wx:if="{{item.urgency === 'Urgent'}}" urgency="Urgent" />
-          <text wx:if="{{item.pending}}" class="tag tag-sm tag-amber pending-tag">待审批</text>
-          <text wx:if="{{item.transferPending}}" class="tag tag-sm transfer-tag">转交待确认</text>
-          <text class="price price-sm {{item.unpriced ? 'unpriced' : 'num-bold'}} {{item.priceFree ? 'free-green' : ''}}">{{item.priceText}}</text>
-        </view>
-        <view class="device ellipsis">{{item.device}}</view>
-        <view class="row gap8 list-foot">
-          <status-tag status="{{item.status}}" />
-          <text class="meta-body flex1 ellipsis {{item.hold ? 'meta-hold' : ''}}">{{item.meta}}</text>
-          <text wx:if="{{item.assistText}}" class="assist">{{item.assistText}}</text>
-        </view>
+      <view class="acc-stack">
+        <block wx:for="{{items}}" wx:key="id">
+          <!-- ========== 展开态：原地浮起聚焦卡 + 完整负责人/协助人头像区 ========== -->
+          <view wx:if="{{expandedId === item.id}}" class="acc-open">
+            <!-- 顶栏（点击收起） -->
+            <view class="acc-open-top" bindtap="onCollapse" aria-role="button" aria-label="收起工单摘要">
+              <view class="open-status">
+                <view class="st-dot {{item.statusLive ? 'dot-pulse' : ''}}" style="background: {{item.statusDot}};"></view>
+                <text class="open-status-text" style="color: {{item.statusTextColor}};">{{item.statusLabel}}</text>
+                <text class="open-sep">·</text>
+                <text class="open-meta">{{item.serviceTypeLabel}}<text wx:if="{{item.city}}"> · {{item.city}}</text></text>
+                <block wx:if="{{item.urgent}}">
+                  <text class="open-sep">·</text>
+                  <text class="open-urgent">紧急</text>
+                </block>
+              </view>
+              <view class="open-top-right">
+                <text class="open-no num-plain">{{item.orderNo}}</text>
+                <view class="collapse-btn">
+                  <ui-icon name="up" color="#8E8E93" size="13" stroke="2.2" />
+                </view>
+              </view>
+            </view>
+
+            <!-- 主体信息（点击进详情） -->
+            <view class="open-body" hover-class="card-hover" hover-stay-time="80" data-id="{{item.id}}" bindtap="goDetail">
+              <view class="open-head">
+                <text class="open-customer flex1">{{item.customerName}}</text>
+                <text class="open-price {{item.unpriced ? 'is-unpriced' : 'num-bold'}} {{item.priceFree ? 'is-free' : ''}}">{{item.priceText}}</text>
+              </view>
+              <view class="open-device">
+                <text>{{item.deviceText}}</text>
+                <text wx:if="{{item.projectNo}}" class="open-proj num-plain"> · {{item.projectNo}}</text>
+              </view>
+              <view wx:if="{{item.detailText}}" class="open-desc {{item.hold ? 'is-hold' : ''}}">{{item.detailText}}</view>
+            </view>
+
+            <!-- 5 段精密进度条 -->
+            <view class="open-prog">
+              <view class="prog-bars">
+                <view wx:for="{{item.segments}}" wx:for-item="seg" wx:key="label" class="prog-bar" style="background: {{seg.barColor}};"></view>
+              </view>
+              <view class="prog-labels">
+                <text wx:for="{{item.segments}}" wx:for-item="seg" wx:key="label" class="prog-label {{seg.current ? 'is-cur' : ''}}">{{seg.label}}</text>
+              </view>
+            </view>
+
+            <!-- 负责人与协助人头像区 -->
+            <view class="open-team">
+              <block wx:if="{{item.assignee}}">
+                <view class="team-chips">
+                  <view class="member-chip is-lead">
+                    <avatar user="{{item.assignee}}" size="24" />
+                    <text class="member-name is-lead">{{item.assignee.name}}</text>
+                    <text class="member-badge">负责</text>
+                  </view>
+                  <view wx:for="{{item.assistants}}" wx:for-item="asst" wx:key="id" class="member-chip">
+                    <avatar user="{{asst}}" size="22" />
+                    <text class="member-name">{{asst.name}}</text>
+                    <text class="member-role">协助</text>
+                  </view>
+                </view>
+              </block>
+              <view wx:else class="team-empty">
+                <view class="empty-av">待</view>
+                <view class="flex1">
+                  <view class="team-empty-title">暂无人认领</view>
+                  <view class="team-empty-sub">
+                    <text wx:if="{{item.creatorName}}">建单人 {{item.creatorName}} · </text>
+                    <text>{{item.timeAgoText}}</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+
+            <!-- 底部标识与直达按钮 -->
+            <view class="open-foot">
+              <view class="open-flags">
+                <text wx:if="{{item.pending}}" class="mini-tag is-amber">待审批 {{item.pendingReqCount}}</text>
+                <text wx:if="{{item.transferPending}}" class="mini-tag is-gray">转交待确认</text>
+                <text wx:if="{{!item.pending && !item.transferPending}}" class="open-foot-meta">
+                  <text>{{item.timeAgoText}}</text>
+                  <text wx:if="{{item.creatorName}}"> · 建单 {{item.creatorName}}</text>
+                </text>
+              </view>
+              <view class="open-cta" hover-class="btn-hover" data-id="{{item.id}}" bindtap="goDetail" aria-role="button">
+                <text>{{item.actionText}}</text>
+                <ui-icon name="right" color="#FFFFFF" size="13" stroke="2.3" />
+              </view>
+            </view>
+          </view>
+
+          <!-- ========== 收起态：高密度纯白行 + 右下角负责人/协助人叠放头像 ========== -->
+          <view wx:else class="acc-row" hover-class="acc-row-hover" hover-stay-time="70"
+                data-id="{{item.id}}" bindtap="onExpand" aria-role="button">
+            <view class="acc-line1">
+              <view class="acc-title-box">
+                <view class="st-dot {{item.statusLive ? 'dot-pulse' : ''}}" style="background: {{item.statusDot}};"></view>
+                <text class="acc-customer ellipsis">{{item.customerName}}</text>
+                <text wx:if="{{item.urgent}}" class="mini-tag is-red">急</text>
+                <text wx:if="{{item.pending}}" class="mini-tag is-amber">待审批</text>
+                <text wx:if="{{item.transferPending}}" class="mini-tag is-gray">转交</text>
+              </view>
+              <text class="acc-price {{item.unpriced ? 'is-unpriced' : 'num-bold'}} {{item.priceFree ? 'is-free' : ''}}">{{item.priceText}}</text>
+            </view>
+
+            <view class="acc-line2">
+              <view class="acc-sub ellipsis">
+                <text wx:if="{{status === ''}}" class="acc-sub-status" style="color: {{item.statusTextColor}};">{{item.statusLabel}} · </text>
+                <text>{{item.serviceTypeLabel}} · {{item.deviceText}}</text>
+              </view>
+
+              <!-- 右下角：负责人 + 协助人头像叠放 -->
+              <view wx:if="{{item.assignee}}" class="av-cluster">
+                <view class="av-stack">
+                  <view wx:for="{{item.avatarStack}}" wx:for-item="u" wx:for-index="uIdx" wx:key="id"
+                        class="av-ring {{uIdx > 0 ? 'is-overlap' : ''}}" style="z-index: {{4 - uIdx}};">
+                    <avatar user="{{u}}" size="21" />
+                  </view>
+                  <view wx:if="{{item.assistOverflow > 0}}" class="av-more num-plain">+{{item.assistOverflow}}</view>
+                </view>
+                <text class="av-who">{{item.assignee.name}}<text wx:if="{{item.assistCount > 0}}"> +{{item.assistCount}}</text></text>
+              </view>
+              <view wx:else class="av-cluster">
+                <view class="av-wait-dot">待</view>
+                <text class="av-wait-text">{{item.timeAgoText}}</text>
+              </view>
+            </view>
+          </view>
+        </block>
       </view>
+
       <view class="load-more">{{loadingMore ? '加载中…' : (hasMore ? '上拉加载更多' : '没有更多了')}}</view>
+    </block>
+
+    <!-- 多维筛选底部抽屉 -->
+    <block wx:if="{{filterOpen}}">
+      <view class="mask" bindtap="onFilterClose"></view>
+      <view class="sheet filter-sheet" catchtap="noop">
+        <view class="sheet-handle"></view>
+        <view class="sheet-head">
+          <text class="sheet-title">筛选条件</text>
+          <view class="sheet-reset" hover-class="btn-hover" bindtap="onFilterReset" aria-role="button">重置</view>
+        </view>
+
+        <view class="filter-label">维修方式</view>
+        <view class="filter-grid">
+          <view wx:for="{{serviceOptions}}" wx:key="key"
+                class="filter-opt {{draftServiceType === item.key ? 'is-on' : ''}}"
+                hover-class="btn-hover" data-key="{{item.key}}" bindtap="onDraftServiceType" aria-role="button">
+            {{item.label}}
+          </view>
+        </view>
+
+        <view class="filter-label">快捷条件</view>
+        <view class="filter-row">
+          <view class="filter-toggle {{draftUnpricedOnly ? 'is-on' : ''}}" hover-class="btn-hover" bindtap="onToggleDraftUnpriced" aria-role="button">
+            仅看未定价
+          </view>
+          <view wx:if="{{role === 'Supervisor'}}" class="filter-toggle {{draftPendingReqOnly ? 'is-on' : ''}}" hover-class="btn-hover" bindtap="onToggleDraftPendingReq" aria-role="button">
+            仅看待审批
+          </view>
+        </view>
+
+        <view class="btn-primary filter-apply" hover-class="btn-hover" bindtap="onFilterApply" aria-role="button">确认</view>
+      </view>
     </block>
   </block>
 

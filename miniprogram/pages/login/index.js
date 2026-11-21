@@ -18,15 +18,24 @@ Page({
     step: 'verify',
     agreed: false,
     tried: false,
+    shakeAgree: false,
     busy: false,
     error: '',
     loginHint: '',
     user: null,
+    surname: '',
     roleName: '',
     phoneMasked: '',
     department: '',
     avatarUrl: '',
     uploading: false
+  },
+
+  onUnload() {
+    if (this._shakeTimer) {
+      clearTimeout(this._shakeTimer);
+      this._shakeTimer = null;
+    }
   },
 
   onLoad(query) {
@@ -83,16 +92,28 @@ Page({
   },
 
   toggleAgree() {
-    this.setData({ agreed: !this.data.agreed, error: '' });
+    const next = !this.data.agreed;
+    this.setData({
+      agreed: next,
+      tried: next ? false : this.data.tried,
+      error: ''
+    });
   },
 
   openPrivacy() {
     wx.navigateTo({ url: '/pages/privacy/index' });
   },
 
-  /** 未勾选时点击验证按钮 */
+  /** 未勾选时点击验证按钮：高亮并轻抖协议区域引导勾选 */
   onVerifyBlocked() {
-    this.setData({ tried: true });
+    if (this._shakeTimer) clearTimeout(this._shakeTimer);
+    this.setData({ tried: true, shakeAgree: false }, () => {
+      this.setData({ shakeAgree: true });
+      this._shakeTimer = setTimeout(() => {
+        this._shakeTimer = null;
+        this.setData({ shakeAgree: false });
+      }, 420);
+    });
   },
 
   onAgreePrivacy() { /* 按钮同时带 agreePrivacyAuthorization，点击即同意隐私协议 */ },
@@ -150,6 +171,7 @@ Page({
   applyUser(u) {
     this.setData({
       user: u,
+      surname: (u && (u.surname || (u.name ? String(u.name).charAt(0) : ''))) || '',
       roleName: u.roleName || '',
       phoneMasked: u.phoneMasked || format.maskPhone(u.phone),
       department: u.department || '',

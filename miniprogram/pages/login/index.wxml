@@ -1,96 +1,186 @@
-<nav-bar back="{{false}}" background="#F6F6F4" />
 <view class="login">
-  <view class="brand">
-    <image class="logo" src="/assets/logo.png" mode="aspectFit" />
-    <view class="brand-title">霍桐售后工单</view>
-    <view class="brand-sub">售后服务工单与现场打卡 · 仅限公司员工使用</view>
+  <!-- 顶部精密光学氛围层（纯 CSS，不拦截点击） -->
+  <view class="hero-bg" aria-hidden="true">
+    <view class="bg-glow"></view>
+    <view class="bg-arc bg-arc-outer"></view>
+    <view class="bg-arc bg-arc-inner"></view>
   </view>
 
-  <view class="panel">
-    <view wx:if="{{step !== 'signedOut'}}" class="steps" aria-label="绑定步骤">
-      <view class="step">
-        <view class="step-no" style="background: {{step === 'verify' ? '#1D1D1F' : '#2F7A4B'}};">
-          <ui-icon wx:if="{{step !== 'verify'}}" name="check" color="#FFFFFF" size="12" stroke="3" />
-          <text wx:else>1</text>
-        </view>
-        <text>验证手机号</text>
+  <nav-bar back="{{false}}" fixed="{{false}}" background="transparent" />
+
+  <!-- 品牌页头 -->
+  <view class="hero">
+    <view class="brand-bar">
+      <image class="logo-img" src="/assets/logo.png" mode="aspectFit" />
+      <view class="scope-pill">
+        <view class="scope-dot"></view>
+        <text>内部员工端</text>
       </view>
-      <view class="step-line"></view>
-      <view class="step" style="color: {{step === 'verify' ? '#6E6E73' : '#1D1D1F'}};">
-        <view class="step-no" style="background: {{step === 'verify' ? '#C7C7C5' : '#1D1D1F'}};">2</view>
-        <text>设置头像</text>
+    </view>
+    <view class="hero-title">霍桐售后工单</view>
+    <view class="hero-sub">售后工单流转 · 现场打卡 · 工时协同</view>
+  </view>
+
+  <!-- 主功能卡片 -->
+  <view class="auth-card">
+    <!-- 两步进度条（仅首次绑定流程展示） -->
+    <view wx:if="{{step !== 'signedOut'}}" class="stepper" aria-label="绑定步骤">
+      <view class="step-item {{step === 'verify' ? 'is-active' : 'is-done'}}">
+        <view class="step-badge">
+          <ui-icon wx:if="{{step !== 'verify'}}" name="check" color="#FFFFFF" size="11" stroke="3" />
+          <text wx:else class="num-plain">1</text>
+        </view>
+        <text class="step-label">验证手机号</text>
+      </view>
+      <view class="step-rail {{step !== 'verify' ? 'is-done' : ''}}"></view>
+      <view class="step-item {{step === 'avatar' ? 'is-active' : 'is-pending'}}">
+        <view class="step-badge">
+          <text class="num-plain">2</text>
+        </view>
+        <text class="step-label">设置头像</text>
       </view>
     </view>
 
-    <!-- 已退出登录：点按钮才重新登录 -->
+    <!-- ===== 状态 A：已退出登录 ===== -->
     <block wx:if="{{step === 'signedOut'}}">
-      <view class="notice">你已退出登录。点击下方按钮，使用当前微信重新登录。</view>
-      <view class="btn-primary verify-btn {{busy ? 'btn-disabled' : ''}}" hover-class="btn-hover" bindtap="onWechatLogin" aria-role="button">
-        <ui-icon name="wechat" color="#FFFFFF" size="20" stroke="2" />
-        <text>微信登录</text>
+      <view class="status-pill">
+        <ui-icon name="wx-lock" color="#636366" size="13" />
+        <text>已安全退出</text>
       </view>
-      <view wx:if="{{error}}" class="alert error-box" aria-role="alert">{{error}}</view>
+      <view class="card-title mt-title">重新登录工作台</view>
+      <view class="card-desc">你已退出登录。点击下方按钮，使用当前微信快速恢复员工会话。</view>
+
+      <view class="cta-wrap">
+        <view class="cta-btn cta-active {{busy ? 'cta-busy' : ''}}" hover-class="cta-hover" bindtap="onWechatLogin" aria-role="button">
+          <ui-icon name="wechat" color="#FFFFFF" size="21" />
+          <text>{{busy ? '登录中…' : '微信登录'}}</text>
+        </view>
+      </view>
+
+      <view wx:if="{{error}}" class="alert-banner" aria-role="alert">
+        <view class="alert-icon"><ui-icon name="wx-warn" color="#C81E2B" size="17" /></view>
+        <text class="alert-text">{{error}}</text>
+      </view>
     </block>
 
-    <!-- 第 1 步：验证手机号 -->
+    <!-- ===== 状态 B：第 1 步 验证手机号 ===== -->
     <block wx:elif="{{step === 'verify'}}">
-      <view class="notice mt-18">首次使用需验证手机号。系统将匹配售后主管在后台登记的员工账号，绑定当前微信后自动登录，之后无需重复验证。</view>
+      <view class="card-title">验证员工手机号</view>
+      <view class="card-desc">系统将匹配售后主管在后台登记的员工账号，绑定当前微信后自动登录，之后无需重复验证。</view>
 
-      <button wx:if="{{agreed}}" class="btn-primary verify-btn" hover-class="btn-hover"
-              open-type="getPhoneNumber|agreePrivacyAuthorization"
-              bindgetphonenumber="onGetPhone" bindagreeprivacyauthorization="onAgreePrivacy"
-              disabled="{{busy}}">
-        <ui-icon name="phone" color="#FFFFFF" size="20" stroke="2" />
-        <text>手机号快速验证</text>
-      </button>
-      <view wx:else class="btn-primary btn-disabled verify-btn" bindtap="onVerifyBlocked" aria-role="button" aria-disabled="true">
-        <ui-icon name="phone" color="#FFFFFF" size="20" stroke="2" />
-        <text>手机号快速验证</text>
-      </view>
-
-      <view class="agree" bindtap="toggleAgree" aria-role="checkbox" aria-checked="{{agreed}}">
-        <view class="agree-box {{agreed ? 'on' : ''}}">
-          <ui-icon wx:if="{{agreed}}" name="check" color="#FFFFFF" size="12" stroke="3" />
+      <view class="cta-wrap">
+        <button wx:if="{{agreed}}" class="cta-btn cta-active {{busy ? 'cta-busy' : ''}}" hover-class="cta-hover"
+                open-type="getPhoneNumber|agreePrivacyAuthorization"
+                bindgetphonenumber="onGetPhone" bindagreeprivacyauthorization="onAgreePrivacy"
+                disabled="{{busy}}">
+          <ui-icon name="wechat" color="#FFFFFF" size="21" />
+          <text>{{busy ? '验证中…' : '手机号快速验证'}}</text>
+        </button>
+        <view wx:else class="cta-btn cta-locked" hover-class="cta-hover" bindtap="onVerifyBlocked" aria-role="button" aria-disabled="true">
+          <ui-icon name="wechat" color="#FFFFFF" size="21" />
+          <text>手机号快速验证</text>
         </view>
-        <view class="agree-text">已阅读并同意 <text class="agree-link" catchtap="openPrivacy">《用户隐私保护指引》</text>，同意使用手机号、位置和相机</view>
       </view>
-      <view wx:if="{{tried && !agreed}}" class="alert" aria-role="alert">请先勾选同意隐私保护指引</view>
-      <view wx:if="{{error}}" class="alert error-box" aria-role="alert">{{error}}</view>
 
-      <view class="tip">提示“未找到账号”时，请联系售后主管在后台添加，并核对登记的手机号是否与本机微信绑定的手机号一致。</view>
-      <view wx:if="{{loginHint}}" class="tip">{{loginHint}}</view>
+      <view class="consent-row {{tried && !agreed ? 'consent-warn' : ''}} {{shakeAgree ? 'is-shake' : ''}}"
+            bindtap="toggleAgree" aria-role="checkbox" aria-checked="{{agreed}}">
+        <view class="check-box {{agreed ? 'is-on' : ''}} {{tried && !agreed ? 'is-warn' : ''}}">
+          <ui-icon wx:if="{{agreed}}" name="check" color="#FFFFFF" size="11" stroke="3" />
+        </view>
+        <view class="consent-body">
+          <view class="consent-text">已阅读并同意 <text class="consent-link" catchtap="openPrivacy">《用户隐私保护指引》</text>，同意使用手机号、位置和相机</view>
+          <view wx:if="{{tried && !agreed}}" class="consent-tip" aria-role="alert">请先勾选同意隐私保护指引</view>
+        </view>
+      </view>
 
+      <view wx:if="{{error}}" class="alert-banner" aria-role="alert">
+        <view class="alert-icon"><ui-icon name="wx-warn" color="#C81E2B" size="17" /></view>
+        <text class="alert-text">{{error}}</text>
+      </view>
+      <view wx:if="{{loginHint && loginHint !== error}}" class="alert-banner alert-soft" aria-role="alert">
+        <view class="alert-icon"><ui-icon name="wx-info" color="#8E8E93" size="17" /></view>
+        <text class="alert-text alert-text-muted">{{loginHint}}</text>
+      </view>
     </block>
 
-    <!-- 第 2 步：设置头像 -->
+    <!-- ===== 状态 C：第 2 步 设置头像 ===== -->
     <block wx:else>
-      <view class="matched">
-        <ui-icon name="shield" color="#2F7A4B" size="22" stroke="2" />
-        <view class="matched-text">已匹配账号：<text class="bold">{{user.name}} · {{roleName}}</text>
-          <view class="text-body">{{phoneMasked}}<text wx:if="{{department}}"> · {{department}}</text></view>
+      <view class="emp-pass">
+        <view class="emp-pass-top">
+          <view class="emp-badge-row">
+            <ui-icon name="wx-safe" color="#2F7A4B" size="17" />
+            <text class="emp-verified">已匹配员工账号</text>
+          </view>
+          <text class="emp-source">由主管登记</text>
+        </view>
+        <view class="emp-pass-divider"></view>
+        <view class="emp-pass-head">
+          <text class="emp-name ellipsis">{{user.name}}</text>
+          <text wx:if="{{roleName}}" class="emp-role">{{roleName}}</text>
+        </view>
+        <view class="emp-meta num-plain">
+          <text>{{phoneMasked}}</text>
+          <text wx:if="{{department}}"> · {{department}}</text>
         </view>
       </view>
 
-      <view class="avatar-area">
+      <view class="avatar-stage">
         <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar" aria-label="设置头像" disabled="{{uploading}}">
           <image wx:if="{{avatarUrl}}" class="avatar-img" src="{{avatarUrl}}" mode="aspectFill" />
-          <view wx:else class="avatar-empty"><ui-icon name="user" color="#6E6E73" size="40" stroke="1.6" /></view>
-          <view class="avatar-badge"><ui-icon name="camera" color="#FFFFFF" size="14" stroke="2.2" /></view>
+          <view wx:else class="avatar-empty">
+            <text wx:if="{{surname}}" class="avatar-surname">{{surname}}</text>
+            <ui-icon wx:else name="user" color="#6E6E73" size="38" stroke="1.6" />
+          </view>
+          <view class="avatar-cam">
+            <ui-icon name="wx-camera" color="#FFFFFF" size="14" />
+          </view>
         </button>
-        <view class="avatar-title">{{avatarUrl ? '已设置头像' : '设置头像'}}</view>
-        <view class="avatar-desc">可使用微信头像或拍照上传；头像会显示在工单和打卡记录中，不设置则显示姓氏</view>
-        <view class="avatar-alt" hover-class="btn-hover" bindtap="onPickAvatar">从相册选择或拍照</view>
+
+        <view class="avatar-title">{{uploading ? '头像上传中…' : (avatarUrl ? '已设置个人头像' : '设置个人头像')}}</view>
+        <view class="avatar-desc">{{avatarUrl ? '点击上方头像可随时重新更换，将显示在工单与打卡记录中' : '头像会显示在工单和打卡记录中，不设置则默认显示姓氏'}}</view>
+
+        <view class="avatar-pill" hover-class="cta-hover" bindtap="onPickAvatar" aria-role="button">
+          <ui-icon name="wx-album" color="#1D1D1F" size="16" />
+          <text>从相册选择或拍照</text>
+        </view>
       </view>
 
-      <view class="name-row">
-        <text class="muted">姓名</text>
-        <text class="bold">{{user.name}} <text class="name-note">· 由主管登记</text></text>
-      </view>
-
-      <view class="actions">
-        <view class="btn-primary enter-btn" hover-class="btn-hover" bindtap="goHome">进入</view>
-        <view class="btn-text" hover-class="btn-hover" bindtap="goHome">暂不设置</view>
+      <view class="avatar-actions">
+        <view wx:if="{{avatarUrl}}" class="cta-btn cta-active" hover-class="cta-hover" bindtap="goHome" aria-role="button">
+          <text>进入工作台</text>
+        </view>
+        <block wx:else>
+          <button class="cta-btn cta-active {{uploading ? 'cta-busy' : ''}}" hover-class="cta-hover"
+                  open-type="chooseAvatar" bindchooseavatar="onChooseAvatar" disabled="{{uploading}}">
+            <ui-icon name="wechat" color="#FFFFFF" size="20" />
+            <text>{{uploading ? '上传中…' : '使用微信头像'}}</text>
+          </button>
+          <view class="skip-btn" hover-class="cta-hover" bindtap="goHome" aria-role="button">暂不设置，直接进入</view>
+        </block>
       </view>
     </block>
+  </view>
+
+  <!-- 辅助说明条（与主卡片分离，减轻视觉压迫） -->
+  <view wx:if="{{step === 'verify'}}" class="help-card">
+    <view class="help-icon"><ui-icon name="wx-info" color="#8E8E93" size="17" /></view>
+    <view class="help-body">
+      <view class="help-title">提示“未找到账号”怎么办？</view>
+      <view class="help-desc">请联系售后主管在后台添加，并核对登记的手机号是否与本机微信绑定的手机号一致。</view>
+    </view>
+  </view>
+
+  <view wx:elif="{{step === 'signedOut'}}" class="help-card">
+    <view class="help-icon"><ui-icon name="wx-safe" color="#8E8E93" size="17" /></view>
+    <view class="help-body">
+      <view class="help-desc">退出后不会自动静默登录。如需更换绑定微信，请联系售后主管在后台解绑后重新验证。</view>
+    </view>
+  </view>
+
+  <!-- 底部品牌落款 -->
+  <view class="login-footer">
+    <view class="footer-line"></view>
+    <text class="footer-text">HTLAB · 霍桐仪器售后服务平台</text>
+    <view class="footer-line"></view>
   </view>
 </view>

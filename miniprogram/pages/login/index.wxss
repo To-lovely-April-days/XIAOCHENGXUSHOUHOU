@@ -1,44 +1,642 @@
-page { background: #F6F6F4; }
-.login { min-height: 100vh; display: flex; flex-direction: column; }
-.brand { padding: 32rpx 48rpx 40rpx; }
-.logo { display: block; width: 200rpx; height: 138rpx; }
-.brand-title { margin-top: 32rpx; font-size: 52rpx; line-height: 68rpx; font-weight: 700; }
-.brand-sub { margin-top: 8rpx; font-size: 30rpx; line-height: 44rpx; color: #6E6E73; }
+/* pages/login 员工登录与首次绑定（精密工牌式设计） */
+page {
+  background: #F6F6F4;
+}
 
-.panel { flex: 1; margin: 0 32rpx; background: #FFFFFF; border-radius: 40rpx 40rpx 0 0; box-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.04), 0 8rpx 28rpx rgba(0, 0, 0, 0.04); padding: 40rpx 40rpx calc(48rpx + env(safe-area-inset-bottom)); }
+.login {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  background: #F6F6F4;
+}
 
-.steps { display: flex; align-items: center; gap: 20rpx; font-size: 26rpx; }
-.step { display: flex; align-items: center; gap: 12rpx; color: #1D1D1F; font-weight: 600; }
-.step-no { width: 40rpx; height: 40rpx; border-radius: 20rpx; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 24rpx; }
-.step-line { flex: 1; height: 2rpx; background: #E5E5E3; }
+.num-plain {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
 
-.mt-18 { margin-top: 36rpx; }
-.verify-btn { margin-top: 48rpx; border-radius: 20rpx; }
+/* ---------- 顶部精密氛围层 ---------- */
+.hero-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 620rpx;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
 
-.agree { margin-top: 28rpx; min-height: 88rpx; display: flex; align-items: center; gap: 16rpx; font-size: 26rpx; line-height: 40rpx; color: #6E6E73; }
-.agree-box { width: 36rpx; height: 36rpx; flex-shrink: 0; border-radius: 18rpx; border: 3rpx solid #AEAEB2; background: #FFFFFF; display: flex; align-items: center; justify-content: center; }
-.agree-box.on { border-color: #1D1D1F; background: #1D1D1F; }
-.agree-text { flex: 1; }
-.agree-link { color: #1D1D1F; font-weight: 600; }
-.error-box { margin-top: 16rpx; padding: 20rpx 24rpx; border-radius: 20rpx; background: #FBEDEE; line-height: 40rpx; }
-.tip { margin-top: 72rpx; font-size: 26rpx; line-height: 40rpx; color: #6E6E73; }
-.tip + .tip { margin-top: 16rpx; }
+.bg-glow {
+  position: absolute;
+  top: -120rpx;
+  right: -100rpx;
+  width: 560rpx;
+  height: 560rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(200, 30, 43, 0.085) 0%, rgba(200, 30, 43, 0.025) 45%, rgba(246, 246, 244, 0) 74%);
+}
 
+/* 呼应 HTLAB 红色弧形标识的精密几何细环 */
+.bg-arc {
+  position: absolute;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
 
-.matched { margin-top: 40rpx; display: flex; align-items: center; gap: 20rpx; border-radius: 24rpx; background: #F0F0EE; padding: 24rpx 28rpx; }
-.matched-text { font-size: 28rpx; line-height: 40rpx; color: #1D1D1F; }
+.bg-arc-outer {
+  top: -160rpx;
+  right: -140rpx;
+  width: 480rpx;
+  height: 480rpx;
+  border: 2rpx solid rgba(200, 30, 43, 0.085);
+}
 
-.avatar-area { margin-top: 56rpx; display: flex; flex-direction: column; align-items: center; }
-.avatar-btn { position: relative; width: 192rpx !important; height: 192rpx; padding: 0; border-radius: 50%; background: transparent; overflow: visible; }
-.avatar-img { width: 192rpx; height: 192rpx; border-radius: 50%; display: block; background: #E5E5E3; }
-.avatar-empty { width: 192rpx; height: 192rpx; border-radius: 50%; border: 3rpx dashed #C7C7C5; background: #F6F6F4; display: flex; align-items: center; justify-content: center; }
-.avatar-badge { position: absolute; right: 4rpx; bottom: 4rpx; width: 56rpx; height: 56rpx; border-radius: 28rpx; background: #1D1D1F; border: 6rpx solid #FFFFFF; display: flex; align-items: center; justify-content: center; }
-.avatar-title { margin-top: 24rpx; font-size: 30rpx; font-weight: 600; }
-.avatar-desc { margin-top: 8rpx; font-size: 26rpx; line-height: 40rpx; color: #6E6E73; text-align: center; }
+.bg-arc-inner {
+  top: -80rpx;
+  right: -60rpx;
+  width: 320rpx;
+  height: 320rpx;
+  border: 2rpx solid rgba(29, 29, 31, 0.045);
+}
 
-.name-row { margin-top: 48rpx; border-top: 2rpx solid #ECECEA; border-bottom: 2rpx solid #ECECEA; padding: 24rpx 0; display: flex; align-items: center; justify-content: space-between; font-size: 30rpx; }
-.name-note { font-size: 24rpx; font-weight: 400; color: #6E6E73; }
+/* ---------- 品牌页头 ---------- */
+.hero {
+  position: relative;
+  z-index: 1;
+  padding: 12rpx 40rpx 36rpx;
+}
 
-.actions { margin-top: 64rpx; display: flex; flex-direction: column; gap: 8rpx; }
-.enter-btn { border-radius: 24rpx; }
-.avatar-alt { margin-top: 16rpx; padding: 12rpx 24rpx; font-size: 28rpx; color: #1D1D1F; font-weight: 600; text-decoration: underline; }
+.brand-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+}
+
+.logo-img {
+  display: block;
+  width: 172rpx;
+  height: 118rpx;
+  flex-shrink: 0;
+}
+
+.scope-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 12rpx;
+  height: 52rpx;
+  padding: 0 22rpx;
+  border-radius: 26rpx;
+  background: rgba(255, 255, 255, 0.86);
+  border: 2rpx solid #E6E6E3;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #3A3A3C;
+}
+
+.scope-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 6rpx;
+  background: #C81E2B;
+  box-shadow: 0 0 0 6rpx rgba(200, 30, 43, 0.12);
+}
+
+.hero-title {
+  margin-top: 26rpx;
+  font-size: 50rpx;
+  line-height: 64rpx;
+  font-weight: 700;
+  letter-spacing: -0.5rpx;
+  color: #1D1D1F;
+}
+
+.hero-sub {
+  margin-top: 6rpx;
+  font-size: 26rpx;
+  line-height: 36rpx;
+  color: #6E6E73;
+}
+
+/* ---------- 主浮动卡片 ---------- */
+.auth-card {
+  position: relative;
+  z-index: 2;
+  margin: 0 32rpx;
+  padding: 36rpx 36rpx 40rpx;
+  border-radius: 40rpx;
+  background: #FFFFFF;
+  border: 2rpx solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.03), 0 16rpx 44rpx rgba(29, 29, 31, 0.06);
+}
+
+/* ---------- 两步进度条 ---------- */
+.stepper {
+  display: flex;
+  align-items: center;
+  padding: 16rpx 22rpx;
+  margin-bottom: 32rpx;
+  border-radius: 22rpx;
+  background: #F6F6F4;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex-shrink: 0;
+}
+
+.step-badge {
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22rpx;
+  font-weight: 700;
+}
+
+.step-label {
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.step-item.is-active .step-badge {
+  background: #1D1D1F;
+  color: #FFFFFF;
+}
+
+.step-item.is-active .step-label {
+  color: #1D1D1F;
+}
+
+.step-item.is-done .step-badge {
+  background: #2F7A4B;
+  color: #FFFFFF;
+}
+
+.step-item.is-done .step-label {
+  color: #2F7A4B;
+}
+
+.step-item.is-pending .step-badge {
+  background: #E3E3E1;
+  color: #6E6E73;
+}
+
+.step-item.is-pending .step-label {
+  color: #8E8E93;
+  font-weight: 500;
+}
+
+.step-rail {
+  flex: 1;
+  height: 4rpx;
+  margin: 0 20rpx;
+  border-radius: 2rpx;
+  background: #E3E3E1;
+  transition: background-color 0.25s ease;
+}
+
+.step-rail.is-done {
+  background: #2F7A4B;
+}
+
+/* ---------- 卡片标题与正文 ---------- */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10rpx;
+  height: 48rpx;
+  padding: 0 20rpx;
+  border-radius: 24rpx;
+  background: #F6F6F4;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #636366;
+}
+
+.card-title {
+  font-size: 38rpx;
+  line-height: 52rpx;
+  font-weight: 700;
+  color: #1D1D1F;
+}
+
+.mt-title {
+  margin-top: 28rpx;
+}
+
+.card-desc {
+  margin-top: 10rpx;
+  font-size: 26rpx;
+  line-height: 42rpx;
+  color: #6E6E73;
+}
+
+/* ---------- 主操作按钮 ---------- */
+.cta-wrap {
+  margin-top: 44rpx;
+}
+
+.cta-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14rpx;
+  width: 100% !important;
+  height: 104rpx;
+  border-radius: 24rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  letter-spacing: 0.5rpx;
+  transition: opacity 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.cta-active {
+  background: #1D1D1F;
+  color: #FFFFFF;
+  box-shadow: 0 12rpx 28rpx rgba(29, 29, 31, 0.18);
+}
+
+.cta-locked {
+  background: #A4A4A2;
+  color: #FFFFFF;
+  box-shadow: none;
+}
+
+.cta-busy,
+.cta-btn[disabled] {
+  background: #8E8E93 !important;
+  color: #FFFFFF !important;
+  opacity: 1 !important;
+  box-shadow: none !important;
+}
+
+.cta-hover {
+  opacity: 0.78;
+  transform: scale(0.99);
+}
+
+/* ---------- 隐私勾选区 ---------- */
+.consent-row {
+  margin-top: 28rpx;
+  padding: 20rpx 22rpx;
+  border-radius: 22rpx;
+  background: #FAF9F7;
+  border: 2rpx solid transparent;
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.consent-row.consent-warn {
+  background: #FBEDEE;
+  border-color: rgba(200, 30, 43, 0.24);
+}
+
+.consent-row.is-shake {
+  animation: consentShake 0.38s ease;
+}
+
+@keyframes consentShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-10rpx); }
+  40% { transform: translateX(10rpx); }
+  60% { transform: translateX(-6rpx); }
+  80% { transform: translateX(6rpx); }
+}
+
+.check-box {
+  margin-top: 4rpx;
+  width: 34rpx;
+  height: 34rpx;
+  flex-shrink: 0;
+  border-radius: 10rpx;
+  border: 3rpx solid #C7C7C5;
+  background: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.18s ease;
+}
+
+.check-box.is-on {
+  border-color: #1D1D1F;
+  background: #1D1D1F;
+}
+
+.check-box.is-warn {
+  border-color: #C81E2B;
+}
+
+.consent-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.consent-text {
+  font-size: 24rpx;
+  line-height: 38rpx;
+  color: #6E6E73;
+}
+
+.consent-link {
+  color: #1D1D1F;
+  font-weight: 600;
+}
+
+.consent-tip {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  line-height: 34rpx;
+  font-weight: 600;
+  color: #C81E2B;
+}
+
+/* ---------- 异常提示横幅 ---------- */
+.alert-banner {
+  margin-top: 24rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 20rpx;
+  background: #FBEDEE;
+  border: 2rpx solid rgba(200, 30, 43, 0.14);
+  display: flex;
+  align-items: flex-start;
+  gap: 14rpx;
+}
+
+.alert-banner.alert-soft {
+  background: #F6F6F4;
+  border-color: #ECECEA;
+}
+
+.alert-icon {
+  margin-top: 3rpx;
+  flex-shrink: 0;
+  display: flex;
+}
+
+.alert-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 25rpx;
+  line-height: 38rpx;
+  font-weight: 500;
+  color: #C81E2B;
+}
+
+.alert-text-muted {
+  color: #6E6E73;
+  font-weight: 400;
+}
+
+/* ---------- 第 2 步：员工工牌卡 ---------- */
+.emp-pass {
+  padding: 24rpx 28rpx;
+  border-radius: 28rpx;
+  background: #F6F6F4;
+  border: 2rpx solid #ECECEA;
+}
+
+.emp-pass-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.emp-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.emp-verified {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #2F7A4B;
+}
+
+.emp-source {
+  font-size: 22rpx;
+  color: #8E8E93;
+}
+
+.emp-pass-divider {
+  height: 2rpx;
+  background: #E8E8E5;
+  margin: 18rpx 0;
+}
+
+.emp-pass-head {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  min-width: 0;
+}
+
+.emp-name {
+  font-size: 36rpx;
+  line-height: 48rpx;
+  font-weight: 700;
+  color: #1D1D1F;
+  min-width: 0;
+}
+
+.emp-role {
+  flex-shrink: 0;
+  height: 42rpx;
+  padding: 0 16rpx;
+  border-radius: 12rpx;
+  background: #1D1D1F;
+  color: #FFFFFF;
+  font-size: 22rpx;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+}
+
+.emp-meta {
+  margin-top: 6rpx;
+  font-size: 26rpx;
+  line-height: 36rpx;
+  color: #6E6E73;
+}
+
+/* ---------- 第 2 步：头像选择区 ---------- */
+.avatar-stage {
+  margin-top: 34rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.avatar-btn {
+  position: relative;
+  width: 172rpx !important;
+  height: 172rpx;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  overflow: visible;
+}
+
+.avatar-img {
+  width: 172rpx;
+  height: 172rpx;
+  border-radius: 50%;
+  display: block;
+  background: #E5E5E3;
+  box-shadow: 0 0 0 6rpx #FFFFFF, 0 0 0 8rpx #E5E5E3, 0 12rpx 28rpx rgba(0, 0, 0, 0.08);
+}
+
+.avatar-empty {
+  width: 172rpx;
+  height: 172rpx;
+  border-radius: 50%;
+  border: 3rpx dashed #C7C7C5;
+  background: #F6F6F4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-surname {
+  font-size: 58rpx;
+  font-weight: 700;
+  color: #3A3A3C;
+  line-height: 1;
+}
+
+.avatar-cam {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 54rpx;
+  height: 54rpx;
+  border-radius: 27rpx;
+  background: #1D1D1F;
+  border: 6rpx solid #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.14);
+}
+
+.avatar-title {
+  margin-top: 22rpx;
+  font-size: 30rpx;
+  line-height: 40rpx;
+  font-weight: 600;
+  color: #1D1D1F;
+}
+
+.avatar-desc {
+  margin-top: 6rpx;
+  max-width: 520rpx;
+  font-size: 24rpx;
+  line-height: 36rpx;
+  color: #6E6E73;
+  text-align: center;
+}
+
+.avatar-pill {
+  margin-top: 20rpx;
+  height: 64rpx;
+  padding: 0 28rpx;
+  border-radius: 32rpx;
+  background: #F0F0EE;
+  color: #1D1D1F;
+  font-size: 25rpx;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+}
+
+.avatar-actions {
+  margin-top: 34rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.skip-btn {
+  height: 76rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #6E6E73;
+}
+
+/* ---------- 辅助说明条 ---------- */
+.help-card {
+  position: relative;
+  z-index: 1;
+  margin: 24rpx 32rpx 0;
+  padding: 24rpx 28rpx;
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.72);
+  border: 2rpx solid #ECECEA;
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+}
+
+.help-icon {
+  margin-top: 3rpx;
+  flex-shrink: 0;
+  display: flex;
+}
+
+.help-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.help-title {
+  font-size: 25rpx;
+  line-height: 36rpx;
+  font-weight: 600;
+  color: #3A3A3C;
+  margin-bottom: 4rpx;
+}
+
+.help-desc {
+  font-size: 24rpx;
+  line-height: 36rpx;
+  color: #6E6E73;
+}
+
+/* ---------- 底部品牌落款 ---------- */
+.login-footer {
+  margin-top: auto;
+  padding: 48rpx 40rpx calc(36rpx + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+}
+
+.footer-line {
+  width: 36rpx;
+  height: 2rpx;
+  background: #E0E0DD;
+}
+
+.footer-text {
+  font-size: 22rpx;
+  line-height: 32rpx;
+  letter-spacing: 1.5rpx;
+  color: #AEAEB2;
+}
