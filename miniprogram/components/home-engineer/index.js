@@ -7,6 +7,7 @@ const api = require('../../api/index.js');
 const format = require('../../utils/format.js');
 const enums = require('../../utils/enums.js');
 const clock = require('./clock.js');
+const subscribe = require('../../utils/subscribe.js');
 
 /** 城市徽标文字（最多 2 字） */
 function badgeOf(o) {
@@ -103,7 +104,7 @@ function doneItem(o) {
   return Object.assign({}, o, { meta: parts.join(' · ') });
 }
 
-Component({
+Component(subscribe.bindTaps({
   options: { addGlobalClass: true },
 
   data: {
@@ -351,4 +352,5 @@ Component({
       });
     }
   }
-});
+  // v1.4：这些点击顺带静默攒一条订阅消息额度（utils/subscribe.js topUp）
+}, ['toDetail', 'toCheckin', 'toComplete']));

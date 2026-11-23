@@ -28,6 +28,7 @@ miniprogram/
 │   ├── location.js                  定位、地图选点、Haversine 距离
 │   ├── icons.js                     线性 SVG 图标（data URI）
 │   ├── system.js                    状态栏 / 胶囊尺寸
+│   ├── subscribe.js                 微信订阅消息「工单提醒」（v1.4）：配置与授权状态缓存、开启入口、点击时静默攒额度
 │   └── tabbar.js                    自定义 tabBar 选中 / 隐藏
 ├── custom-tab-bar/                  按角色切换的底部导航
 ├── components/                      全局组件（app.json 已注册，页面直接用）

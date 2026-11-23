@@ -5,6 +5,7 @@ const tabbar = require('../../utils/tabbar.js');
 const format = require('../../utils/format.js');
 const enums = require('../../utils/enums.js');
 const system = require('../../utils/system.js');
+const subscribe = require('../../utils/subscribe.js');
 
 const PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 200; // 与服务端 OrderService.Query 的 pageSize 上限一致（须为 PAGE_SIZE 的整数倍）
@@ -146,7 +147,7 @@ function buildActivePills(serviceType, unpricedOnly, pendingReqOnly, role) {
   return pills;
 }
 
-Page({
+Page(subscribe.bindTaps({
   data: {
     navTotalHeight: 64,
     role: '',
@@ -583,4 +584,5 @@ Page({
   },
 
   noop() {}
-});
+  // v1.4：这些点击顺带静默攒一条订阅消息额度（utils/subscribe.js topUp）
+}, ['goDetail', 'onClaim']));

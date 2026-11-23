@@ -75,6 +75,7 @@ public partial class OrderService
         await AutoCancelRequests(o, now, holdReply: "主管已直接暂停");
         await _db.SaveChangesAsync();
         await _notifier.NotifyAsync("工单已暂停搁置", $"**{o.CustomerName}**（{o.OrderNo}）已暂停搁置：{text}", ParticipantPhones(o));
+        await Push(o, me, now, "工单已暂停", $"暂停原因：{text}", o.Assignee);
         return await _view.BuildDetail(id, user);
     }
 
@@ -94,6 +95,7 @@ public partial class OrderService
         AddLog(o, me, $"{me.Name} 恢复处理 → {EnumText.Status(to)}", to, now, LogKind.Hold);
         await _db.SaveChangesAsync();
         await _notifier.NotifyAsync("工单已恢复处理", $"**{o.CustomerName}**（{o.OrderNo}）已恢复为「{EnumText.Status(to)}」", ParticipantPhones(o));
+        await Push(o, me, now, "工单已恢复处理", $"{me.Name}已恢复工单，可继续处理", o.Assignee);
         return await _view.BuildDetail(id, user);
     }
 
@@ -121,6 +123,7 @@ public partial class OrderService
         await tx.CommitAsync();
         await _notifier.NotifyAsync("暂停搁置申请",
             $"{me.Name} 申请暂停 **{o.CustomerName}**（{o.OrderNo}）：{text}，请审批。", await SupervisorPhones());
+        await PushSupervisors(o, me, now, "有申请待审批", $"{me.Name}申请暂停：{text}");
         return await _view.BuildDetail(id, user);
     }
 
@@ -157,6 +160,7 @@ public partial class OrderService
         await _notifier.NotifyAsync("协助人申请",
             $"{me.Name} 申请为 **{o.CustomerName}**（{o.OrderNo}）添加协助人 {target.Name}" + (note == null ? "" : $"：{note}") + "，请审批。",
             await SupervisorPhones());
+        await PushSupervisors(o, me, now, "有申请待审批", $"{me.Name}申请添加协助人{target.Name}");
         return await _view.BuildDetail(id, user);
     }
 
@@ -205,6 +209,7 @@ public partial class OrderService
             var phones = o.Assistants.Where(a => a.Engineer != null).Select(a => a.Engineer!.Phone).ToList();
             if (req.Requester != null) phones.Insert(0, req.Requester.Phone);
             await _notifier.NotifyAsync("暂停申请已同意", $"**{o.CustomerName}**（{o.OrderNo}）已暂停搁置：{text}", phones);
+            await Push(o, me, now, "暂停申请已同意", $"{me.Name}已同意，工单已暂停搁置", req.Requester);
             return await _view.BuildDetail(id, user);
         }
 
@@ -221,6 +226,7 @@ public partial class OrderService
             Decide(req, RequestStatus.Approved, me, now, null);
             await _db.SaveChangesAsync();
             await tx.CommitAsync();
+            await Push(o, me, now, "协助申请已同意", $"{target.Name}已是本单参与人", req.Requester);
             return await _view.BuildDetail(id, user);
         }
         if (o.Assistants.Count >= MaxAssistants) throw BizException.Conflict("协助人最多 5 人");
@@ -236,6 +242,9 @@ public partial class OrderService
         if (req.Requester != null) at.Insert(0, req.Requester.Phone);
         await _notifier.NotifyAsync("工单协助提醒",
             $"{me.Name} 同意 {target.Name} 协助 **{o.CustomerName}**（{o.OrderNo}），负责人 {o.Assignee?.Name}。", at);
+        await Push(o, me, now, b => b
+            .Add("协助申请已同意", $"{me.Name}已同意，{target.Name}加入协助", req.Requester)
+            .Add(AssistantAddedTitle, $"{me.Name}同意你协助，负责人{o.Assignee?.Name}", target));
         return await _view.BuildDetail(id, user);
     }
 
@@ -268,6 +277,8 @@ public partial class OrderService
             await _notifier.NotifyAsync("申请被驳回",
                 $"**{o.CustomerName}**（{o.OrderNo}）的{(req.Type == OrderRequestType.Hold ? "暂停申请" : "协助人申请")}被驳回" + (reply == null ? "" : $"：{reply}"),
                 new[] { req.Requester.Phone });
+        await Push(o, me, now, req.Type == OrderRequestType.Hold ? "暂停申请被驳回" : "协助申请被驳回",
+            reply == null ? $"{me.Name}驳回了你的申请" : $"驳回原因：{reply}", req.Requester);
         return await _view.BuildDetail(id, user);
     }
 

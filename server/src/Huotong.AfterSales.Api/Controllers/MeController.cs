@@ -12,15 +12,22 @@ public class MeController : ApiControllerBase
 {
     private readonly HomeService _home;
     private readonly PasswordService _password;
+    private readonly ISubscribeNotifier _subscribe;
 
-    public MeController(HomeService home, PasswordService password)
+    public MeController(HomeService home, PasswordService password, ISubscribeNotifier subscribe)
     {
         _home = home;
         _password = password;
+        _subscribe = subscribe;
     }
 
     [HttpGet]
     public async Task<ApiResponse<MeDto>> Get() => Ok(await _home.Me(Me));
+
+    /// <summary>v1.4：微信订阅消息配置（任何已登录角色）。未启用时 enabled=false、templateIds=[]</summary>
+    [HttpGet("subscribe")]
+    public ApiResponse<SubscribeConfigDto> Subscribe() =>
+        Ok(new SubscribeConfigDto { Enabled = _subscribe.Enabled, TemplateIds = _subscribe.TemplateIds.ToList() });
 
     [HttpPut("avatar")]
     public async Task<ApiResponse<UserDto>> Avatar([FromBody] AvatarRequest req) => Ok(await _home.SetAvatar(Me, req.FileId));

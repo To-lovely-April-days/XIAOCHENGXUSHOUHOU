@@ -772,5 +772,13 @@ expect "$(cat "$TMP/status")/$(py 'd["message"]' < "$TMP/body")" "400/协助人�
 # 17. PC 新文件已随后端发布
 expect "$(curl -s -o /dev/null -w "%{http_code}" "$BASE/admin/js/views/orders-sat.js")" "200" "GET /admin/js/views/orders-sat.js → 200"
 
+echo "== v1.4 订阅消息配置"
+# 模板未配置时 enabled=false、templateIds=[]；配置了（WeChat__Subscribe__TemplateId + 至少一个 Fields）则 enabled=true 且带模板 ID。两种情况下形状都要对
+req GET /api/me/subscribe ""; expect "$(cat "$TMP/status")/$(py 'd["code"]' < "$TMP/body")" "401/40100" "未登录取订阅配置 → 401"
+SC=$(call GET /api/me/subscribe "$ENG")
+expect "$(echo "$SC" | py 'sorted(d.keys())')" '["enabled", "templateIds"]' "GET /api/me/subscribe 只有 enabled / templateIds 两个字段"
+expect "$(echo "$SC" | py 'isinstance(d["enabled"],bool) and isinstance(d["templateIds"],list) and all(isinstance(x,str) and x for x in d["templateIds"]) and d["enabled"]==(len(d["templateIds"])>0)')" "True" "enabled 为布尔、templateIds 为字符串数组，且 enabled 当且仅当有模板（当前 $(echo "$SC" | py 'd["enabled"]')）"
+expect "$(call GET /api/me/subscribe "$SUP")|$(call GET /api/me/subscribe "$SALES")" "$SC|$SC" "主管、销售取到的订阅配置与工程师一致"
+
 echo
 echo "全部通过：$PASS 项"

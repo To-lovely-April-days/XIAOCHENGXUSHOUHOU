@@ -258,3 +258,10 @@ public class AdminHoursDto
     public int TotalMinutes { get; set; }
     public List<AdminHoursEngineerDto> Engineers { get; set; } = new();
 }
+
+/// <summary>GET /api/me/subscribe（v1.4）：小程序据此决定是否显示「工单提醒」入口、向微信申请哪些模板</summary>
+public class SubscribeConfigDto
+{
+    public bool Enabled { get; set; }
+    public List<string> TemplateIds { get; set; } = new();
+}

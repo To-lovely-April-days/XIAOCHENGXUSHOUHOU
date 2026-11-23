@@ -5,6 +5,7 @@
  * 选中项由页面 onShow 调 utils/tabbar.js 的 setTabSelected(this, key) 设置。
  */
 const icons = require('../utils/icons.js');
+const subscribe = require('../utils/subscribe.js');
 
 const ON = '#1D1D1F';
 const OFF = '#AEAEB2';
@@ -35,7 +36,7 @@ function buildItems(role) {
   return list.map(decorate);
 }
 
-Component({
+Component(subscribe.bindTaps({
   data: {
     role: '',
     items: [],
@@ -73,4 +74,5 @@ Component({
       wx.switchTab({ url: item.path });
     }
   }
-});
+  // v1.4：切换 tab / 点中间按钮时顺带静默攒一条订阅消息额度（utils/subscribe.js topUp）
+}, ['onTap']));

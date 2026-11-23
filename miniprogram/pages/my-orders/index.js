@@ -4,6 +4,7 @@ const api = require('../../api/index.js');
 const auth = require('../../utils/auth.js');
 const format = require('../../utils/format.js');
 const enums = require('../../utils/enums.js');
+const subscribe = require('../../utils/subscribe.js');
 
 const FILTERS = [
   { key: 'doing', label: '进行中' },
@@ -72,7 +73,7 @@ function toRow(o) {
   };
 }
 
-Page({
+Page(subscribe.bindTaps({
   data: {
     filter: 'doing',
     filters: FILTERS.map((f) => Object.assign({ count: 0 }, f)),
@@ -138,4 +139,5 @@ Page({
   goHall() {
     wx.switchTab({ url: '/pages/orders/index' });
   }
-});
+  // v1.4：这些点击顺带静默攒一条订阅消息额度（utils/subscribe.js topUp）
+}, ['goDetail']));

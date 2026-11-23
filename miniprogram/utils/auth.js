@@ -8,6 +8,7 @@
  */
 const api = require('../api/index.js');
 const http = require('./request.js');
+const subscribe = require('./subscribe.js');
 
 const LOGIN_PAGE = '/pages/login/index';
 const HOME_PAGE = '/pages/home/index';
@@ -140,9 +141,19 @@ function toLogin(ticket) {
  * 需要绑定或登录失败时 reject（{code:'NEED_BIND'|'LOGIN_FAILED'}），并已跳转登录页；页面 catch 后忽略即可。
  * 有 token 但 GET /api/me 因网络/服务端异常失败（非 401）时 reject（{code:'LOAD_FAILED', message}），不跳转；
  * 页面应展示错误态并提供重试（再次调用 ensureLogin）。可用 isLoadFailed(err) 判断。
+ * v1.4：登录就绪后顺带刷新订阅消息的配置与授权状态缓存（utils/subscribe.js；静默，不影响登录结果）。
+ * 每个页面的 onShow 都会走到这里，所以页面不需要自己刷新。
  * @returns {Promise<Object>} User
  */
 function ensureLogin() {
+  const p = resolveLogin();
+  p.then(() => {
+    try { subscribe.refresh(); } catch (e) { /* 订阅消息只是附带功能，任何异常都不影响登录 */ }
+  }, () => {});
+  return p;
+}
+
+function resolveLogin() {
   const user = getUser();
   const token = getToken();
   if (token && user) return Promise.resolve(user);

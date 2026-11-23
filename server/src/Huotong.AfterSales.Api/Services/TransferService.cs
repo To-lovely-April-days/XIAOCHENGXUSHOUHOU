@@ -69,10 +69,12 @@ public partial class OrderService
     }
 
     /// <summary>待确认的转交因别的动作（改派 / 作废）自动失效，并在确实结束了一行时写状态记录（在触发动作自身的记录之前调用）</summary>
-    private async Task ExpirePendingTransfer(WorkOrder o, Employee actor, DateTime now, string why)
+    /// <returns>被结束的那一行（带 From / To）；本来就没有待确认的转交时为 null</returns>
+    private async Task<OrderTransfer?> ExpirePendingTransfer(WorkOrder o, Employee actor, DateTime now, string why)
     {
         var t = await EndPendingTransfer(o, TransferStatus.Expired, null, now, why);
         if (t != null) AddLog(o, actor, TransferRules.ExpiredLogText(t.From?.Name, t.To?.Name, why), o.Status, now, LogKind.Assist);
+        return t;
     }
 
     /// <summary>写退出记录：该人在本单已有退出记录 → 更新方式与时间；否则新增（o 须带 Exits）</summary>
@@ -162,6 +164,7 @@ public partial class OrderService
         await _notifier.NotifyAsync("工单转交",
             $"{me.Name} 想把 **{o.CustomerName}**（{o.OrderNo}）转交给 {to.Name}，原因：{reason}。\n\n请 {to.Name} 在小程序里确认接手或拒绝；确认前工单仍由 {me.Name} 负责。",
             await WithSupervisors(to.Phone));
+        await Push(o, me, now, "有工单转交给你，请确认", $"{me.Name}想把工单转交给你：{reason}", to);
         return await _view.BuildDetail(id, user);
     }
 
@@ -207,6 +210,7 @@ public partial class OrderService
         await _notifier.NotifyAsync("工单已转交",
             $"{me.Name} 已接手 **{o.CustomerName}**（{o.OrderNo}），原负责人 {from?.Name} 退出本单。\n\n{o.DeviceText} · {o.Symptom}",
             await WithSupervisors(from?.Phone));
+        await Push(o, me, now, "转交已被接手", $"{me.Name}已接手，你已退出本单", from);
         return await _view.BuildDetail(id, user);
     }
 
@@ -234,6 +238,7 @@ public partial class OrderService
         await _notifier.NotifyAsync("转交被拒绝",
             $"{me.Name} 拒绝接手 **{o.CustomerName}**（{o.OrderNo}）" + (reply == null ? "" : $"：{reply}") + $"。工单仍由 {from?.Name} 负责。",
             await WithSupervisors(from?.Phone));
+        await Push(o, me, now, "转交被拒绝", reply == null ? $"{me.Name}拒绝接手，工单仍由你负责" : $"{me.Name}拒绝接手：{reply}", from);
         // 不用「BuildDetail 再捕获 40300」：直接按查看权限决定返回详情还是 null
         return OrderViewBuilder.CanView(o, user) ? await _view.BuildDetail(id, user) : null;
     }
@@ -266,6 +271,8 @@ public partial class OrderService
             await _notifier.NotifyAsync("转交已撤销",
                 $"{me.Name} 撤销了 **{o.CustomerName}**（{o.OrderNo}）由 {from?.Name} 转交给 {to?.Name} 的请求，工单仍由 {from?.Name} 负责。",
                 new[] { from?.Phone, to?.Phone }.Where(p => !string.IsNullOrEmpty(p)).Select(p => p!).ToList());
+        // v1.4：主管撤销时提醒发起人（发起人自己撤回不提醒任何人）
+        if (!byRequester) await Push(o, me, now, "转交已失效", $"{me.Name}撤销了转交，工单仍由你负责", from);
         return await _view.BuildDetail(id, user);
     }
 }

@@ -2,8 +2,9 @@
 
 Base URL：`{host}/api`。JSON 使用 **camelCase**；枚举一律以**字符串**传输（如 `"Pending"`）。
 
-> 当前版本 **v1.3**（在 v1.1 的价格 / 暂停 / 多人协作 / 返厂流程、v1.2 的工单附件与文件中心之上，新增：多台设备的「设备资料」、附件分类与闭环后可传、工程师之间的「转交」）。本文件即现行契约；
+> 当前版本 **v1.4**（在 v1.1 的价格 / 暂停 / 多人协作 / 返厂流程、v1.2 的工单附件与文件中心、v1.3 的多台设备 / 附件分类 / 转交之上，新增：微信小程序「订阅消息」工单提醒，见 §2 与 `docs/CHANGES-v1.4.md`）。本文件即现行契约；
 > 逐条校验文案、状态记录文字、通知、测试清单与各端改动清单见 `docs/CHANGES-v1.1.md`、`docs/CHANGES-v1.2.md`、`docs/CHANGES-v1.3.md`（与本文件冲突时以 CHANGES 文档为准；同一内容以版本号最新的那份为准）。
+> v1.4 没有改动任何已有接口的请求 / 响应，只新增了 `GET /api/me/subscribe`。
 
 ## 0. 通用约定
 
@@ -250,6 +251,19 @@ MockMode 下 `login` 的 code 直接当作 openid 使用（`mock-` 前缀），`
 
 ### PUT /api/me/avatar
 `{ "fileId": 12 }`（先用 /api/files 上传，category=Avatar）→ `{ User }`
+
+### GET /api/me/subscribe（v1.4；任何已登录角色）
+微信订阅消息「工单提醒」的配置，小程序登录后取一次。
+→ `{ "enabled": true, "templateIds": ["模板ID"] }`；后端没配模板时 → `{ "enabled": false, "templateIds": [] }`。
+- `enabled` = 后端配置了 `WeChat:Subscribe:TemplateId` 且 `WeChat:Subscribe:Fields` 至少一项；`enabled` 为 `true` 时 `templateIds` 一定非空（目前恰好 1 个），为 `false` 时一定是空数组。
+- `templateIds` 就是 `wx.requestSubscribeMessage({ tmplIds })` 要传的值。`enabled=false` 时小程序不显示任何提醒入口、不调用订阅接口。
+- 未登录 → 401 / `40100`。这是只读配置：后端**不记录**谁订阅了、还剩几条额度（微信不提供查询），每次事件直接发，对方没订阅或额度用完时微信拒收（`43101`），后端只记一条日志。
+
+### 订阅消息提醒（v1.4，服务端行为；事件、收件人、文案见 CHANGES-v1.4 §3）
+- 工单动作成功（事务提交）之后，后端给相关的人发微信一次性订阅消息；点开消息进入 `pages/order-detail/index?id={工单id}`。
+- 收件人必须是启用状态、已绑定微信（有 OpenId），并且**不是操作人本人**；一次动作里同一个人最多收一条。
+- 消息内容不含价格、价格建议、受限附件名。
+- 发送失败、超时（一次动作最多等 5 秒）都只记日志，**不影响接口的返回**：任何工单接口的请求、响应、错误码都没有因为 v1.4 改变。
 
 ---
 

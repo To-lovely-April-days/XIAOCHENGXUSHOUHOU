@@ -32,7 +32,8 @@ const PATHS = {
   switch: '<path d="M4 9a8 8 0 0 1 14-3l2 2M20 15a8 8 0 0 1-14 3l-2-2"/><path d="M20 4v4h-4M4 20v-4h4"/>',
   shield: '<path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>',
-  more: '<path d="M5.5 12h.01M12 12h.01M18.5 12h.01"/>'
+  more: '<path d="M5.5 12h.01M12 12h.01M18.5 12h.01"/>',
+  bell: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>'
 };
 
 /** 微信 / WeUI 风格实心面性图标（24×24，fill-rule="evenodd"） */

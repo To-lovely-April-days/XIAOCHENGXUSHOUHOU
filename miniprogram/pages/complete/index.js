@@ -2,6 +2,7 @@
 const auth = require('../../utils/auth.js');
 const api = require('../../api/index.js');
 const enums = require('../../utils/enums.js');
+const subscribe = require('../../utils/subscribe.js');
 
 const HOME = '/pages/home/index';
 const MAX_PHOTOS = 9;
@@ -12,7 +13,7 @@ function fileItem(path, fileId) {
   return { key: 'f' + Date.now() + '_' + seq, path: path, fileId: fileId || null, status: fileId ? 'done' : 'uploading' };
 }
 
-Page({
+Page(subscribe.bindTaps({
   data: {
     id: 0,
     loading: true,
@@ -309,4 +310,5 @@ Page({
       wx.reLaunch({ url: HOME });
     }
   }
-});
+  // v1.4：提交完工时顺带静默攒一条订阅消息额度（utils/subscribe.js topUp）
+}, ['onSubmit']));

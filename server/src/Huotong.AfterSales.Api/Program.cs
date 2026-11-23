@@ -26,6 +26,9 @@ var wxOpt = config.GetSection("WeChat").Get<WeChatOptions>() ?? new WeChatOption
 if (!wxOpt.MockMode && (string.IsNullOrWhiteSpace(wxOpt.AppId) || string.IsNullOrWhiteSpace(wxOpt.AppSecret)))
     Console.Error.WriteLine("警告：WeChat:AppId / WeChat:AppSecret 未配置，小程序微信登录与手机号验证将失败。" +
         "本地开发：dotnet user-secrets set \"WeChat:AppSecret\" \"<密钥>\"；服务器：环境变量 WeChat__AppSecret。");
+// v1.4 订阅消息：配置写错只提示、不阻止启动（写错的字段会填占位符，微信可能拒收整条消息）
+foreach (var problem in SubscribeService.ConfigProblems(wxOpt.Subscribe))
+    Console.Error.WriteLine("警告：WeChat:Subscribe 配置有误：" + problem);
 
 // ---------- 数据库 ----------
 var provider = config["Database:Provider"] ?? "Sqlite";
@@ -54,9 +57,10 @@ builder.Services.AddDbContext<AppDbContext>(o =>
 builder.Services.AddSingleton<IClock, BeijingClock>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
-builder.Services.AddHttpClient();
+builder.Services.AddOutboundHttpClients();
 builder.Services.AddSingleton<IWeChatService, WeChatService>();
 builder.Services.AddSingleton<INotifier, DingTalkRobotNotifier>();
+builder.Services.AddSingleton<ISubscribeNotifier, SubscribeService>();
 builder.Services.AddSingleton<TokenService>();
 builder.Services.AddScoped<FileService>();
 builder.Services.AddScoped<OrderViewBuilder>();

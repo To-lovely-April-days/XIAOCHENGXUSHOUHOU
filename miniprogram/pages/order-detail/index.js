@@ -9,6 +9,7 @@ const auth = require('../../utils/auth.js');
 const format = require('../../utils/format.js');
 const enums = require('../../utils/enums.js');
 const attachments = require('../../utils/attachments.js');
+const subscribe = require('../../utils/subscribe.js');
 
 const ENGINEER_TABS = [{ key: 'info', label: '信息' }, { key: 'punch', label: '打卡记录' }, { key: 'files', label: '附件资料' }];
 // 返厂单（工程师）：「返厂流程」取代「打卡记录」
@@ -549,7 +550,7 @@ function needPriceToClose(d) {
   return !!d && d.status === 'Submitted' && d.priceSet === false && String(d.closeBlockedReason || '').indexOf('价格') >= 0;
 }
 
-Page({
+Page(subscribe.bindTaps({
   data: {
     loading: true,
     error: '',
@@ -1800,4 +1801,5 @@ Page({
   },
 
   noop() {}
-});
+  // v1.4：底部操作按钮、转交确认 / 拒绝 / 撤回、暂停、申请审批、定价并闭环的点击顺带静默攒一条订阅消息额度（utils/subscribe.js topUp）
+}, ['onAction', 'onAcceptTransfer', 'onRejectTransfer', 'onCancelTransfer', 'saveHold', 'onApproveRequest', 'onRejectRequest', 'savePrice']));

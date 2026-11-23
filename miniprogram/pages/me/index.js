@@ -1,5 +1,6 @@
 /**
  * 我的（原型 09，tab）。数据：GET /api/me；更换头像：chooseAvatar → 上传 Avatar → PUT /api/me/avatar。
+ * v1.4：「工单提醒」一行（微信订阅消息，见 utils/subscribe.js；后端未启用时不显示）。
  */
 const api = require('../../api/index.js');
 const auth = require('../../utils/auth.js');
@@ -8,6 +9,7 @@ const tabbar = require('../../utils/tabbar.js');
 const format = require('../../utils/format.js');
 const enums = require('../../utils/enums.js');
 const system = require('../../utils/system.js');
+const subscribe = require('../../utils/subscribe.js');
 const config = require('../../config.js');
 
 function appVersion() {
@@ -34,6 +36,8 @@ Page({
     monthText: '—',
     activeText: '—',
     uploading: false,
+    subShow: false, // 「工单提醒」一行：后端启用订阅消息时才显示
+    subText: '',    // 已开启 / 未开启 / 已关闭
     version: '1.0.0'
   },
 
@@ -52,6 +56,7 @@ Page({
     return auth.ensureLogin().then((user) => {
       tabbar.setTabSelected(this, 'me');
       this.applyUser(user);
+      subscribe.refresh().then(() => this.applySubscribe());
       return this.load();
     }).catch((err) => {
       if (auth.isLoadFailed(err) && !this.data.user) this.setData({ error: err.message || '网络异常，请重试' });
@@ -151,6 +156,18 @@ Page({
       .then((user) => { if (user) this.applyUser(user); })
       .catch((err) => console.warn('[avatar] 设置失败', err))
       .then(() => this.setData({ uploading: false }));
+  },
+
+  /* ---------------- 工单提醒（v1.4） ---------------- */
+  applySubscribe() {
+    const show = subscribe.isEnabled();
+    const text = show ? subscribe.statusText() : '';
+    if (show !== this.data.subShow || text !== this.data.subText) this.setData({ subShow: show, subText: text });
+  },
+
+  /** 未开启 → 说明 + 授权弹窗；已关闭 → 引导去设置；已开启 → 提示并顺便攒一条额度 */
+  onSubscribe() {
+    subscribe.open().then(() => this.applySubscribe());
   },
 
   onVersionTap() {

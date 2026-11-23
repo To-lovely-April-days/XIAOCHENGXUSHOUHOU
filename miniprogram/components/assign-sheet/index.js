@@ -21,11 +21,12 @@
 const api = require('../../api/index.js');
 const enums = require('../../utils/enums.js');
 const tabbar = require('../../utils/tabbar.js');
+const subscribe = require('../../utils/subscribe.js');
 
 const MAX_ASSISTANTS = 5;
 
 const NOTES = {
-  assign: '指派后工单进入“待启动”，被指派人收到钉钉群提醒；协助人可查看工单并在现场打卡，工时按本人计算。',
+  assign: '指派后工单进入“待启动”，被指派人会收到提醒；协助人可查看工单并在现场打卡，工时按本人计算。',
   assistants: '协助人可查看工单并在现场打卡，工时按本人计算；最多 5 人。正在现场计时的协助人需先离场打卡才能移除。',
   request: '提交后由主管审批，同意后对方成为本单协助人，可查看工单并在现场打卡。',
   transfer: '对方确认接手后成为本单负责人，你将退出本单（只能查看），已有的打卡和工时保留；对方确认前工单仍由你负责，可随时撤回。'
@@ -46,7 +47,7 @@ function sameSet(a, b) {
   return a.every((x) => b.indexOf(x) >= 0);
 }
 
-Component({
+Component(subscribe.bindTaps({
   options: { addGlobalClass: true },
   properties: {
     show: { type: Boolean, value: false },
@@ -317,4 +318,5 @@ Component({
       if (this.data.show) tabbar.setTabBarHidden(currentPage(), false);
     }
   }
-});
+  // v1.4：确认指派 / 改派 / 调整协助人 / 申请协助 / 发起转交时顺带静默攒一条订阅消息额度（utils/subscribe.js topUp）
+}, ['onConfirm']));

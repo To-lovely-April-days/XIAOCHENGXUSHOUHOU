@@ -5,6 +5,7 @@
 const api = require('../../api/index.js');
 const format = require('../../utils/format.js');
 const enums = require('../../utils/enums.js');
+const subscribe = require('../../utils/subscribe.js');
 
 const FILTERS = [
   { key: 'all', label: '全部' },
@@ -72,7 +73,7 @@ function decorate(o) {
   });
 }
 
-Component({
+Component(subscribe.bindTaps({
   options: { addGlobalClass: true },
 
   data: {
@@ -149,4 +150,5 @@ Component({
       if (id) wx.navigateTo({ url: '/pages/order-detail/index?id=' + id });
     }
   }
-});
+  // v1.4：这些点击顺带静默攒一条订阅消息额度（utils/subscribe.js topUp）
+}, ['toDetail']));

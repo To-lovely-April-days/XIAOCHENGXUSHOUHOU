@@ -30,6 +30,9 @@ public abstract class V11TestBase : IDisposable
     protected readonly HomeService Home;
     protected readonly AdminReportService Reports;
     protected readonly RecordingNotifier Notifier = new();
+    /// <summary>v1.4 订阅消息：默认未启用（TemplateId 为空）；要测提醒的用例改这份配置即可（MockMode，只记录不联网）</summary>
+    protected readonly WeChatOptions WxOptions = new() { MockMode = true };
+    protected readonly SubscribeService Subscribe;
 
     protected class Env : IWebHostEnvironment
     {
@@ -42,6 +45,12 @@ public abstract class V11TestBase : IDisposable
     }
 
     public record Notice(string Title, string Text, List<string> Mobiles);
+
+    /// <summary>服务级测试一律不联网：谁要 HttpClient 就直接失败</summary>
+    private sealed class NoHttp : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => throw new InvalidOperationException("测试里不应该发起网络请求");
+    }
 
     public class RecordingNotifier : INotifier
     {
@@ -66,7 +75,8 @@ public abstract class V11TestBase : IDisposable
         Files = new FileService(Db, Clock, new Env { ContentRootPath = Root }, new HttpContextAccessor(),
             Options.Create(new AppSettings { PublicBaseUrl = "http://test" }));
         View = new OrderViewBuilder(Db, Clock, Files);
-        Orders = new OrderService(Db, Clock, View, Files, Notifier, NullLogger<OrderService>.Instance);
+        Subscribe = new SubscribeService(new NoHttp(), Options.Create(WxOptions), NullLogger<SubscribeService>.Instance);
+        Orders = new OrderService(Db, Clock, View, Files, Notifier, NullLogger<OrderService>.Instance, Subscribe);
         Punches = new PunchService(Db, Clock, View, Files);
         Admin = new AdminService(Db, Clock, View, Files);
         Hours = new HoursService(Db, Clock, View);

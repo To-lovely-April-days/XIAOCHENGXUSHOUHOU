@@ -5,12 +5,13 @@ const fmt = require('../../utils/format.js');
 const enums = require('../../utils/enums.js');
 const location = require('../../utils/location.js');
 const watermark = require('../../utils/watermark.js');
+const subscribe = require('../../utils/subscribe.js');
 
 const HOME = '/pages/home/index';
 const DOT_OK = '#34C77B';
 const DOT_FAR = '#FFB340'; // 深色背景上的琥珀色
 
-Page({
+Page(subscribe.bindTaps({
   data: {
     loading: true,
     loadError: '',
@@ -327,4 +328,5 @@ Page({
   goHall() {
     wx.switchTab({ url: '/pages/orders/index' });
   }
-});
+  // v1.4：打卡提交时顺带静默攒一条订阅消息额度（utils/subscribe.js topUp）
+}, ['onShutter']));

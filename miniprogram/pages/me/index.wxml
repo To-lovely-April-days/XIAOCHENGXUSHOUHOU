@@ -43,6 +43,11 @@
       <text class="menu-extra">{{uploading ? '上传中' : '相册 / 拍照'}}</text>
       <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
     </view>
+    <view wx:if="{{subShow}}" class="menu-item" hover-class="menu-hover" bindtap="onSubscribe">
+      <text class="menu-text">工单提醒</text>
+      <text class="menu-extra">{{subText}}</text>
+      <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+    </view>
   </view>
 
   <view class="menu card">

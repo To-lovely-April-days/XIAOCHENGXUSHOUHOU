@@ -84,6 +84,14 @@ const me = {
    */
   setAvatar(fileId, opts) {
     return put('/api/me/avatar', { fileId: fileId }, opts);
+  },
+  /**
+   * GET /api/me/subscribe（v1.4）微信订阅消息「工单提醒」配置；任何已登录角色可调
+   * @returns {Promise<{enabled:boolean,templateIds:string[]}>} 后端未配置模板时 enabled=false、templateIds=[]
+   *   页面不要直接调，统一走 utils/subscribe.js
+   */
+  getSubscribeConfig(opts) {
+    return get('/api/me/subscribe', null, opts);
   }
 };
 

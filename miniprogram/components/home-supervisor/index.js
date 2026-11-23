@@ -4,6 +4,7 @@
  */
 const api = require('../../api/index.js');
 const format = require('../../utils/format.js');
+const subscribe = require('../../utils/subscribe.js');
 
 const START_H = 8;
 const END_H = 20;
@@ -78,7 +79,7 @@ function buildTodo(t, i) {
   });
 }
 
-Component({
+Component(subscribe.bindTaps({
   options: { addGlobalClass: true },
 
   data: {
@@ -208,4 +209,5 @@ Component({
       this.refresh(true);
     }
   }
-});
+  // v1.4：这些点击顺带静默攒一条订阅消息额度（utils/subscribe.js topUp）
+}, ['toDetail', 'onTodo']));

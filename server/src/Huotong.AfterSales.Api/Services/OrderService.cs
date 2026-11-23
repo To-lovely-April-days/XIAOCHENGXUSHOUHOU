@@ -36,8 +36,11 @@ public partial class OrderService
     private readonly FileService _files;
     private readonly INotifier _notifier;
     private readonly ILogger<OrderService> _logger;
+    /// <summary>微信订阅消息提醒（v1.4）；不传 = 不发</summary>
+    private readonly ISubscribeNotifier _subscribe;
 
-    public OrderService(AppDbContext db, IClock clock, OrderViewBuilder view, FileService files, INotifier notifier, ILogger<OrderService> logger)
+    public OrderService(AppDbContext db, IClock clock, OrderViewBuilder view, FileService files, INotifier notifier, ILogger<OrderService> logger,
+        ISubscribeNotifier? subscribe = null)
     {
         _db = db;
         _clock = clock;
@@ -45,6 +48,7 @@ public partial class OrderService
         _files = files;
         _notifier = notifier;
         _logger = logger;
+        _subscribe = subscribe ?? NullSubscribeNotifier.Instance;
     }
 
     // ---------- 列表 ----------
@@ -344,6 +348,10 @@ public partial class OrderService
             await _notifier.NotifyAsync("紧急工单待认领",
                 $"**{order.CustomerName}**（{order.OrderNo}）\n\n{order.DeviceText} · {order.Symptom}\n\n{EnumText.Service(order.ServiceType)} · {order.Region} · 建单人 {me.Name}");
         }
+        // v1.4：非主管建单 → 提醒主管去指派
+        if (me.Role != Role.Supervisor)
+            await PushSupervisors(order, me, now, "新工单待指派",
+                (order.Urgency == Urgency.Urgent ? "【紧急】" : "") + $"{me.Name}新建{EnumText.Service(order.ServiceType)}工单，待指派");
         return await _view.BuildDetail(order.Id, user);
     }
 
@@ -527,6 +535,7 @@ public partial class OrderService
 
         await _notifier.NotifyAsync("工单待验收",
             $"{me.Name} 提交了 **{o.CustomerName}**（{o.OrderNo}）的完工资料，请确认闭环。\n\n运行状况：{EnumText.Run(r.RunStatus!.Value)}", await SupervisorPhones());
+        await PushSupervisors(o, me, now, "工单待验收", $"{me.Name}提交了完工，请验收");
         return await _view.BuildDetail(id, user);
     }
 
@@ -587,6 +596,10 @@ public partial class OrderService
             added.Select(e => e.Phone).ToList());
     }
 
+    /// <summary>v1.4：主管安排的新协助人各收一条订阅消息</summary>
+    private static void AddAssistantNotice(PushBatch b, WorkOrder o, Employee me, List<Employee> added) =>
+        b.Add(AssistantAddedTitle, $"{me.Name}安排你协助，负责人{o.Assignee?.Name}", added);
+
     public async Task<OrderDetail> Assign(int id, AssignRequest r, CurrentUser user)
     {
         if (r.EngineerId == null) throw BizException.BadRequest("请选择工程师");
@@ -611,7 +624,7 @@ public partial class OrderService
         var plan = r.AssistantIds == null ? null : await PlanAssistants(o, r.AssistantIds, eng.Id, now);
 
         // v1.3：改派让待确认的转交自动失效（失效记录写在改派记录之前；改派给转交的接手人也一样）
-        if (!assign) await ExpirePendingTransfer(o, me, now, "主管已改派");
+        var expired = assign ? null : await ExpirePendingTransfer(o, me, now, "主管已改派");
 
         o.Status = to;
         o.AssigneeId = eng.Id;
@@ -638,6 +651,13 @@ public partial class OrderService
         await _notifier.NotifyAsync("工单指派提醒",
             $"{me.Name} 将 **{o.CustomerName}**（{o.OrderNo}）指派给 {eng.Name}。\n\n{o.DeviceText} · {o.Symptom}", new[] { eng.Phone });
         if (plan != null) await NotifyNewAssistants(o, me, plan.ToAdd);
+        // v1.4：新负责人、新协助人、（因改派失效的）转交发起人；同一个人只收排在前面的那一条
+        await Push(o, me, now, b =>
+        {
+            b.Add("新工单指派给你", assign ? $"{me.Name}把工单指派给你，请及时处理" : $"{me.Name}把工单改派给你，请及时处理", eng);
+            if (plan != null) AddAssistantNotice(b, o, me, plan.ToAdd);
+            if (expired != null) b.Add("转交已失效", "主管已改派，转交自动失效", expired.From);
+        });
         return await _view.BuildDetail(id, user);
     }
 
@@ -663,7 +683,11 @@ public partial class OrderService
             await _db.SaveChangesAsync();
         }
         await tx.CommitAsync();
-        if (changed) await NotifyNewAssistants(o, me, plan.ToAdd);
+        if (changed)
+        {
+            await NotifyNewAssistants(o, me, plan.ToAdd);
+            await Push(o, me, now, b => AddAssistantNotice(b, o, me, plan.ToAdd));
+        }
         return await _view.BuildDetail(id, user);
     }
 
@@ -713,6 +737,7 @@ public partial class OrderService
         await _db.SaveChangesAsync();
         if (o.Assignee != null)
             await _notifier.NotifyAsync("工单被退回", $"**{o.CustomerName}**（{o.OrderNo}）被退回处理中" + (reason == null ? "" : $"：{reason}"), new[] { o.Assignee.Phone });
+        await Push(o, me, now, "完工被驳回，请重新处理", reason == null ? $"{me.Name}退回了完工资料" : $"退回原因：{reason}", o.Assignee);
         return await _view.BuildDetail(id, user);
     }
 
@@ -733,6 +758,9 @@ public partial class OrderService
         AddLog(o, me, $"{me.Name} 确认闭环 → {EnumText.Status(to)}", to, now);
         await AutoCancelRequests(o, now);
         await _db.SaveChangesAsync();
+        // v1.4：告诉建单人（销售或工程师）工单已闭环；内容不含价格
+        if (o.Creator != null && o.Creator.Role != Role.Supervisor)
+            await Push(o, me, now, "工单已闭环", $"{me.Name}已确认闭环", o.Creator);
         return await _view.BuildDetail(id, user);
     }
 

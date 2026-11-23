@@ -59,6 +59,10 @@ PC 后台（`http://localhost:5080/admin/`）用赵主管 `13900000001` / `Huoto
 | `Jwt:Issuer` / `Jwt:ExpireDays` | `huotong-aftersales` / `30` | token 有效期 30 天；每次请求复核账号（不存在/停用/角色变化/`Employee.TokenVersion` 变化即 40100），解绑、停用、改角色、改手机号会递增 TokenVersion 使旧 token 立即失效 |
 | `WeChat:AppId` / `WeChat:AppSecret` | 空 | 小程序 AppID / AppSecret |
 | `WeChat:MockMode` | 生产 `false`，Development `true` | 见下文 |
+| `WeChat:Subscribe:TemplateId` | 空 | 微信订阅消息模板 ID（v1.4，不是机密，可以直接写在 `appsettings.json`）。为空 = 不发提醒，小程序也不显示提醒入口 |
+| `WeChat:Subscribe:Fields` | `{}` | 模板字段映射：键 = 模板字段键（`thing1`、`character_string2`、`time3`…），值 = 槽名 `Title` / `OrderNo` / `Customer` / `Content` / `Time` / `Operator` / `Status` / `Device`。至少一项才算启用。详见 `docs/CHANGES-v1.4.md` §2 |
+| `WeChat:Subscribe:MiniProgramState` | `trial` | 点开消息进入哪个版本的小程序：`developer` 开发版 / `trial` 体验版 / `formal` 正式版。**正式发布后要改成 `formal`** |
+| `WeChat:Subscribe:Page` | `pages/order-detail/index?id={id}` | 点开消息进入的页面，`{id}` 替换为工单 id |
 | `DingTalk:Webhook` / `DingTalk:Secret` | 空 | 钉钉群机器人；为空时通知只写日志。Secret 为「加签」密钥（可选） |
 | `PublicBaseUrl` | 空 | 文件绝对地址前缀，如 `https://api.example.com`；为空用请求的 scheme+host |
 | `Cors:Origins` | `[]` | 允许的来源；为空允许任意来源（供后续 PC 后台使用） |
@@ -66,7 +70,7 @@ PC 后台（`http://localhost:5080/admin/`）用赵主管 `13900000001` / `Huoto
 | `Seed:SupervisorPassword` | 生产空，Development `Huotong@2026` | 写入演示数据时赵主管的 PC 后台初始密码（为空则不设密码） |
 | `Bootstrap:SupervisorPassword` | 空 | 启动时给所有**未设密码**的 Supervisor 设上该密码（已有密码的不覆盖），用于已有数据库的生产环境首次开通 PC 后台；不满足强度规则时只记警告日志、不设置 |
 
-环境变量写法：`Database__Provider=SqlServer`、`WeChat__AppSecret=xxx`、`Bootstrap__SupervisorPassword=xxx`。
+环境变量写法：`Database__Provider=SqlServer`、`WeChat__AppSecret=xxx`、`Bootstrap__SupervisorPassword=xxx`；订阅消息的字段映射写成 `WeChat__Subscribe__TemplateId=xxx`、`WeChat__Subscribe__Fields__thing1=Title`、`WeChat__Subscribe__Fields__time3=Time`。
 
 > macOS 默认文件系统不区分大小写，`data/aftersales.db` 实际会落在源码目录 `Data/` 下（与 `AppDbContext.cs` 同目录）。这不影响运行，`*.db` 已在 `.gitignore` 中；需要的话可把连接串改成 `Data Source=App_Data/aftersales.db`。
 

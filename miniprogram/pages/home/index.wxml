@@ -11,6 +11,16 @@
     </view>
   </view>
 
+  <!-- v1.4 开启工单提醒（订阅消息从未选择过时显示；关闭后 7 天内不再出现） -->
+  <view wx:if="{{subTip && role}}" class="sub-tip" aria-label="开启工单提醒">
+    <view class="sub-tip-icon"><ui-icon name="bell" color="#1D1D1F" size="18" stroke="1.8" /></view>
+    <text class="sub-tip-text">开启工单提醒，指派和审批结果第一时间通知你</text>
+    <view class="sub-tip-btn" hover-class="btn-hover" bindtap="onSubTipOpen" aria-role="button">去开启</view>
+    <view class="sub-tip-close" hover-class="btn-hover" bindtap="onSubTipClose" aria-role="button" aria-label="关闭提示">
+      <ui-icon name="close" color="#AEAEB2" size="16" stroke="2" />
+    </view>
+  </view>
+
   <home-engineer wx:if="{{role === 'Engineer'}}" id="home-child" bind:meta="onMeta" />
   <home-sales wx:elif="{{role === 'Sales'}}" id="home-child" />
   <home-supervisor wx:elif="{{role === 'Supervisor'}}" id="home-child" bind:meta="onMeta" />
