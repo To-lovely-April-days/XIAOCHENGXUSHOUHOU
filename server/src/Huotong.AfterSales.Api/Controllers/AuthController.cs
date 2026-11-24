@@ -37,6 +37,14 @@ public class AuthController : ApiControllerBase
     public async Task<ApiResponse<RegisterResult>> Register([FromServices] AccountService accounts, [FromBody] RegisterRequest req) =>
         Ok(await accounts.Register(req));
 
+    /// <summary>v1.8 注册页要申请订阅的模板（审批结果通知）。公开接口，模板 ID 不是秘密</summary>
+    [HttpGet("subscribe")]
+    public ApiResponse<SubscribeConfigDto> Subscribe([FromServices] AccountService accounts)
+    {
+        var ids = accounts.ResultTemplateIds.ToList();
+        return Ok(new SubscribeConfigDto { Enabled = ids.Count > 0, TemplateIds = ids });
+    }
+
     [HttpPost("login")]
     public async Task<ApiResponse<LoginResult>> Login([FromBody] LoginRequest req) => Ok(await _auth.Login(req));
 

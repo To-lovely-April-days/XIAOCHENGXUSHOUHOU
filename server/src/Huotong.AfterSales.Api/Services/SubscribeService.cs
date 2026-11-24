@@ -32,6 +32,12 @@ public interface ISubscribeNotifier
 
     /// <summary>v1.8 有新的注册申请：提醒有注册审批权限的人。同样吞掉异常、自带超时；未配置模板时什么都不做</summary>
     Task NotifyRegistrationAsync(IReadOnlyList<Employee> to, SubscribeSlots slots) => Task.CompletedTask;
+
+    /// <summary>v1.8 注册审批结果提醒的模板 ID（申请人提交注册时申请订阅）；未配置时为空</summary>
+    IReadOnlyList<string> ResultTemplateIds => Array.Empty<string>();
+
+    /// <summary>v1.8 把审批结果发给申请人（按提交注册时的微信）。吞掉异常、自带超时；未配置模板或没有 openid 时什么都不做</summary>
+    Task NotifyRegistrationResultAsync(string? openId, string name, SubscribeSlots slots) => Task.CompletedTask;
 }
 
 /// <summary>不发送任何提醒（测试里不关心订阅消息时用）</summary>
@@ -108,6 +114,18 @@ public class SubscribeService : ISubscribeNotifier
     {
         var cfg = _opt.Subscribe.Register;
         if (!cfg.Enabled) return Task.CompletedTask;
+        return Deliver(() => Compose(0, new[] { new SubscribeNotice(0, to, slots) }, cfg.TemplateId.Trim(), cfg.Fields, cfg.Page));
+    }
+
+    public IReadOnlyList<string> ResultTemplateIds =>
+        _opt.Subscribe.Result.Enabled ? new[] { _opt.Subscribe.Result.TemplateId.Trim() } : Array.Empty<string>();
+
+    public Task NotifyRegistrationResultAsync(string? openId, string name, SubscribeSlots slots)
+    {
+        var cfg = _opt.Subscribe.Result;
+        if (!cfg.Enabled || string.IsNullOrWhiteSpace(openId)) return Task.CompletedTask;
+        // 申请人还不是（或刚成为）员工，按提交注册时记下的微信发
+        var to = new[] { new Employee { Id = -1, Name = name, OpenId = openId, Enabled = true } };
         return Deliver(() => Compose(0, new[] { new SubscribeNotice(0, to, slots) }, cfg.TemplateId.Trim(), cfg.Fields, cfg.Page));
     }
 

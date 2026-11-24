@@ -50,6 +50,18 @@ public class SubscribeOptions
         set => _register = value ?? new();
     }
     private RegisterSubscribeOptions _register = new();
+
+    /// <summary>
+    /// v1.8 「注册审批结果」提醒（发给申请人：通过 / 未通过）。申请人提交注册时在小程序里授权一次。
+    /// 槽名：Title = 「注册审批结果」，Status = 「已通过」/「未通过」，Content = 一句话（通过时提示去登录，未通过时带原因），
+    /// Customer / Operator = 申请人姓名，OrderNo = 手机号，Time = 审批时间。Page 默认登录页。
+    /// </summary>
+    public RegisterSubscribeOptions Result
+    {
+        get => _result;
+        set => _result = value ?? new() { Page = "pages/login/index" };
+    }
+    private RegisterSubscribeOptions _result = new() { Page = "pages/login/index" };
 }
 
 /// <summary>

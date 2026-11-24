@@ -151,6 +151,25 @@ public class AccountService
         }
     }
 
+    /// <summary>v1.8 申请人提交注册时要申请订阅的「审批结果」模板（公开，登录前就要用）</summary>
+    public IReadOnlyList<string> ResultTemplateIds => _subscribe.ResultTemplateIds;
+
+    /// <summary>v1.8 把审批结果通知申请人：通过时提示去登录，未通过时带原因。失败只记日志</summary>
+    private async Task NotifyResult(string? openId, string name, string phone, bool approved, string? reason, DateTime time)
+    {
+        try
+        {
+            var content = approved ? "审批已通过，请用手机号和密码登录" : "未通过：" + (string.IsNullOrWhiteSpace(reason) ? "请修改后重新提交" : reason.Trim());
+            await _subscribe.NotifyRegistrationResultAsync(openId, name, new SubscribeSlots(
+                Title: "注册审批结果", OrderNo: phone, Customer: name, Content: content, Time: time, Operator: name,
+                Status: approved ? "已通过" : "未通过", Device: ""));
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning("审批结果提醒发送失败（不影响审批）：{Message}", ex.Message);
+        }
+    }
+
     /// <summary>v1.8 当前用户要申请订阅的「注册申请提醒」模板（没有注册审批权限的人为空）</summary>
     public async Task<IReadOnlyList<string>> RegisterTemplateIdsFor(CurrentUser user)
     {
@@ -298,6 +317,7 @@ public class AccountService
         await _db.SaveChangesAsync();
         await tx.CommitAsync();
         _throttle.Reset(r.Phone);
+        await NotifyResult(r.OpenId, emp.Name, r.Phone, true, null, now);
         return await Reloaded(r.Id);
     }
 
@@ -312,6 +332,7 @@ public class AccountService
         r.ReviewedById = user.Id;
         r.ReviewedAt = _clock.Now;
         await _db.SaveChangesAsync();
+        await NotifyResult(r.OpenId, r.Name, r.Phone, false, reason, r.ReviewedAt.Value);
         return await Reloaded(r.Id);
     }
 

@@ -54,6 +54,27 @@ Page({
     if (last) this.setData({ phone: String(last) });
     // 已登录（如从别处误入登录页）直接回首页
     if (auth.getToken() && auth.getUser()) this.goHome();
+    // v1.8 提前取好「审批结果通知」的模板：授权弹窗必须在点按钮的那一下里直接调起，不能等网络
+    this.resultTmplIds = [];
+    api.auth.subscribeConfig({ silent: true }).then((d) => {
+      this.resultTmplIds = d && d.enabled && Array.isArray(d.templateIds) ? d.templateIds.slice(0, 3) : [];
+    }).catch(() => {});
+  },
+
+  /**
+   * 请申请人授权接收「审批结果通知」。必须在点击事件里同步调用；没配模板、用户拒绝或微信报错都当作没授权，不影响注册。
+   * @returns {Promise<boolean>} 是否授权成功
+   */
+  askResultNotice() {
+    const ids = this.resultTmplIds || [];
+    if (!ids.length || typeof wx.requestSubscribeMessage !== 'function') return Promise.resolve(false);
+    return new Promise((resolve) => {
+      wx.requestSubscribeMessage({
+        tmplIds: ids,
+        success: (res) => resolve(ids.some((id) => res && res[id] === 'accept')),
+        fail: () => resolve(false)
+      });
+    });
   },
 
   onUnload() {
@@ -172,15 +193,23 @@ Page({
     if (!d.agreed) return this.nudgeAgree();
 
     this.setData({ busy: true, error: '', canReapply: false });
-    wx.showLoading({ title: '提交中', mask: true });
-    auth.wxLogin()
+    let noticed = false;
+    // 先弹通知授权（要在这一下点击里调起），不管同不同意都继续提交
+    this.askResultNotice()
+      .then((ok) => {
+        noticed = ok;
+        wx.showLoading({ title: '提交中', mask: true });
+        return auth.wxLogin();
+      })
       .then((code) => api.auth.register({ name: name, phone: phone, password: d.password, code: code }, { silent: true }))
       .then(() => {
         try { wx.setStorageSync(LAST_PHONE_KEY, phone); } catch (e) { /* ignore */ }
         this.setData({
           step: 'pending', password: '', confirm: '',
           pendingTitle: '已提交，等待管理员审批',
-          pendingDesc: '审批通过后，用刚才填写的手机号和密码登录即可。如果着急使用，请联系售后主管。'
+          pendingDesc: noticed
+            ? '审批有结果后，微信会通知你。通过后用刚才填写的手机号和密码登录即可。'
+            : '审批通过后，用刚才填写的手机号和密码登录即可。如果着急使用，请联系售后主管。'
         });
       })
       .catch((err) => this.fail((err && err.message) || '提交失败，请检查网络后重试'))

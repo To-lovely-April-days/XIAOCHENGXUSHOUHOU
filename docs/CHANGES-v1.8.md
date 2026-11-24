@@ -34,3 +34,12 @@
 
 `UserDto.canApprove`（管理员或有开关）、`EmployeeDto.canApprove`（开关本身）、`MeDto.pendingRegistrations`（不能审批时为 null）。
 `POST/PUT /api/admin/employees` 新增 `canApprove`（不传保持原值）。迁移 `V18_CanApprove`。
+
+## 审批结果通知申请人
+
+- 申请人点「提交注册」时，小程序先弹一次订阅授权（`GET /api/auth/subscribe` 返回的模板，公开接口），同意与否都继续提交。
+- 审批通过或驳回后，按提交注册时记下的微信（`Registration.OpenId`）发一条结果：
+  通过 → 「审批已通过，请用手机号和密码登录」，点开进登录页；驳回 → 「未通过：原因」。
+- 配置 `WeChat:Subscribe:Result`（`TemplateId` / `Page` 默认 `pages/login/index` / `Fields`），槽名：`Status` = 已通过 / 未通过，
+  `Content` = 上面那句话，`Customer` / `Operator` = 申请人姓名，`OrderNo` = 手机号，`Time` = 审批时间，`Title` = 注册审批结果。没配就不发。
+- 一次性订阅：一次授权只能收一条。被驳回后重新提交时会再弹一次授权。

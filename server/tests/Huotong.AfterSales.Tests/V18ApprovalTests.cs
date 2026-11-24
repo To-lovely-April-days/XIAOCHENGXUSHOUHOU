@@ -94,6 +94,44 @@ public sealed class V18ApprovalTests : V11TestBase
     }
 
     [Fact]
+    public async Task ApplicantIsToldTheResultOnTheWeChatUsedToRegister()
+    {
+        WxOptions.Subscribe.Result.TemplateId = "tmpl-result";
+        WxOptions.Subscribe.Result.Fields = new() { ["phrase1"] = "Status", ["thing2"] = "Content", ["time3"] = "Time" };
+        Assert.Equal(new[] { "tmpl-result" }, _acc.ResultTemplateIds);
+
+        await _acc.Register(Reg("13755550001"));
+        await _acc.Register(new RegisterRequest { Name = "另一位", Phone = "13755550002", Password = "Abcd1234", Code = "other" });
+        var ids = Db.Registrations.AsNoTracking().OrderBy(r => r.Id).Select(r => r.Id).ToList();
+        Subscribe.ClearMockSent();
+
+        await _acc.Approve(ids[0], new RegistrationApproveRequest { Position = Position.Engineer, Department = "售后部门" }, Sup);
+        var ok = Assert.Single(Subscribe.MockSent);
+        Assert.Equal(("openid-applicant", "tmpl-result", "pages/login/index"), (ok.OpenId, ok.TemplateId, ok.Page));
+        Assert.Equal("已通过", ok.Data["phrase1"]);
+        Assert.Equal("审批已通过，请用手机号和密码登录", ok.Data["thing2"]);
+
+        Subscribe.ClearMockSent();
+        await _acc.Reject(ids[1], new RegistrationRejectRequest { Reason = "请填写真实姓名" }, Sup);
+        var no = Assert.Single(Subscribe.MockSent);
+        Assert.Equal("openid-other", no.OpenId);
+        Assert.Equal("未通过", no.Data["phrase1"]);
+        Assert.Equal("未通过：请填写真实姓名", no.Data["thing2"]);
+    }
+
+    [Fact]
+    public async Task NoResultTemplateMeansApprovalStillWorksSilently()
+    {
+        Assert.Empty(_acc.ResultTemplateIds);
+        await _acc.Register(Reg());
+        Subscribe.ClearMockSent();
+        var dto = await _acc.Approve(Db.Registrations.AsNoTracking().Single().Id,
+            new RegistrationApproveRequest { Position = Position.Engineer, Department = "售后部门" }, Sup);
+        Assert.Equal(RegistrationStatus.Approved, dto.Status);
+        Assert.Empty(Subscribe.MockSent);
+    }
+
+    [Fact]
     public async Task UserDtoAndMeExposeApprovalAbility()
     {
         await _acc.Register(Reg());

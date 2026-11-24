@@ -83,6 +83,13 @@ const auth = {
    */
   register(body, opts) {
     return post('/api/auth/register', body, Object.assign({ auth: false }, opts));
+  },
+  /**
+   * GET /api/auth/subscribe（v1.8，无需登录）注册页要申请订阅的「审批结果通知」模板
+   * @returns {Promise<{enabled:boolean,templateIds:string[]}>} 后端没配模板时 enabled=false
+   */
+  subscribeConfig(opts) {
+    return get('/api/auth/subscribe', null, Object.assign({ auth: false }, opts));
   }
 };
 
