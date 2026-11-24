@@ -57,10 +57,13 @@ public class AccountService
     private readonly RegisterThrottle _registerThrottle;
     private readonly IClock _clock;
     private readonly ILogger<AccountService> _log;
+    private readonly ISubscribeNotifier _subscribe;
 
     public AccountService(AppDbContext db, IWeChatService wx, TokenService tokens, OrderViewBuilder view,
-        LoginThrottle throttle, RegisterThrottle registerThrottle, IClock clock, ILogger<AccountService> log)
+        LoginThrottle throttle, RegisterThrottle registerThrottle, IClock clock, ILogger<AccountService> log,
+        ISubscribeNotifier? subscribe = null)
     {
+        _subscribe = subscribe ?? NullSubscribeNotifier.Instance;
         _db = db;
         _wx = wx;
         _tokens = tokens;
@@ -126,7 +129,34 @@ public class AccountService
             // 同一手机号并发提交撞唯一索引
             throw BizException.Conflict("该手机号已提交注册，正在等待审批");
         }
+        await NotifyApprovers(reg);
         return new RegisterResult { Status = RegistrationStatus.Pending, Message = SubmittedText };
+    }
+
+    /// <summary>v1.8 有新的注册申请：提醒开了「注册审批权限」的人（只有管理员权限、没单独开的人不提醒）</summary>
+    private async Task NotifyApprovers(Registration reg)
+    {
+        try
+        {
+            if (_subscribe.RegisterTemplateIds.Count == 0) return;
+            var to = await _db.Employees.AsNoTracking().Where(e => e.Enabled && e.CanApprove && e.OpenId != null).ToListAsync();
+            if (to.Count == 0) return;
+            await _subscribe.NotifyRegistrationAsync(to, new SubscribeSlots(
+                Title: "新的注册申请", OrderNo: reg.Phone, Customer: reg.Name,
+                Content: $"{reg.Name} 申请注册账号，请审批", Time: reg.SubmittedAt, Operator: reg.Name, Status: "待审批", Device: ""));
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning("注册申请提醒发送失败（不影响注册）：{Message}", ex.Message);
+        }
+    }
+
+    /// <summary>v1.8 当前用户要申请订阅的「注册申请提醒」模板（没有注册审批权限的人为空）</summary>
+    public async Task<IReadOnlyList<string>> RegisterTemplateIdsFor(CurrentUser user)
+    {
+        var ids = _subscribe.RegisterTemplateIds;
+        if (ids.Count == 0) return ids;
+        return await _db.Employees.AnyAsync(e => e.Id == user.Id && e.CanApprove) ? ids : Array.Empty<string>();
     }
 
     // ---------- 小程序账号密码登录 ----------
@@ -235,8 +265,11 @@ public class AccountService
     }
 
     /// <summary>通过：必须选角色；可顺手改姓名、填部门。生成 Employee，密码沿用注册时填的</summary>
-    public async Task<RegistrationDto> Approve(int id, RegistrationApproveRequest req, CurrentUser user)
+    public async Task<RegistrationDto> Approve(int id, RegistrationApproveRequest req, CurrentUser user, bool allowAdmin = true)
     {
+        // v1.8 小程序里审批：不能给管理员岗位 / 管理员权限，那要去电脑后台
+        if (!allowAdmin && (req.Position == Position.Admin || req.IsAdmin == true))
+            throw BizException.BadRequest("管理员权限请到电脑后台设置");
         var position = AdminService.ResolvePosition(req.Position, req.Role);
         var name = string.IsNullOrWhiteSpace(req.Name) ? null : req.Name.Trim();
         if (name != null && name.Length > 20) throw BizException.BadRequest("姓名不能超过 20 个字");

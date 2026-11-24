@@ -96,6 +96,7 @@ Component(subscribe.bindTaps({
     grid: GRID,
     todos: [],
     pendingRegistrations: 0,
+    canApprove: false,
     sheetShow: false,
     sheetOrder: null
   },
@@ -105,6 +106,10 @@ Component(subscribe.bindTaps({
   },
 
   methods: {
+    toApprovals() {
+      if (this.data.canApprove) wx.navigateTo({ url: '/pages/approvals/index' });
+    },
+
     /** keepAssigned：指派成功后刷新时保留「已指派」行 */
     refresh(keepAssigned) {
       if (!keepAssigned) this._assigned = {};
@@ -145,6 +150,7 @@ Component(subscribe.bindTaps({
       this.setData({
         status: 'ok',
         pendingRegistrations: Number(d.pendingRegistrations) || 0,
+        canApprove: !!(d.user && d.user.canApprove),
         greeting: greetingOf(now) + '，' + ((d.user && d.user.name) || ''),
         onSiteCount: d.onSiteCount || 0,
         todoCount: todos.filter((t) => !t.assigned).length,

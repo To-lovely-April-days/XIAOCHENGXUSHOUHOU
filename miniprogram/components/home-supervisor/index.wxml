@@ -12,13 +12,14 @@
 </view>
 
 <view wx:else class="main">
-  <!-- v1.5 待审批的注册申请（审批在电脑后台做） -->
-  <view wx:if="{{pendingRegistrations > 0}}" class="reg-banner" aria-role="status">
+  <!-- v1.5 待审批的注册申请；v1.8 能审批的人点进去直接审批 -->
+  <view wx:if="{{pendingRegistrations > 0}}" class="reg-banner" hover-class="row-hover" bindtap="toApprovals" aria-role="button">
     <view class="reg-dot"></view>
     <view class="reg-body">
       <view class="reg-title">有 <text class="greet-num">{{pendingRegistrations}}</text> 个账号待审批</view>
-      <view class="reg-sub">请到电脑后台「账号管理」里通过或驳回</view>
+      <view class="reg-sub">{{canApprove ? '点这里审批' : '请到电脑后台「账号管理」里通过或驳回'}}</view>
     </view>
+    <ui-icon wx:if="{{canApprove}}" name="right" color="#AEAEB2" size="18" stroke="2" />
   </view>
 
   <!-- 今日现场时间轴 -->

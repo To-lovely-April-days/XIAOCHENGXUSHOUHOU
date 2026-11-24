@@ -50,6 +50,7 @@ const AccountsEditModal = {
         role: e ? (e.position || e.role) : 'Engineer',
         department: e ? (e.department || '') : '售后部门',
         isAdmin: e ? !!e.isAdmin : false,
+        canApprove: e ? !!e.canApprove : false,
         enabled: e ? e.enabled !== false : true,
         password: '',
       },
@@ -96,7 +97,7 @@ const AccountsEditModal = {
     async submit() {
       if (this.saving || !this.validate()) return;
       const f = this.form;
-      const body = { name: f.name.trim(), phone: f.phone.trim(), position: f.role, department: f.department, isAdmin: this.adminOn };
+      const body = { name: f.name.trim(), phone: f.phone.trim(), position: f.role, department: f.department, isAdmin: this.adminOn, canApprove: !!f.canApprove };
       this.saving = true;
       this.serverError = '';
       try {
@@ -157,6 +158,16 @@ const AccountsEditModal = {
             <span class="switch" :class="{ on: adminOn }"></span>{{ adminOn ? '已开启' : '未开启' }}
           </button>
           <span class="field-hint">{{ form.role === 'Admin' ? '管理员岗位自带管理员权限' : (isSelf ? '不能取消自己的管理员权限' : '开启后可登录电脑后台、管理账号、审批注册，并拥有售后主管的全部操作权限') }}</span>
+        </div>
+      </div>
+      <div class="field span-2">
+        <span class="field-label">注册审批权限</span>
+        <div class="accounts-enable-row">
+          <button type="button" class="btn btn-secondary switch-btn" role="switch" :aria-checked="form.canApprove ? 'true' : 'false'"
+            @click="form.canApprove = !form.canApprove; serverError = ''">
+            <span class="switch" :class="{ on: form.canApprove }"></span>{{ form.canApprove ? '已开启' : '未开启' }}
+          </button>
+          <span class="field-hint">开启后可在小程序里审批注册申请，并在有新申请时收到微信提醒。管理员不开也能审批，只是不收提醒</span>
         </div>
       </div>
       <div v-if="isEdit" class="field span-2">
@@ -498,7 +509,7 @@ export default {
       this.busyId = e.id;
       try {
         const dto = await api.admin.updateEmployee(e.id, {
-          name: e.name, phone: e.phone, position: e.position || e.role, isAdmin: !!e.isAdmin, department: e.department || '', enabled: enable,
+          name: e.name, phone: e.phone, position: e.position || e.role, isAdmin: !!e.isAdmin, canApprove: !!e.canApprove, department: e.department || '', enabled: enable,
         });
         if (dto && dto.id != null) this.upsert(dto);
         else e.enabled = enable;
@@ -605,7 +616,7 @@ export default {
                 </div>
               </td>
               <td class="accounts-phone">{{ e.phone }}</td>
-              <td>{{ roleLabel(e) }}<Tag v-if="e.isAdmin && e.position !== 'Admin'" tone="neutral" class="accounts-admin-tag">管理员</Tag></td>
+              <td>{{ roleLabel(e) }}<Tag v-if="e.isAdmin && e.position !== 'Admin'" tone="neutral" class="accounts-admin-tag">管理员</Tag><Tag v-if="e.canApprove" tone="success" class="accounts-admin-tag">审批</Tag></td>
               <td><span class="ellipsis accounts-dept" :class="{ 'text-faint': !e.department }">{{ e.department || '—' }}</span></td>
               <td>
                 <Tag v-if="e.bound" tone="success">已绑定</Tag>

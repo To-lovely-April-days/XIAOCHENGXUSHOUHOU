@@ -129,7 +129,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
             if (!int.TryParse(idText, out var uid)) { ctx.Fail("account invalid"); return; }
             var db = ctx.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
             var emp = await db.Employees.AsNoTracking().Where(e => e.Id == uid)
-                .Select(e => new { e.Enabled, e.Role, e.TokenVersion, e.IsAdmin, e.Position }).FirstOrDefaultAsync();
+                .Select(e => new { e.Enabled, e.Role, e.TokenVersion, e.IsAdmin, e.Position, e.CanApprove }).FirstOrDefaultAsync();
             if (emp == null || !emp.Enabled || emp.Role.ToString() != roleText || emp.TokenVersion.ToString() != tvText)
             {
                 ctx.Fail("account invalid");
@@ -138,17 +138,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
             // v1.7：管理员权限 / 销售主管以数据库为准（升级前签发的旧令牌里没有这两个声明，也不必重新登录）
             if (p?.Identity is System.Security.Claims.ClaimsIdentity identity)
             {
-                foreach (var c in identity.FindAll(x => x.Type is ClaimsExtensions.AdminClaim or ClaimsExtensions.SalesManagerClaim).ToList())
+                foreach (var c in identity.FindAll(x => x.Type is ClaimsExtensions.AdminClaim or ClaimsExtensions.SalesManagerClaim or ClaimsExtensions.ApproverClaim).ToList())
                     identity.RemoveClaim(c);
                 var salesManager = emp.Role == Role.Sales && emp.Position == Position.SalesManager;
                 identity.AddClaim(new System.Security.Claims.Claim(ClaimsExtensions.AdminClaim, emp.IsAdmin ? "1" : "0"));
                 identity.AddClaim(new System.Security.Claims.Claim(ClaimsExtensions.SalesManagerClaim, salesManager ? "1" : "0"));
+                identity.AddClaim(new System.Security.Claims.Claim(ClaimsExtensions.ApproverClaim, emp.IsAdmin || emp.CanApprove ? "1" : "0"));
             }
         }
     };
 });
 builder.Services.AddAuthorization(o =>
-    o.AddPolicy(ClaimsExtensions.AdminPolicy, p => p.RequireClaim(ClaimsExtensions.AdminClaim, "1")));
+{
+    o.AddPolicy(ClaimsExtensions.AdminPolicy, p => p.RequireClaim(ClaimsExtensions.AdminClaim, "1"));
+    o.AddPolicy(ClaimsExtensions.ApproverPolicy, p => p.RequireClaim(ClaimsExtensions.ApproverClaim, "1"));
+});
 
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
 {

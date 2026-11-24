@@ -38,6 +38,8 @@ Page({
     uploading: false,
     subShow: false, // 「工单提醒」一行：后端启用订阅消息时才显示
     subText: '',    // 已开启 / 未开启 / 已关闭
+    canApprove: false,        // v1.8 能否审批注册（管理员或有注册审批权限）
+    pendingRegistrations: 0,
     version: '1.0.0'
   },
 
@@ -75,7 +77,8 @@ Page({
       user: u,
       roleName: u.roleName || enums.label(enums.ROLE, u.role),
       subline: [u.department, phone].filter(Boolean).join(' · '),
-      isEngineer: u.role === 'Engineer'
+      isEngineer: u.role === 'Engineer',
+      canApprove: !!u.canApprove
     });
   },
 
@@ -88,7 +91,7 @@ Page({
         this.applyUser(data.user);
       }
       this.applyStats(data || {});
-      this.setData({ loaded: true, error: '' });
+      this.setData({ loaded: true, error: '', pendingRegistrations: Number(data && data.pendingRegistrations) || 0 });
     }).catch((err) => {
       this.setData({ error: (err && err.message) || '加载失败' });
       if (!this.data.loaded) this.applyStats({});
@@ -181,6 +184,10 @@ Page({
       return;
     }
     this.load();
+  },
+
+  goApprovals() {
+    wx.navigateTo({ url: '/pages/approvals/index' });
   },
 
   goPassword() {

@@ -29,6 +29,8 @@ public class HomeService
     {
         var me = await _view.LoadEmployee(user.Id);
         var dto = new MeDto { User = _view.User(me) };
+        if (me.IsAdmin || me.CanApprove)
+            dto.PendingRegistrations = await _db.Registrations.CountAsync(r => r.Status == RegistrationStatus.Pending);
         switch (me.Role)
         {
             case Role.Engineer:

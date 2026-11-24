@@ -40,7 +40,7 @@ public class OrderViewBuilder
     {
         Id = e.Id, Name = e.Name, Surname = e.Surname, Role = e.Role,
         AvatarUrl = e.AvatarFile == null ? null : _files.Url(e.AvatarFile),
-        RoleName = Positions.Name(e.DisplayPosition), Position = e.DisplayPosition, IsAdmin = e.IsAdmin, Department = e.Department,
+        RoleName = Positions.Name(e.DisplayPosition), Position = e.DisplayPosition, IsAdmin = e.IsAdmin, CanApprove = e.IsAdmin || e.CanApprove, Department = e.Department,
         PhoneMasked = MaskPhone(e.Phone), Phone = self ? e.Phone : null
     };
 

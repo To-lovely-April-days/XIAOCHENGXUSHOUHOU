@@ -50,6 +50,15 @@
     </view>
   </view>
 
+  <view wx:if="{{canApprove}}" class="menu card">
+    <view class="menu-item" hover-class="menu-hover" bindtap="goApprovals">
+      <text class="menu-text">注册审批</text>
+      <text wx:if="{{pendingRegistrations > 0}}" class="menu-badge">{{pendingRegistrations}}</text>
+      <text wx:else class="menu-extra">暂无待审批</text>
+      <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+    </view>
+  </view>
+
   <view class="menu card">
     <view class="menu-item" hover-class="menu-hover" bindtap="goPassword">
       <text class="menu-text">修改密码</text>

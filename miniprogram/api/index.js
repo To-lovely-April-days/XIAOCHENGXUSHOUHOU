@@ -625,7 +625,32 @@ const admin = {
   }
 };
 
+/* ---------------- 注册审批（v1.8，小程序端） ---------------- */
+const registrations = {
+  /**
+   * GET /api/registrations 管理员或有「注册审批权限」的人可用（user.canApprove）
+   * @returns {Promise<{pendingCount:number,items:{id:number,name:string,phone:string,status:'Pending'|'Approved'|'Rejected',
+   *   statusText:string,rejectReason:?string,submittedAt:string,reviewedAt:?string,reviewedByName:?string}[]}>}
+   */
+  list(opts) {
+    return get('/api/registrations', null, opts);
+  },
+  /**
+   * POST /api/registrations/{id}/approve
+   * @param {{name?:string,position:'Engineer'|'Sales'|'SalesManager'|'Supervisor',department:string}} body
+   *   这里不能传管理员岗位 / isAdmin（40000「管理员权限请到电脑后台设置」）
+   */
+  approve(id, body, opts) {
+    return post('/api/registrations/' + id + '/approve', body, opts);
+  },
+  /** POST /api/registrations/{id}/reject */
+  reject(id, reason, opts) {
+    return post('/api/registrations/' + id + '/reject', { reason: reason }, opts);
+  }
+};
+
 module.exports = {
+  registrations,
   auth,
   me,
   files,

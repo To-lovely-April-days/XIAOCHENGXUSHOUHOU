@@ -17,6 +17,8 @@ public class UserDto : UserBrief
     /// <summary>v1.7 岗位；role 仍是权限角色（Engineer / Sales / Supervisor）</summary>
     public Position Position { get; set; }
     public bool IsAdmin { get; set; }
+    /// <summary>v1.8 能否在小程序里审批注册（管理员或有注册审批权限）</summary>
+    public bool CanApprove { get; set; }
     public string Department { get; set; } = "";
     public string PhoneMasked { get; set; } = "";
     public string? Phone { get; set; }

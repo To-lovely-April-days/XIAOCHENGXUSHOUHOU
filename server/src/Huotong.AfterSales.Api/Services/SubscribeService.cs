@@ -26,6 +26,12 @@ public interface ISubscribeNotifier
     /// 收件人过滤：启用状态、已绑定微信（OpenId 非空）、不是操作人本人；同一个人在一次调用里只收第一条。
     /// </summary>
     Task NotifyAsync(int actorId, IReadOnlyList<SubscribeNotice> notices);
+
+    /// <summary>v1.8 注册申请提醒要申请的模板 ID；未配置时为空</summary>
+    IReadOnlyList<string> RegisterTemplateIds => Array.Empty<string>();
+
+    /// <summary>v1.8 有新的注册申请：提醒有注册审批权限的人。同样吞掉异常、自带超时；未配置模板时什么都不做</summary>
+    Task NotifyRegistrationAsync(IReadOnlyList<Employee> to, SubscribeSlots slots) => Task.CompletedTask;
 }
 
 /// <summary>不发送任何提醒（测试里不关心订阅消息时用）</summary>
@@ -92,12 +98,24 @@ public class SubscribeService : ISubscribeNotifier
         lock (_mockSent) _mockSent.Clear();
     }
 
-    public async Task NotifyAsync(int actorId, IReadOnlyList<SubscribeNotice> notices)
+    public IReadOnlyList<string> RegisterTemplateIds =>
+        _opt.Subscribe.Register.Enabled ? new[] { _opt.Subscribe.Register.TemplateId.Trim() } : Array.Empty<string>();
+
+    public Task NotifyAsync(int actorId, IReadOnlyList<SubscribeNotice> notices) =>
+        Enabled ? Deliver(() => Compose(actorId, notices)) : Task.CompletedTask;
+
+    public Task NotifyRegistrationAsync(IReadOnlyList<Employee> to, SubscribeSlots slots)
     {
-        if (!Enabled) return;
+        var cfg = _opt.Subscribe.Register;
+        if (!cfg.Enabled) return Task.CompletedTask;
+        return Deliver(() => Compose(0, new[] { new SubscribeNotice(0, to, slots) }, cfg.TemplateId.Trim(), cfg.Fields, cfg.Page));
+    }
+
+    private async Task Deliver(Func<List<Outgoing>> compose)
+    {
         try
         {
-            var outgoing = Compose(actorId, notices);
+            var outgoing = compose();
             if (outgoing.Count == 0) return;
 
             if (_opt.MockMode)
@@ -135,10 +153,13 @@ public class SubscribeService : ISubscribeNotifier
     }
 
     /// <summary>过滤收件人并生成每个人的消息；同一个人（同一 OpenId）在一次调用里只收第一条</summary>
-    private List<Outgoing> Compose(int actorId, IReadOnlyList<SubscribeNotice> notices)
+    private List<Outgoing> Compose(int actorId, IReadOnlyList<SubscribeNotice> notices) =>
+        Compose(actorId, notices, _opt.Subscribe.TemplateId.Trim(), _opt.Subscribe.Fields, _opt.Subscribe.Page);
+
+    private List<Outgoing> Compose(int actorId, IReadOnlyList<SubscribeNotice> notices, string templateId,
+        IEnumerable<KeyValuePair<string, string>> fields, string? pageTemplate)
     {
         var cfg = _opt.Subscribe;
-        var templateId = cfg.TemplateId.Trim();
         var state = string.IsNullOrWhiteSpace(cfg.MiniProgramState) ? "trial" : cfg.MiniProgramState.Trim();
         var seen = new HashSet<string>();
         var list = new List<Outgoing>();
@@ -149,8 +170,8 @@ public class SubscribeService : ISubscribeNotifier
             {
                 if (e == null || !e.Enabled || e.Id == actorId || string.IsNullOrWhiteSpace(e.OpenId)) continue;
                 if (!seen.Add(e.OpenId)) continue;
-                data ??= SubscribeFields.Build(cfg.Fields, n.Slots);
-                var page = (cfg.Page ?? "").Trim().Replace("{id}", n.OrderId.ToString());
+                data ??= SubscribeFields.Build(fields, n.Slots);
+                var page = (pageTemplate ?? "").Trim().Replace("{id}", n.OrderId.ToString());
                 list.Add(new Outgoing(new SubscribeMessage(e.OpenId, templateId, page, state, "zh_CN", data), e.Name, n.Slots.Title));
             }
         }

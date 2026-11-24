@@ -1,0 +1,107 @@
+<view class="ap-page">
+  <view wx:if="{{status === 'loading'}}" class="ap-state">加载中…</view>
+
+  <view wx:elif="{{status === 'denied'}}" class="ap-state">
+    <view class="ap-state-title">没有注册审批权限</view>
+    <view class="ap-state-desc">需要管理员在电脑后台「账号管理」里为你开启「注册审批权限」。</view>
+  </view>
+
+  <view wx:elif="{{status === 'error'}}" class="ap-state">
+    <view class="ap-state-title">加载失败</view>
+    <view class="ap-state-desc">{{errorText}}</view>
+    <view class="ap-btn ap-btn-plain ap-retry" hover-class="btn-hover" bindtap="onRetry" aria-role="button">重试</view>
+  </view>
+
+  <block wx:else>
+    <!-- 新申请提醒开关 -->
+    <view wx:if="{{subShow}}" class="ap-sub" hover-class="row-hover" bindtap="onSubscribe" aria-role="button">
+      <view class="ap-sub-body">
+        <view class="ap-sub-title">新申请提醒</view>
+        <view class="ap-sub-desc">开启后，有人提交注册时微信会提醒你。弹窗里请勾选「总是保持以上选择」。</view>
+      </view>
+      <text class="ap-sub-state">{{subText}}</text>
+      <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+    </view>
+
+    <view class="ap-head">
+      <text class="ap-title">待审批</text>
+      <text class="ap-count">{{pending.length}}</text>
+    </view>
+
+    <view wx:if="{{!pending.length}}" class="ap-empty">没有待审批的注册申请</view>
+    <view wx:for="{{pending}}" wx:key="id" class="ap-card">
+      <view class="ap-row">
+        <text class="ap-name ellipsis">{{item.name}}</text>
+        <text class="ap-time">{{item.timeText}}</text>
+      </view>
+      <view class="ap-phone num-font">{{item.phone}}</view>
+      <view class="ap-actions">
+        <view class="ap-btn ap-btn-plain" hover-class="btn-hover" data-index="{{index}}" bindtap="onReject" aria-role="button">驳回</view>
+        <view class="ap-btn ap-btn-main" hover-class="btn-hover" data-index="{{index}}" bindtap="onApprove" aria-role="button">通过</view>
+      </view>
+    </view>
+
+    <view wx:if="{{handled.length}}" class="ap-toggle" hover-class="btn-hover" bindtap="toggleHandled" aria-role="button">
+      {{showHandled ? '收起已处理' : '查看已处理（' + handled.length + '）'}}
+    </view>
+    <block wx:if="{{showHandled}}">
+      <view wx:for="{{handled}}" wx:key="id" class="ap-card ap-card-done">
+        <view class="ap-row">
+          <text class="ap-name ellipsis">{{item.name}}</text>
+          <text class="ap-tag {{item.status === 'Approved' ? 'is-ok' : ''}}">{{item.statusText}}</text>
+        </view>
+        <view class="ap-phone num-font">{{item.phone}}</view>
+        <view wx:if="{{item.rejectReason}}" class="ap-done">驳回原因：{{item.rejectReason}}</view>
+        <view wx:if="{{item.doneText}}" class="ap-done">{{item.doneText}}</view>
+      </view>
+    </block>
+
+    <view class="ap-note">在这里可以把人设为售后工程师、销售、销售主管或售后主管。管理员权限请到电脑后台设置。</view>
+  </block>
+
+  <!-- 通过 / 驳回 底部面板 -->
+  <view wx:if="{{sheet}}" class="ap-mask" bindtap="closeSheet" catchtouchmove="noop">
+    <view class="ap-sheet" catchtap="noop">
+      <view class="ap-sheet-title">{{sheet === 'approve' ? '通过注册申请' : '驳回注册申请'}}</view>
+      <view class="ap-sheet-sub num-font">{{target.name}} · {{target.phone}}</view>
+
+      <block wx:if="{{sheet === 'approve'}}">
+        <view class="ap-field">
+          <text class="ap-label">姓名</text>
+          <input class="ap-input" maxlength="20" value="{{name}}" bindinput="onName" placeholder="员工真实姓名" placeholder-class="ap-ph" />
+        </view>
+        <picker mode="selector" range="{{positions}}" value="{{positionIndex < 0 ? 0 : positionIndex}}" bindchange="onPosition">
+          <view class="ap-field">
+            <text class="ap-label">岗位</text>
+            <text class="ap-value {{positionIndex < 0 ? 'ap-ph' : ''}}">{{positionIndex < 0 ? '请选择' : positions[positionIndex]}}</text>
+            <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+          </view>
+        </picker>
+        <picker mode="selector" range="{{departments}}" value="{{departmentIndex < 0 ? 0 : departmentIndex}}" bindchange="onDepartment">
+          <view class="ap-field">
+            <text class="ap-label">部门</text>
+            <text class="ap-value {{departmentIndex < 0 ? 'ap-ph' : ''}}">{{departmentIndex < 0 ? '请选择' : departments[departmentIndex]}}</text>
+            <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+          </view>
+        </picker>
+        <view class="ap-hint">通过后对方即可用注册时填的密码登录。请确认是本公司员工。</view>
+      </block>
+
+      <block wx:else>
+        <view class="ap-field ap-field-col">
+          <text class="ap-label">驳回原因</text>
+          <textarea class="ap-textarea" maxlength="100" value="{{reason}}" bindinput="onReason" placeholder="如：请填写真实姓名" placeholder-class="ap-ph" auto-height />
+        </view>
+        <view class="ap-hint">对方登录时会看到这个原因，可以修改后重新提交。</view>
+      </block>
+
+      <view wx:if="{{sheetError}}" class="ap-error" aria-role="alert">{{sheetError}}</view>
+
+      <view class="ap-sheet-actions">
+        <view class="ap-btn ap-btn-plain" hover-class="btn-hover" bindtap="closeSheet" aria-role="button">取消</view>
+        <view wx:if="{{sheet === 'approve'}}" class="ap-btn ap-btn-main {{busy ? 'is-busy' : ''}}" hover-class="btn-hover" bindtap="submitApprove" aria-role="button">{{busy ? '处理中…' : '通过'}}</view>
+        <view wx:else class="ap-btn ap-btn-danger {{busy ? 'is-busy' : ''}}" hover-class="btn-hover" bindtap="submitReject" aria-role="button">{{busy ? '处理中…' : '驳回'}}</view>
+      </view>
+    </view>
+  </view>
+</view>

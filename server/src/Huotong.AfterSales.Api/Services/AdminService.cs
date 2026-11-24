@@ -245,7 +245,7 @@ public class AdminService
 
     public EmployeeDto ToDto(Employee e) => new()
     {
-        Id = e.Id, Name = e.Name, Phone = e.Phone, Role = e.Role, RoleName = Positions.Name(e.DisplayPosition), Position = e.DisplayPosition, IsAdmin = e.IsAdmin, Department = e.Department,
+        Id = e.Id, Name = e.Name, Phone = e.Phone, Role = e.Role, RoleName = Positions.Name(e.DisplayPosition), Position = e.DisplayPosition, IsAdmin = e.IsAdmin, CanApprove = e.CanApprove, Department = e.Department,
         Enabled = e.Enabled, Bound = !string.IsNullOrEmpty(e.OpenId), AvatarUrl = e.AvatarFile == null ? null : _files.Url(e.AvatarFile),
         HasPassword = !string.IsNullOrEmpty(e.PasswordHash)
     };
@@ -288,7 +288,7 @@ public class AdminService
         var e = new Employee
         {
             Name = v.Name, Phone = v.Phone, Position = v.Position, Role = Positions.ToRole(v.Position),
-            IsAdmin = v.Position == Position.Admin || r.IsAdmin == true,
+            IsAdmin = v.Position == Position.Admin || r.IsAdmin == true, CanApprove = r.CanApprove == true,
             Department = v.Dept, Enabled = true, CreatedAt = _clock.Now
         };
         if (!string.IsNullOrEmpty(r.Password)) e.PasswordHash = PasswordPolicy.Hash(e, r.Password);
@@ -319,6 +319,7 @@ public class AdminService
         e.Role = role;
         e.Position = v.Position;
         e.IsAdmin = isAdmin;
+        if (r.CanApprove != null) e.CanApprove = r.CanApprove.Value; // 没传（旧客户端）保持原样
         e.Department = v.Dept;
         if (r.Enabled != null) e.Enabled = r.Enabled.Value;
         if (wasActiveEngineer && !(e.Enabled && e.Role == Role.Engineer))

@@ -97,15 +97,15 @@ public sealed class V14SubscribeEventTests : V13TestBase
     public void 配置接口_已启用返回模板_未启用返回空()
     {
         var me = new MeController(Home, null!, Subscribe);
-        Assert.Equal("{\"enabled\":true,\"templateIds\":[\"TPL-ORDER-REMIND\"]}", Json(me.Subscribe().Data!));
-        Assert.Equal(0, me.Subscribe().Code);
+        Assert.Equal("{\"enabled\":true,\"templateIds\":[\"TPL-ORDER-REMIND\"]}", Json(me.Subscribe().GetAwaiter().GetResult().Data!));
+        Assert.Equal(0, me.Subscribe().GetAwaiter().GetResult().Code);
 
         WxOptions.Subscribe.TemplateId = "";
-        Assert.Equal("{\"enabled\":false,\"templateIds\":[]}", Json(me.Subscribe().Data!));
+        Assert.Equal("{\"enabled\":false,\"templateIds\":[]}", Json(me.Subscribe().GetAwaiter().GetResult().Data!));
 
         WxOptions.Subscribe.TemplateId = Tpl;
         WxOptions.Subscribe.Fields = new();
-        Assert.Equal("{\"enabled\":false,\"templateIds\":[]}", Json(me.Subscribe().Data!));
+        Assert.Equal("{\"enabled\":false,\"templateIds\":[]}", Json(me.Subscribe().GetAwaiter().GetResult().Data!));
     }
 
     // ---------- 给主管 ----------

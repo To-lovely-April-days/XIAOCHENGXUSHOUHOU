@@ -26,6 +26,9 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                     b.Property<int?>("AvatarFileId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("CanApprove")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 

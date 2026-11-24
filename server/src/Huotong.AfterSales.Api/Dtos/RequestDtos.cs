@@ -155,6 +155,8 @@ public class EmployeeCreateRequest
     public Position? Position { get; set; }
     /// <summary>v1.7 管理员权限（管理员岗位恒为 true）</summary>
     public bool? IsAdmin { get; set; }
+    /// <summary>v1.8 注册审批权限</summary>
+    public bool? CanApprove { get; set; }
     public string? Department { get; set; }
     /// <summary>v1.5 新增账号时可顺带设初始密码（可空）；编辑时忽略</summary>
     public string? Password { get; set; }

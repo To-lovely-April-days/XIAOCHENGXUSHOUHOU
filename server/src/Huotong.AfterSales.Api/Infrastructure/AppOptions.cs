@@ -42,6 +42,31 @@ public class SubscribeOptions
 
     /// <summary>已启用 = 模板 ID 非空 且 至少映射了一个字段</summary>
     public bool Enabled => !string.IsNullOrWhiteSpace(TemplateId) && Fields.Count > 0;
+
+    /// <summary>v1.8 「有新的注册申请」提醒（发给有注册审批权限的人）；单独一个模板，没配就不发</summary>
+    public RegisterSubscribeOptions Register
+    {
+        get => _register;
+        set => _register = value ?? new();
+    }
+    private RegisterSubscribeOptions _register = new();
+}
+
+/// <summary>
+/// v1.8 注册申请提醒的模板配置。Fields 的槽名沿用 SubscribeSlot：
+/// Title = 「新的注册申请」，Customer / Operator = 申请人姓名，OrderNo = 申请人手机号，Content = 一句话说明，Status = 「待审批」，Time = 提交时间。
+/// </summary>
+public class RegisterSubscribeOptions
+{
+    public string TemplateId { get; set; } = "";
+    public string Page { get; set; } = "pages/approvals/index";
+    public Dictionary<string, string> Fields
+    {
+        get => _fields;
+        set => _fields = value ?? new();
+    }
+    private Dictionary<string, string> _fields = new();
+    public bool Enabled => !string.IsNullOrWhiteSpace(TemplateId) && Fields.Count > 0;
 }
 
 public class DingTalkOptions

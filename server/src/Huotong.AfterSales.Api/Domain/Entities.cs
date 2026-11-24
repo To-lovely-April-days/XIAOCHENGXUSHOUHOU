@@ -12,6 +12,8 @@ public class Employee
     public Position Position { get; set; }
     /// <summary>v1.7 管理员权限：能登录电脑后台、管理账号、审批注册。管理员岗位恒为 true</summary>
     public bool IsAdmin { get; set; }
+    /// <summary>v1.8 注册审批权限：能在小程序里审批注册申请，并在有新申请时收到微信提醒。管理员不勾也能审批，但不收提醒</summary>
+    public bool CanApprove { get; set; }
     public string Department { get; set; } = "";
     public bool Enabled { get; set; } = true;
     public string? OpenId { get; set; }

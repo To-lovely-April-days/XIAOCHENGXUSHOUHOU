@@ -1,0 +1,54 @@
+/* pages/approvals 注册审批（v1.8） */
+page { background: #F6F6F4; }
+.ap-page { padding: 24rpx 32rpx calc(48rpx + env(safe-area-inset-bottom)); }
+.ap-state { padding: 160rpx 40rpx 0; text-align: center; font-size: 28rpx; color: #6E6E73; }
+.ap-state-title { font-size: 34rpx; font-weight: 600; color: #1D1D1F; }
+.ap-state-desc { margin-top: 12rpx; font-size: 26rpx; line-height: 42rpx; color: #6E6E73; }
+.ap-retry { margin: 36rpx auto 0; width: 240rpx; }
+
+.ap-sub { display: flex; align-items: center; gap: 16rpx; padding: 24rpx 28rpx; border-radius: 28rpx; background: #FFF7E8; border: 2rpx solid rgba(196, 126, 10, 0.18); }
+.ap-sub-body { flex: 1; min-width: 0; }
+.ap-sub-title { font-size: 28rpx; font-weight: 600; color: #1D1D1F; }
+.ap-sub-desc { margin-top: 4rpx; font-size: 24rpx; line-height: 36rpx; color: #6E6E73; }
+.ap-sub-state { flex-shrink: 0; font-size: 26rpx; color: #6E6E73; }
+
+.ap-head { display: flex; align-items: center; gap: 12rpx; margin: 32rpx 8rpx 16rpx; }
+.ap-title { font-size: 32rpx; font-weight: 700; color: #1D1D1F; }
+.ap-count { min-width: 40rpx; height: 40rpx; padding: 0 12rpx; border-radius: 20rpx; background: #C81E2B; color: #FFFFFF; font-size: 24rpx; font-weight: 600; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.ap-empty { padding: 56rpx 0; text-align: center; font-size: 28rpx; color: #8E8E93; background: #FFFFFF; border-radius: 32rpx; }
+
+.ap-card { margin-bottom: 20rpx; padding: 28rpx 32rpx; border-radius: 32rpx; background: #FFFFFF; box-shadow: var(--shadow); }
+.ap-card-done { box-shadow: none; }
+.ap-row { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
+.ap-name { flex: 1; min-width: 0; font-size: 34rpx; font-weight: 600; color: #1D1D1F; }
+.ap-time { flex-shrink: 0; font-size: 24rpx; color: #8E8E93; }
+.ap-phone { margin-top: 6rpx; font-size: 28rpx; color: #6E6E73; }
+.ap-actions { margin-top: 24rpx; display: flex; gap: 20rpx; }
+.ap-tag { flex-shrink: 0; font-size: 24rpx; font-weight: 600; padding: 4rpx 16rpx; border-radius: 999rpx; background: #F0F0EE; color: #6E6E73; }
+.ap-tag.is-ok { background: #E8F3EC; color: #2F7A4B; }
+.ap-done { margin-top: 8rpx; font-size: 24rpx; line-height: 36rpx; color: #8E8E93; }
+
+.ap-btn { flex: 1; height: 88rpx; border-radius: 22rpx; display: flex; align-items: center; justify-content: center; font-size: 30rpx; font-weight: 600; }
+.ap-btn-main { background: #C81E2B; color: #FFFFFF; }
+.ap-btn-danger { background: #C81E2B; color: #FFFFFF; }
+.ap-btn-plain { background: #F0F0EE; color: #1D1D1F; }
+.ap-btn.is-busy { background: #8E8E93; }
+
+.ap-toggle { margin: 12rpx 0 20rpx; padding: 16rpx 0; text-align: center; font-size: 26rpx; color: #6E6E73; }
+.ap-note { margin-top: 24rpx; padding: 0 8rpx; font-size: 24rpx; line-height: 38rpx; color: #8E8E93; }
+
+.ap-mask { position: fixed; left: 0; right: 0; top: 0; bottom: 0; z-index: 100; background: rgba(0, 0, 0, 0.45); display: flex; align-items: flex-end; }
+.ap-sheet { width: 100%; box-sizing: border-box; padding: 40rpx 32rpx calc(32rpx + env(safe-area-inset-bottom)); border-radius: 40rpx 40rpx 0 0; background: #FFFFFF; }
+.ap-sheet-title { font-size: 36rpx; font-weight: 700; color: #1D1D1F; }
+.ap-sheet-sub { margin-top: 6rpx; font-size: 26rpx; color: #6E6E73; }
+.ap-field { margin-top: 20rpx; min-height: 100rpx; padding: 0 28rpx; border-radius: 24rpx; border: 3rpx solid #DEDEDA; display: flex; align-items: center; gap: 16rpx; box-sizing: border-box; }
+.ap-field-col { flex-direction: column; align-items: stretch; gap: 8rpx; padding: 20rpx 28rpx; }
+.ap-label { width: 110rpx; flex-shrink: 0; font-size: 28rpx; color: #5E5E63; }
+.ap-field-col .ap-label { width: auto; }
+.ap-input { flex: 1; min-width: 0; height: 96rpx; font-size: 30rpx; color: #1D1D1F; }
+.ap-value { flex: 1; min-width: 0; font-size: 30rpx; color: #1D1D1F; }
+.ap-textarea { width: 100%; min-height: 120rpx; font-size: 30rpx; line-height: 44rpx; color: #1D1D1F; }
+.ap-ph { color: #8A8A8E; }
+.ap-hint { margin-top: 16rpx; font-size: 24rpx; line-height: 36rpx; color: #8E8E93; }
+.ap-error { margin-top: 20rpx; padding: 18rpx 24rpx; border-radius: 20rpx; background: #FBEDEE; font-size: 26rpx; line-height: 38rpx; color: #C81E2B; }
+.ap-sheet-actions { margin-top: 32rpx; display: flex; gap: 20rpx; }

@@ -17,6 +17,10 @@ public static class ClaimsExtensions
     public const string SalesManagerClaim = "sm";
     /// <summary>授权策略名：需要管理员权限</summary>
     public const string AdminPolicy = "Admin";
+    /// <summary>"1" = 能审批注册（管理员或有注册审批权限）</summary>
+    public const string ApproverClaim = "apr";
+    /// <summary>授权策略名：能审批注册</summary>
+    public const string ApproverPolicy = "Approver";
 
     public static CurrentUser ToCurrentUser(this ClaimsPrincipal p)
     {

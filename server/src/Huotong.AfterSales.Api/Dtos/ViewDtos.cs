@@ -8,6 +8,8 @@ public class MeDto
     public int MonthMinutes { get; set; }
     public int ActiveOrderCount { get; set; }
     public int MonthTripDays { get; set; }
+    /// <summary>v1.8 待审批的注册申请数；当前用户不能审批时为 null</summary>
+    public int? PendingRegistrations { get; set; }
 }
 
 public class RecentCustomerDto
@@ -213,6 +215,8 @@ public class EmployeeDto
     public string RoleName { get; set; } = "";
     public Position Position { get; set; }
     public bool IsAdmin { get; set; }
+    /// <summary>v1.8 注册审批权限这个开关本身（不含管理员自带的审批能力）</summary>
+    public bool CanApprove { get; set; }
     public string Department { get; set; } = "";
     public bool Enabled { get; set; }
     public bool Bound { get; set; }

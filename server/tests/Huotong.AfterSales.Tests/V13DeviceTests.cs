@@ -450,7 +450,7 @@ public sealed class V13DeviceTests : V13TestBase
         conn.Open();
         using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseSqlite(conn).Options);
         db.GetService<IMigrator>().Migrate("V12_Attachments");
-        Assert.Equal(new[] { "V13_DevicesTransfers", "V15_Registrations", "V17_PositionAdmin" }, db.Database.GetPendingMigrations().Select(m => m[(m.IndexOf('_') + 1)..]));
+        Assert.Equal(new[] { "V13_DevicesTransfers", "V15_Registrations", "V17_PositionAdmin", "V18_CanApprove" }, db.Database.GetPendingMigrations().Select(m => m[(m.IndexOf('_') + 1)..]));
 
         db.Database.ExecuteSqlRaw("""
             INSERT INTO Employees (Id, Name, Phone, Role, Department, Enabled, TokenVersion, CreatedAt)

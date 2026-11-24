@@ -26,8 +26,13 @@ public class MeController : ApiControllerBase
 
     /// <summary>v1.4：微信订阅消息配置（任何已登录角色）。未启用时 enabled=false、templateIds=[]</summary>
     [HttpGet("subscribe")]
-    public ApiResponse<SubscribeConfigDto> Subscribe() =>
-        Ok(new SubscribeConfigDto { Enabled = _subscribe.Enabled, TemplateIds = _subscribe.TemplateIds.ToList() });
+    public async Task<ApiResponse<SubscribeConfigDto>> Subscribe([FromServices] AccountService? accounts = null)
+    {
+        // v1.8 有注册审批权限的人，多申请一个「注册申请提醒」模板
+        IEnumerable<string> extra = accounts == null ? Array.Empty<string>() : await accounts.RegisterTemplateIdsFor(Me);
+        var ids = _subscribe.TemplateIds.Concat(extra).Distinct().ToList();
+        return Ok(new SubscribeConfigDto { Enabled = ids.Count > 0, TemplateIds = ids });
+    }
 
     [HttpPut("avatar")]
     public async Task<ApiResponse<UserDto>> Avatar([FromBody] AvatarRequest req) => Ok(await _home.SetAvatar(Me, req.FileId));
