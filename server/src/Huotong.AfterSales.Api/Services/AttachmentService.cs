@@ -49,14 +49,14 @@ public partial class OrderService
     private Task<int> AttachmentCount(int orderId) =>
         _db.Files.CountAsync(f => f.OrderId == orderId && (f.Category == FileCategory.OrderPhoto || f.Category == FileCategory.Attachment));
 
-    private static void Mount(List<StoredFile> files, List<(int FileId, bool Restricted, AttachmentType Type)> items, int orderId)
+    private static void Mount(List<StoredFile> files, List<(int FileId, bool Restricted, AttachmentType Type)> items, int orderId, ServiceType service)
     {
         for (var i = 0; i < files.Count; i++)
         {
             files[i].OrderId = orderId;
             files[i].Category = FileCategory.Attachment;
             files[i].Restricted = items[i].Restricted;
-            files[i].AttachmentType = items[i].Type;
+            files[i].AttachmentType = AttachmentRules.Resolve(items[i].Type, service);
         }
     }
 
@@ -90,7 +90,7 @@ public partial class OrderService
                 ? $"附件最多 {AttachmentRules.Limit} 个，本单已达上限"
                 : $"附件最多 {AttachmentRules.Limit} 个，本单还可添加 {left} 个");
 
-        Mount(files, items, id);
+        Mount(files, items, id, o.ServiceType);
         var me = await _view.LoadEmployee(user.Id);
         var now = _clock.Now;
         var open = files.Where(f => !f.Restricted).ToList();
@@ -177,6 +177,7 @@ public partial class OrderService
         var f = await LoadAttachment(id, fileId, user);
         var denied = AttachmentRules.ChangeTypeDenied(f, o, user);
         if (denied != null) throw denied;
+        type = AttachmentRules.Resolve(type, o.ServiceType);
         if (f.AttachmentType == type) return await _view.BuildDetail(id, user);
 
         var me = await _view.LoadEmployee(user.Id);

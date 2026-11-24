@@ -87,7 +87,11 @@ public enum LogKind { Status, Price, Hold, Assist, Factory, Attachment, Attachme
 /// <summary>
 /// 附件类别（v1.3，落库）。声明顺序必须是 Other 在最前（CLR 默认值 = 「其他」）；展示顺序见 AttachmentRules.TypeOrder。
 /// </summary>
-public enum AttachmentType { Other, Sat, RepairForm }
+/// <summary>
+/// v1.9：维修登记表拆成「现场」和「返厂」两类。RepairForm 只为兼容旧客户端保留：
+/// 收到它时按工单的服务方式落到 OnsiteRepairForm / FactoryRepairForm，库里不再新存这个值。
+/// </summary>
+public enum AttachmentType { Other, Sat, RepairForm, OnsiteRepairForm, FactoryRepairForm }
 
 /// <summary>转交状态（v1.3，落库）</summary>
 public enum TransferStatus { Pending, Accepted, Rejected, Cancelled, Expired }
@@ -205,6 +209,8 @@ public static class EnumText
     {
         AttachmentType.Sat => "SAT 验收单（签字版）",
         AttachmentType.RepairForm => "现场维修登记表/返厂维修登记表（签字版）",
+        AttachmentType.OnsiteRepairForm => "现场维修登记表（签字版）",
+        AttachmentType.FactoryRepairForm => "返厂维修登记表（签字版）",
         AttachmentType.Other => "设备照片、沟通记录及其他附件",
         _ => t.ToString()
     };
@@ -214,6 +220,8 @@ public static class EnumText
     {
         AttachmentType.Sat => "SAT 验收单",
         AttachmentType.RepairForm => "维修登记表",
+        AttachmentType.OnsiteRepairForm => "现场维修登记表",
+        AttachmentType.FactoryRepairForm => "返厂维修登记表",
         AttachmentType.Other => "其他附件",
         _ => t.ToString()
     };

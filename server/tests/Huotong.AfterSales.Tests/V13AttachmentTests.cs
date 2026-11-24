@@ -33,19 +33,19 @@ public sealed class V13AttachmentTests : V13TestBase
         await Orders.AddAttachments(id, AttT("Other", other), Wm);
         var d = await Orders.AddAttachments(id, Att(plain), Wm); // v1.2 客户端不传 type
 
-        Assert.Equal(new AttachmentType?[] { AttachmentType.Sat, AttachmentType.RepairForm, AttachmentType.Other, AttachmentType.Other },
+        Assert.Equal(new AttachmentType?[] { AttachmentType.Sat, AttachmentType.OnsiteRepairForm, AttachmentType.Other, AttachmentType.Other },
             d.Attachments.Select(a => a.AttachmentType));
-        Assert.Equal(new[] { "SAT 验收单（签字版）", "现场维修登记表/返厂维修登记表（签字版）", "设备照片、沟通记录及其他附件", "设备照片、沟通记录及其他附件" },
+        Assert.Equal(new[] { "SAT 验收单（签字版）", "现场维修登记表（签字版）", "设备照片、沟通记录及其他附件", "设备照片、沟通记录及其他附件" },
             d.Attachments.Select(a => a.AttachmentTypeLabel));
-        Assert.Equal(new[] { "SAT 验收单", "维修登记表", "其他附件", "其他附件" }, d.Attachments.Select(a => a.AttachmentTypeShort));
+        Assert.Equal(new[] { "SAT 验收单", "现场维修登记表", "其他附件", "其他附件" }, d.Attachments.Select(a => a.AttachmentTypeShort));
         Assert.Equal(AttachmentType.Sat, FileRow(sat).AttachmentType);
-        Assert.Equal(AttachmentType.RepairForm, FileRow(form).AttachmentType);
+        Assert.Equal(AttachmentType.OnsiteRepairForm, FileRow(form).AttachmentType);
         Assert.Equal(AttachmentType.Other, FileRow(plain).AttachmentType);
         // 上传记录不带类别（保持 v1.2 文案）；不发通知
         Assert.Equal("王敏 上传附件 验收单.pdf", d.Logs.First(l => l.Kind == LogKind.Attachment).Text);
         Assert.DoesNotContain(d.Logs, l => l.Text.Contains("归为"));
         // 展示顺序固定 Sat → RepairForm → Other；枚举声明顺序 Other 在最前（CLR 默认值）
-        Assert.Equal(new[] { AttachmentType.Sat, AttachmentType.RepairForm, AttachmentType.Other }, AttachmentRules.TypeOrder);
+        Assert.Equal(new[] { AttachmentType.Sat, AttachmentType.OnsiteRepairForm, AttachmentType.FactoryRepairForm, AttachmentType.Other }, AttachmentRules.TypeOrder);
         Assert.Equal(AttachmentType.Other, default(AttachmentType));
         Assert.Equal(AttachmentType.Other, new StoredFile().AttachmentType);
 
@@ -73,7 +73,7 @@ public sealed class V13AttachmentTests : V13TestBase
         };
         var created = await Orders.Create(req, Wm);
         Assert.Equal(AttachmentType.Sat, created.Attachments.Single(a => a.Id == c1).AttachmentType);
-        Assert.Equal(AttachmentType.RepairForm, created.Attachments.Single(a => a.Id == c2).AttachmentType);
+        Assert.Equal(AttachmentType.OnsiteRepairForm, created.Attachments.Single(a => a.Id == c2).AttachmentType);
         Assert.Equal(AttachmentType.Other, created.Attachments.Single(a => a.Id == photo).AttachmentType);
         Assert.Equal("OrderPhoto", created.Attachments.Single(a => a.Id == photo).Source);
         var badCreate = NewOrder13("建单非法类别");
@@ -134,7 +134,7 @@ public sealed class V13AttachmentTests : V13TestBase
         Assert.True(mine.CanChangeType);
         await Fails(40900, "工单已闭环，只有主管可以删除附件", () => Orders.DeleteAttachment(id, mine.Id, Wg));
         await Fails(40900, "工单已闭环，只有主管可以删除附件", () => Orders.DeleteAttachment(id, before, Wg));
-        Assert.Equal(AttachmentType.RepairForm, (await Orders.SetAttachmentType(id, mine.Id, T("RepairForm"), Wg)).Attachments.Single(a => a.Id == mine.Id).AttachmentType);
+        Assert.Equal(AttachmentType.OnsiteRepairForm, (await Orders.SetAttachmentType(id, mine.Id, T("RepairForm"), Wg)).Attachments.Single(a => a.Id == mine.Id).AttachmentType);
         var sup = await Orders.DeleteAttachment(id, mine.Id, Sup);
         Assert.DoesNotContain(sup.Attachments, a => a.Id == mine.Id);
 
@@ -165,7 +165,7 @@ public sealed class V13AttachmentTests : V13TestBase
         // 第 51 个
         await Fails(40000, "附件最多 50 个，本单已达上限", () => Orders.AddAttachments(id, Att(Fresh(1)), Wm));
         await Fails(40000, "附件最多 50 个，本单已达上限", () => Orders.AddAttachments(id, Att(NewFile(Sup, FileCategory.Attachment)), Sup));
-        Assert.Equal(new[] { 20, 27, 3 }, AttachmentRules.TypeOrder.Select(t => d.Attachments.Count(a => a.AttachmentType == t)));
+        Assert.Equal(new[] { 20, 27, 0, 3 }, AttachmentRules.TypeOrder.Select(t => d.Attachments.Count(a => a.AttachmentType == t)));
         Assert.Equal(50, AttachmentRules.Limit);
         Assert.Equal(50, new OrderDetail().AttachmentLimit);
     }
@@ -197,7 +197,7 @@ public sealed class V13AttachmentTests : V13TestBase
         // 主管改别人的
         Tick();
         d = await Orders.SetAttachmentType(id, fEng, T("RepairForm"), Sup);
-        Assert.Equal("赵主管 将附件 验收单.pdf 归为「维修登记表」", d.Logs[^1].Text);
+        Assert.Equal("赵主管 将附件 验收单.pdf 归为「现场维修登记表」", d.Logs[^1].Text);
         // 受限附件：记录为 AttachmentPrivate，工程师看不到这条记录
         Tick();
         d = await Orders.SetAttachmentType(id, fSecret, T("Other"), Wm); // 值不变（默认就是 Other）

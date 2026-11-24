@@ -60,7 +60,7 @@ public sealed class V13ReviewTests : V13TestBase
         Assert.True(own.CanDelete);
         Assert.True(own.CanChangeType);
         d = await Orders.SetAttachmentType(id, mine, T("RepairForm"), Liu);
-        Assert.Equal(AttachmentType.RepairForm, d.Attachments.Single(a => a.Id == mine).AttachmentType);
+        Assert.Equal(AttachmentType.OnsiteRepairForm, d.Attachments.Single(a => a.Id == mine).AttachmentType);
         d = await Orders.DeleteAttachment(id, mine, Liu);
         Assert.DoesNotContain(d.Attachments, a => a.Id == mine);
         AssertInvariants();

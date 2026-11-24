@@ -99,8 +99,12 @@ public class FileCenterService
         {
             // 只返回附件（建单照片 / 新附件）且类别等于该值的行；与 source 同时给时取交集
             var at = attType.Value;
+            // 旧客户端的 RepairForm = 现场 + 返厂两类维修登记表
+            var types = at == AttachmentType.RepairForm
+                ? new[] { AttachmentType.RepairForm, AttachmentType.OnsiteRepairForm, AttachmentType.FactoryRepairForm }
+                : new[] { at };
             q = q.Where(x => (x.File.Category == FileCategory.OrderPhoto || x.File.Category == FileCategory.Attachment)
-                             && x.File.AttachmentType == at);
+                             && types.Contains(x.File.AttachmentType));
         }
         if (p.UploaderId != null) q = q.Where(x => x.File.UploaderId == p.UploaderId);
         if (p.OrderId != null) q = q.Where(x => x.File.OrderId == p.OrderId);
@@ -141,5 +145,65 @@ public class FileCenterService
         }).ToList();
 
         return new FileCenterPage { Items = items, Total = total, TotalSize = totalSize, Page = page, PageSize = size, Counts = counts };
+    }
+
+    /// <summary>
+    /// v1.9 按工单归档：一个工单一个「文件夹」。只列出名下有文件的工单，按最近上传时间倒序。
+    /// keyword 匹配工单号 / 客户 / 项目编号 / 文件名。可见性规则与 Query 相同。
+    /// </summary>
+    public async Task<FileFolderPage> Folders(string? keyword, int page, int pageSize, CurrentUser user)
+    {
+        page = Math.Max(1, page);
+        var size = Math.Clamp(pageSize, 1, 200);
+        var q = from f in _db.Files
+            join o in _db.Orders on f.OrderId equals o.Id
+            where f.Category != FileCategory.Avatar
+            select new Row { File = f, Order = o };
+        if (user.Role == Role.Engineer)
+        {
+            var uid = user.Id;
+            q = q.Where(x => !x.File.Restricted
+                             && (x.Order.Status == OrderStatus.Pending || x.Order.AssigneeId == uid || x.Order.CreatorId == uid
+                                 || x.Order.Assistants.Any(a => a.EngineerId == uid)
+                                 || x.Order.Exits.Any(e => e.EngineerId == uid) || x.Order.PendingTransferToId == uid));
+        }
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var k = keyword.Trim();
+            q = q.Where(x => (x.File.DisplayName != null && x.File.DisplayName.Contains(k)) || x.File.OriginalName.Contains(k)
+                             || x.Order.OrderNo.Contains(k) || x.Order.CustomerName.Contains(k)
+                             || (x.Order.ProjectNo != null && x.Order.ProjectNo.Contains(k)));
+        }
+
+        // 文件数不大（每单最多几十个），取回必要的列在内存里分组，避免 SQLite 上的分组翻译问题
+        var rows = await q.Select(x => new
+        {
+            OrderId = x.Order.Id, x.File.Size, x.File.CreatedAt, x.File.Category, x.File.AttachmentType, x.File.MimeType
+        }).ToListAsync();
+        var groups = rows.GroupBy(r => r.OrderId).Select(g => new
+        {
+            OrderId = g.Key, Count = g.Count(), Size = g.Sum(r => r.Size), Last = g.Max(r => r.CreatedAt),
+            Sat = g.Count(r => AttachmentRules.IsAttachment(r.Category) && r.AttachmentType == AttachmentType.Sat),
+            Onsite = g.Count(r => AttachmentRules.IsAttachment(r.Category) && r.AttachmentType == AttachmentType.OnsiteRepairForm),
+            Factory = g.Count(r => AttachmentRules.IsAttachment(r.Category) && r.AttachmentType == AttachmentType.FactoryRepairForm)
+        }).OrderByDescending(g => g.Last).ThenByDescending(g => g.OrderId).ToList();
+
+        var pageGroups = groups.Skip((page - 1) * size).Take(size).ToList();
+        var ids = pageGroups.Select(g => g.OrderId).ToList();
+        var orders = await _db.Orders.AsNoTracking().Where(o => ids.Contains(o.Id)).ToDictionaryAsync(o => o.Id);
+        return new FileFolderPage
+        {
+            Total = groups.Count, TotalFiles = rows.Count, TotalSize = rows.Sum(r => r.Size), Page = page, PageSize = size,
+            Items = pageGroups.Select(g =>
+            {
+                var o = orders[g.OrderId];
+                return new FileFolderDto
+                {
+                    OrderId = o.Id, OrderNo = o.OrderNo, CustomerName = o.CustomerName, ProjectNo = o.ProjectNo, DeviceText = o.DeviceText,
+                    Status = o.Status, ServiceType = o.ServiceType, FileCount = g.Count, TotalSize = g.Size, LastUploadAt = g.Last,
+                    SatCount = g.Sat, OnsiteRepairCount = g.Onsite, FactoryRepairCount = g.Factory
+                };
+            }).ToList()
+        };
     }
 }

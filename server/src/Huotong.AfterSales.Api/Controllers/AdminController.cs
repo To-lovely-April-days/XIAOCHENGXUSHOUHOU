@@ -63,6 +63,12 @@ public class AdminController : ApiControllerBase
     }
 
     /// <summary>工单文件中心（v1.2）</summary>
+    /// <summary>v1.9 文件中心按工单归档：一个工单一个文件夹</summary>
+    [HttpGet("files/folders")]
+    public async Task<ApiResponse<FileFolderPage>> FileFolders([FromServices] FileCenterService center,
+        [FromQuery] string? keyword, [FromQuery] int page = 1, [FromQuery] int pageSize = 30) =>
+        Ok(await center.Folders(keyword, page, pageSize, Me));
+
     [HttpGet("files")]
     public async Task<ApiResponse<FileCenterPage>> Files([FromServices] FileCenterService center, [FromQuery] FileCenterQuery q) =>
         Ok(await center.Query(q, Me));

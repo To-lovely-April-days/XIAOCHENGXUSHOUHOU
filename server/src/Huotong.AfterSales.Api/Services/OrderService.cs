@@ -329,7 +329,7 @@ public partial class OrderService
                 await _db.SaveChangesAsync();
                 await _files.Attach(photoIds, order.Id, FileCategory.OrderPhoto, user, "现场照片");
                 // 建单时的附件不另写状态记录（已有「建单」记录）
-                Mount(await LoadNewAttachments(attItems, user), attItems, order.Id);
+                Mount(await LoadNewAttachments(attItems, user), attItems, order.Id, order.ServiceType);
                 AddLog(order, me, order.Urgency == Urgency.Urgent ? $"{me.Name} 建单 · 紧急" : $"{me.Name} 建单", OrderStatus.Pending, now);
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();

@@ -113,7 +113,8 @@ const FILE_CATEGORY = {
  */
 const ATTACHMENT_TYPE = {
   Sat:        { label: 'SAT 验收单（签字版）', short: 'SAT 验收单' },
-  RepairForm: { label: '现场维修登记表/返厂维修登记表（签字版）', short: '维修登记表' },
+  OnsiteRepairForm: { label: '现场维修登记表（签字版）', short: '现场维修登记表' },
+  FactoryRepairForm: { label: '返厂维修登记表（签字版）', short: '返厂维修登记表' },
   Other:      { label: '设备照片、沟通记录及其他附件', short: '其他附件' }
 };
 

@@ -9,6 +9,10 @@ import { toast, toastError, confirm, preview } from '../ui.js';
 import { fmtDateTime, fmtSize, fileBadge } from '../format.js';
 import { FILE_KIND, FILE_SOURCE, ATTACHMENT_TYPE, ATTACHMENT_TYPE_OPTIONS, options } from '../enums.js';
 import OrdersDrawer from './orders-drawer.js';
+import FilesFolders from './files-folders.js';
+
+/** v1.9 这些参数任意一个出现，就是「全部文件」列表视图；都没有时默认按工单归档（文件夹） */
+const LIST_KEYS = ['view', 'keyword', 'type', 'source', 'attachmentType', 'uploaderId', 'orderId', 'from', 'to', 'page', 'id'];
 
 const PAGE_SIZE = 30;
 /** 图片不超过 2 MB 才显示缩略图（缩略图就是原图地址） */
@@ -23,7 +27,7 @@ const emptyCounts = () => ({ all: 0, Image: 0, Video: 0, Document: 0 });
 
 export default {
   name: 'FilesView',
-  components: { OrdersDrawer },
+  components: { OrdersDrawer, FilesFolders },
   data() {
     return {
       route,
@@ -59,6 +63,8 @@ export default {
     tabs() {
       return TYPE_TABS.map(t => ({ ...t, count: this.counts[t.countKey] ?? 0, active: t.key === this.type }));
     },
+    /** 文件夹视图（默认）还是全部文件列表 */
+    folderMode() { const q = route.query || {}; return !LIST_KEYS.some(k => q[k]); },
     sizeTotalText() { return fmtSize(this.totalSize) || '0 B'; },
     filtered() {
       return !!(this.keyword || this.type || this.source || this.attachmentType || this.uploaderId || this.orderId || this.from || this.to);
@@ -109,6 +115,7 @@ export default {
     'route.query': {
       handler(q, old) {
         if (route.path !== '/files') return;
+        if (!LIST_KEYS.some(k => q[k])) return; // 文件夹视图不拉平铺列表
         const o = old || {};
         const idChanged = (q.id || '') !== (o.id || '');
         this.selectedId = /^\d+$/.test(q.id || '') ? Number(q.id) : null;
@@ -215,7 +222,9 @@ export default {
       this.setQuery(v && this.from && v < this.from ? { from: v, to: v } : { to: v || null });
     },
     clearOrder() { this.setQuery({ orderId: null }); },
-    resetFilters() { navigate('/files', this.selectedId ? { id: this.selectedId } : null, { replace: true }); },
+    resetFilters() { navigate('/files', this.selectedId ? { view: 'list', id: this.selectedId } : { view: 'list' }, { replace: true }); },
+    showFolders() { navigate('/files'); },
+    showList() { navigate('/files', { view: 'list' }); },
     goPage(p) { updateQuery({ page: p > 1 ? p : null }); },
 
     // ------------------------------------------------ 行操作
@@ -305,9 +314,17 @@ export default {
   },
   template: `
   <PageHeader :crumbs="['文件', '工单文件中心']">
-    <button type="button" class="btn btn-secondary" :disabled="loading" @click="load"><Icon name="refresh" :size="15" />刷新</button>
+    <button v-if="!folderMode" type="button" class="btn btn-secondary" :disabled="loading" @click="load"><Icon name="refresh" :size="15" />刷新</button>
   </PageHeader>
   <div class="page">
+    <div class="files-mode" role="tablist" aria-label="文件中心的查看方式">
+      <button type="button" role="tab" class="files-mode-btn" :class="{ active: folderMode }" :aria-selected="folderMode ? 'true' : 'false'" @click="showFolders">
+        <Icon name="folder" :size="15" />按工单</button>
+      <button type="button" role="tab" class="files-mode-btn" :class="{ active: !folderMode }" :aria-selected="folderMode ? 'false' : 'true'" @click="showList">
+        <Icon name="orders" :size="15" />全部文件</button>
+    </div>
+    <FilesFolders v-if="folderMode" />
+    <template v-else>
     <div class="page-head">
       <div>
         <h1>工单文件中心</h1>
@@ -408,6 +425,7 @@ export default {
         <Pagination :total="total" :page="page" :page-size="pageSize" @change="goPage" />
       </div>
     </section>
+    </template>
   </div>
 
   <OrdersDrawer v-if="selectedId" :key="selectedId + '-' + drawerRev" :order-id="selectedId" :server-offset="0" :now-ts="nowTs"

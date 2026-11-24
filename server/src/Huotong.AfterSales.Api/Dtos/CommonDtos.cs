@@ -97,6 +97,36 @@ public class FileCenterItem : AttachmentDto
     public OrderStatus OrderStatus { get; set; }
 }
 
+/// <summary>v1.9 文件中心的一个「工单文件夹」</summary>
+public class FileFolderDto
+{
+    public int OrderId { get; set; }
+    public string OrderNo { get; set; } = "";
+    public string CustomerName { get; set; } = "";
+    public string? ProjectNo { get; set; }
+    public string? DeviceText { get; set; }
+    public OrderStatus Status { get; set; }
+    public ServiceType ServiceType { get; set; }
+    public int FileCount { get; set; }
+    public long TotalSize { get; set; }
+    public DateTime LastUploadAt { get; set; }
+    /// <summary>三类签字单据各有几份（0 = 还没传）</summary>
+    public int SatCount { get; set; }
+    public int OnsiteRepairCount { get; set; }
+    public int FactoryRepairCount { get; set; }
+}
+
+public class FileFolderPage
+{
+    public List<FileFolderDto> Items { get; set; } = new();
+    /// <summary>文件夹（工单）数</summary>
+    public int Total { get; set; }
+    public int TotalFiles { get; set; }
+    public long TotalSize { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+}
+
 public class FileCenterPage
 {
     public List<FileCenterItem> Items { get; set; } = new();

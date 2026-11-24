@@ -338,6 +338,9 @@ export const admin = {
    * @returns {Promise<{items:object[],total:number,totalSize:number,page:number,pageSize:number,counts:{all:number,Image:number,Video:number,Document:number}}>}
    */
   files: (params) => get('/admin/files', params),
+  /** v1.9 按工单归档的文件夹列表 @param {{keyword?:string,page?:number,pageSize?:number}} params
+   * @returns {Promise<{items:object[],total:number,totalFiles:number,totalSize:number,page:number,pageSize:number}>} */
+  fileFolders: (params) => get('/admin/files/folders', params),
   /**
    * 导出工单台账 xlsx。
    * @param {{from?:string,to?:string,status?:string}} [params]

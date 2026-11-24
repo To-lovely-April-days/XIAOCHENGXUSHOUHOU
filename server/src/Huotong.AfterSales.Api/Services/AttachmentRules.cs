@@ -17,7 +17,13 @@ public static class AttachmentRules
     // ---------- 附件类别（v1.3） ----------
 
     /// <summary>展示顺序（与枚举声明顺序不同：Other 是 CLR 默认值，排在声明的最前）</summary>
-    public static readonly AttachmentType[] TypeOrder = { AttachmentType.Sat, AttachmentType.RepairForm, AttachmentType.Other };
+    public static readonly AttachmentType[] TypeOrder =
+        { AttachmentType.Sat, AttachmentType.OnsiteRepairForm, AttachmentType.FactoryRepairForm, AttachmentType.Other };
+
+    /// <summary>v1.9：旧客户端还会传 RepairForm（不分现场 / 返厂）：返厂工单归返厂维修登记表，其余归现场维修登记表</summary>
+    public static AttachmentType Resolve(AttachmentType type, ServiceType service) =>
+        type != AttachmentType.RepairForm ? type
+        : service == ServiceType.Factory ? AttachmentType.FactoryRepairForm : AttachmentType.OnsiteRepairForm;
 
     /// <summary>
     /// 附件类别字符串的唯一解析入口（添加附件、改类别、文件中心筛选共用）。
@@ -29,7 +35,8 @@ public static class AttachmentRules
         type = null;
         if (string.IsNullOrWhiteSpace(s)) return true;
         var text = s.Trim();
-        foreach (var t in TypeOrder)
+        // RepairForm：旧客户端的写法，照样认，落库前由 Resolve 细分
+        foreach (var t in TypeOrder.Append(AttachmentType.RepairForm))
         {
             if (!string.Equals(t.ToString(), text, StringComparison.OrdinalIgnoreCase)) continue;
             type = t;

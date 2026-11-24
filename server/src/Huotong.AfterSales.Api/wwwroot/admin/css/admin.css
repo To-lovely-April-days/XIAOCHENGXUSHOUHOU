@@ -940,3 +940,29 @@ h1, h2, h3, p { margin: 0; }
 /* v1.7 岗位 / 管理员权限 */
 .accounts-admin-tag { margin-left: 6px; }
 .accounts-admin-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); cursor: pointer; }
+
+/* v1.9 文件中心：按工单归档 */
+.files-mode { display: inline-flex; gap: 2px; padding: 3px; margin-bottom: 14px; border-radius: 10px; background: var(--hover); }
+.files-mode-btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--text-2); font-size: 13px; cursor: pointer; }
+.files-mode-btn.active { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+.folder-tip { font-size: 12px; }
+.folder-list { table-layout: fixed; }
+.folder-row { cursor: pointer; }
+.folder-row:hover td, .folder-row:focus-visible td { background: var(--hover); }
+.folder-row td { height: 56px; }
+.folder-no { display: block; font-weight: 600; }
+.folder-customer { display: block; font-weight: 500; }
+.folder-docs { display: flex; flex-wrap: wrap; gap: 6px; }
+.folder-doc { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #E8F3EC; color: #2F7A4B; white-space: nowrap; }
+.folder-doc.missing { background: var(--hover); color: var(--muted); }
+.folder-head { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.folder-head-main { flex: 1; min-width: 200px; }
+.folder-head-title { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; }
+.folder-head-side { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+.folder-section { padding: 12px 16px 4px; border-bottom: 1px solid var(--border); }
+.folder-section:last-child { border-bottom: 0; }
+.folder-section-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.folder-section-title { font-weight: 600; font-size: 13px; }
+.folder-section-empty { padding: 2px 0 10px; font-size: 13px; color: var(--muted); }
+.folder-table { table-layout: fixed; }
+.folder-table td { border-bottom: 0; }
