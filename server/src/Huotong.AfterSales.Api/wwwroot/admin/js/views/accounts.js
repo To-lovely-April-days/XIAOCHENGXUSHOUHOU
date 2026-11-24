@@ -1,10 +1,12 @@
-// 账号管理（#/accounts）：员工列表 + 新增/编辑 + 解绑微信 + 设置电脑登录密码 + 停用/启用。
+// 账号管理（#/accounts）：注册审批（v1.5）+ 员工列表 + 新增/编辑 + 解绑微信 + 设置登录密码 + 停用/启用。
+// 注册审批：GET /api/admin/registrations、POST .../{id}/approve、POST .../{id}/reject
 // 数据：GET/POST /api/admin/employees、PUT /api/admin/employees/{id}、POST .../{id}/unbind、POST .../{id}/password
 import * as api from '../api.js';
 import { route, updateQuery } from '../router.js';
-import { store } from '../store.js';
+import { store, refreshCounts } from '../store.js';
 import { toast, toastError, confirm } from '../ui.js';
 import { ROLE } from '../enums.js';
+import { fmtMDHM } from '../format.js';
 
 const ROLE_TABS = [
   { key: '', label: '全部' },
@@ -37,6 +39,7 @@ const AccountsEditModal = {
         role: e ? e.role : 'Engineer',
         department: e ? (e.department || '') : '',
         enabled: e ? e.enabled !== false : true,
+        password: '',
       },
       errors: {},
       serverError: '',
@@ -61,6 +64,7 @@ const AccountsEditModal = {
       else if (!MOBILE_RE.test(phone)) errors.phone = '请填写 11 位手机号';
       if (!f.role) errors.role = '请选择角色';
       if (f.department.trim().length > 50) errors.department = '部门不能超过 50 个字';
+      if (!this.isEdit && f.password) { const pe = passwordError(f.password); if (pe) errors.password = pe; }
       this.errors = errors;
       return !Object.keys(errors).length;
     },
@@ -77,7 +81,7 @@ const AccountsEditModal = {
           saved = await api.admin.updateEmployee(this.employee.id, { ...body, enabled: f.enabled });
           toast('已保存', 'success');
         } else {
-          saved = await api.admin.createEmployee(body);
+          saved = await api.admin.createEmployee(f.password ? { ...body, password: f.password } : body);
           toast('已新增账号', 'success');
         }
         this.$emit('saved', saved);
@@ -102,7 +106,7 @@ const AccountsEditModal = {
         <input class="input num" :class="{ invalid: errors.phone }" v-model="form.phone" maxlength="11" inputmode="numeric"
           placeholder="11 位手机号" autocomplete="off" @input="clearError('phone')">
         <span v-if="errors.phone" class="field-error">{{ errors.phone }}</span>
-        <span v-else-if="phoneChanged" class="field-hint text-warn">修改手机号后将解除微信绑定，需用新手机号重新验证</span>
+        <span v-else-if="phoneChanged" class="field-hint text-warn">修改手机号后，员工需用新手机号重新登录</span>
       </label>
       <label class="field">
         <span class="field-label">角色<span class="req">*</span></span>
@@ -128,7 +132,13 @@ const AccountsEditModal = {
           <span class="field-hint">{{ isSelf ? '不能停用自己的账号' : '停用后该员工无法登录小程序和电脑后台' }}</span>
         </div>
       </div>
-      <div v-if="!isEdit" class="span-2 field-hint">新账号默认启用。员工首次使用小程序时，用登记的手机号快速验证即可绑定微信。</div>
+      <label v-if="!isEdit" class="field span-2">
+        <span class="field-label">初始密码</span>
+        <input class="input" :class="{ invalid: errors.password }" type="password" v-model="form.password" maxlength="64"
+          autocomplete="new-password" placeholder="至少 8 位，包含字母和数字；可留空，之后再设置" @input="clearError('password')">
+        <span v-if="errors.password" class="field-error">{{ errors.password }}</span>
+        <span v-else class="field-hint">员工用手机号 + 密码登录小程序。没有密码的账号无法登录。</span>
+      </label>
       <div v-if="serverError" class="span-2 field-error" role="alert">{{ serverError }}</div>
       <button type="submit" hidden></button>
     </form>
@@ -167,7 +177,7 @@ const AccountsPasswordModal = {
       }
     },
   },
-  template: `<Modal :title="employee.hasPassword ? '重置电脑登录密码' : '设置电脑登录密码'" :width="420" persistent @close="$emit('close')">
+  template: `<Modal :title="employee.hasPassword ? '重置登录密码' : '设置登录密码'" :width="420" persistent @close="$emit('close')">
     <form class="form-stack" novalidate @submit.prevent="submit">
       <div class="accounts-pwd-who">
         <Avatar :user="employee" :size="32" />
@@ -176,7 +186,7 @@ const AccountsPasswordModal = {
           <div class="cell-sub num">{{ employee.phone }} · {{ employee.roleName || roleLabel(employee.role) }}</div>
         </div>
       </div>
-      <p class="field-hint accounts-pwd-tip">员工用手机号 + 此密码登录电脑后台（目前仅售后主管可登录）。{{ employee.hasPassword ? '重置后原密码立即失效。' : '' }}</p>
+      <p class="field-hint accounts-pwd-tip">员工用手机号 + 此密码登录小程序；售后主管还可以用它登录电脑后台。{{ employee.hasPassword ? '重置后原密码立即失效。' : '' }}</p>
       <input type="text" :value="employee.phone" autocomplete="username" hidden>
       <label class="field"><span class="field-label">新密码<span class="req">*</span></span>
         <input class="input" type="password" v-model="password" autocomplete="new-password" placeholder="至少 8 位，包含字母和数字"
@@ -194,11 +204,108 @@ const AccountsPasswordModal = {
   </Modal>`,
 };
 
+// ---------------------------------------------------------------- 注册审批：通过 / 驳回弹窗
+
+const RegistrationApproveModal = {
+  name: 'RegistrationApproveModal',
+  props: { item: { type: Object, required: true } },
+  emits: ['close', 'done'],
+  data() {
+    return {
+      form: { name: this.item.name || '', role: '', department: '' },
+      error: '',
+      saving: false,
+      roleOptions: ROLE_KEYS.map(k => ({ value: k, label: ROLE[k].label })),
+    };
+  },
+  methods: {
+    async submit() {
+      if (this.saving) return;
+      const name = this.form.name.trim();
+      if (!name) { this.error = '请填写姓名'; return; }
+      if (!this.form.role) { this.error = '请选择角色'; return; }
+      this.saving = true;
+      this.error = '';
+      try {
+        const dto = await api.admin.approveRegistration(this.item.id, { role: this.form.role, name, department: this.form.department.trim() });
+        toast(`已通过，「${name}」现在可以登录了`, 'success');
+        this.$emit('done', dto);
+      } catch (e) {
+        if (e && e.code === 40100) return;
+        this.error = (e && e.message) || '操作失败';
+      } finally {
+        this.saving = false;
+      }
+    },
+  },
+  template: `<Modal title="通过注册申请" :width="460" persistent @close="$emit('close')">
+    <form class="form-stack" novalidate @submit.prevent="submit">
+      <p class="field-hint accounts-pwd-tip">手机号 <span class="num">{{ item.phone }}</span>。通过后对方即可用注册时填的密码登录小程序。请确认是本公司员工。</p>
+      <label class="field"><span class="field-label">姓名<span class="req">*</span></span>
+        <input class="input" v-model="form.name" maxlength="20" autocomplete="off" @input="error = ''"></label>
+      <label class="field"><span class="field-label">角色<span class="req">*</span></span>
+        <select class="select" v-model="form.role" @change="error = ''">
+          <option value="" disabled>请选择</option>
+          <option v-for="o in roleOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select>
+        <span v-if="form.role === 'Supervisor'" class="field-hint text-warn">售后主管可以登录电脑后台、审批账号、查看价格，请谨慎授予。</span>
+      </label>
+      <label class="field"><span class="field-label">部门</span>
+        <input class="input" v-model="form.department" maxlength="50" placeholder="如：售后服务部" autocomplete="off"></label>
+      <div v-if="error" class="field-error" role="alert">{{ error }}</div>
+      <button type="submit" hidden></button>
+    </form>
+    <template #footer>
+      <button type="button" class="btn btn-secondary" @click="$emit('close')">取消</button>
+      <button type="button" class="btn btn-primary" :disabled="saving" @click="submit">{{ saving ? '处理中…' : '通过' }}</button>
+    </template>
+  </Modal>`,
+};
+
+const RegistrationRejectModal = {
+  name: 'RegistrationRejectModal',
+  props: { item: { type: Object, required: true } },
+  emits: ['close', 'done'],
+  data() { return { reason: '', error: '', saving: false }; },
+  methods: {
+    async submit() {
+      if (this.saving) return;
+      const reason = this.reason.trim();
+      if (!reason) { this.error = '请填写驳回原因'; return; }
+      this.saving = true;
+      this.error = '';
+      try {
+        const dto = await api.admin.rejectRegistration(this.item.id, reason);
+        toast('已驳回', 'success');
+        this.$emit('done', dto);
+      } catch (e) {
+        if (e && e.code === 40100) return;
+        this.error = (e && e.message) || '操作失败';
+      } finally {
+        this.saving = false;
+      }
+    },
+  },
+  template: `<Modal title="驳回注册申请" :width="440" persistent @close="$emit('close')">
+    <form class="form-stack" novalidate @submit.prevent="submit">
+      <p class="field-hint accounts-pwd-tip">「{{ item.name }}」<span class="num">{{ item.phone }}</span>。对方登录时会看到驳回原因，可以修改后重新提交。</p>
+      <label class="field"><span class="field-label">驳回原因<span class="req">*</span></span>
+        <input class="input" v-model="reason" maxlength="100" placeholder="如：请填写真实姓名" autocomplete="off" @input="error = ''"></label>
+      <div v-if="error" class="field-error" role="alert">{{ error }}</div>
+      <button type="submit" hidden></button>
+    </form>
+    <template #footer>
+      <button type="button" class="btn btn-secondary" @click="$emit('close')">取消</button>
+      <button type="button" class="btn btn-danger" :disabled="saving" @click="submit">{{ saving ? '处理中…' : '驳回' }}</button>
+    </template>
+  </Modal>`,
+};
+
 // ---------------------------------------------------------------- 页面
 
 export default {
   name: 'AccountsView',
-  components: { AccountsEditModal, AccountsPasswordModal },
+  components: { AccountsEditModal, AccountsPasswordModal, RegistrationApproveModal, RegistrationRejectModal },
   data() {
     return {
       route,
@@ -213,6 +320,10 @@ export default {
       pwdTarget: null,
       busyId: null,
       roleTabs: ROLE_TABS,
+      regs: [],            // 注册申请（待审批 + 最近处理）
+      showHandled: false,
+      approving: null,
+      rejecting: null,
     };
   },
   computed: {
@@ -244,6 +355,8 @@ export default {
       return s;
     },
     meId() { return store.user ? store.user.id : null; },
+    pendingRegs() { return this.regs.filter(x => x.status === 'Pending'); },
+    handledRegs() { return this.regs.filter(x => x.status !== 'Pending'); },
   },
   watch: {
     'route.query': {
@@ -263,8 +376,12 @@ export default {
       this.loading = true;
       this.error = '';
       try {
-        const list = await api.admin.employees();
+        const [list, regs] = await Promise.all([api.admin.employees(), api.admin.registrations().catch(() => null)]);
         this.items = Array.isArray(list) ? list : [];
+        if (regs) {
+          this.regs = Array.isArray(regs.items) ? regs.items : [];
+          store.counts.registrations = regs.pendingCount ?? this.pendingRegs.length;
+        }
         this.loaded = true;
       } catch (err) {
         this.error = (err && err.message) || '加载失败';
@@ -272,6 +389,14 @@ export default {
       } finally {
         this.loading = false;
       }
+    },
+    regTime(s) { return fmtMDHM(s); },
+    /** 通过 / 驳回之后：关弹窗，重新拉两个列表（通过会多出一个员工） */
+    onRegDone() {
+      this.approving = null;
+      this.rejecting = null;
+      this.load();
+      refreshCounts();
     },
     setRole(key) { updateQuery({ role: key }); },
     onSearch(v) { updateQuery({ keyword: (v || '').trim() }); },
@@ -301,7 +426,7 @@ export default {
       else { const row = this.items.find(x => x.id === id); if (row) row.hasPassword = true; }
     },
     async unbind(e) {
-      const ok = await confirm('解绑微信', `确定解绑「${e.name}」的微信？解绑后该员工需重新验证手机号。`, { okText: '解绑', danger: true });
+      const ok = await confirm('解绑微信', `确定解绑「${e.name}」的微信？解绑后该员工需重新登录，重新登录前收不到工单提醒。`, { okText: '解绑', danger: true });
       if (!ok) return;
       this.busyId = e.id;
       try {
@@ -353,6 +478,49 @@ export default {
       </div>
     </div>
 
+    <section v-if="loaded && regs.length" class="card accounts-regs">
+      <div class="accounts-regs-head">
+        <div class="accounts-regs-title">注册申请<span v-if="pendingRegs.length" class="accounts-regs-count num">{{ pendingRegs.length }}</span></div>
+        <div class="page-sub">员工在小程序里提交的注册，通过并分配角色后才能登录</div>
+      </div>
+      <table v-if="pendingRegs.length" class="data-table accounts-table">
+        <colgroup><col style="width: 200px"><col style="width: 150px"><col><col style="width: 180px"></colgroup>
+        <thead><tr><th>姓名</th><th>手机号</th><th>提交时间</th><th class="text-right">操作</th></tr></thead>
+        <tbody>
+          <tr v-for="x in pendingRegs" :key="x.id">
+            <td><span class="accounts-name ellipsis">{{ x.name }}</span></td>
+            <td class="accounts-phone">{{ x.phone }}</td>
+            <td class="accounts-phone">{{ regTime(x.submittedAt) }}</td>
+            <td>
+              <div class="accounts-actions">
+                <button type="button" class="btn btn-primary btn-sm" @click="approving = x">通过</button>
+                <button type="button" class="btn btn-ghost btn-sm accounts-danger" @click="rejecting = x">驳回</button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-else class="accounts-regs-empty">没有待审批的注册申请</div>
+      <template v-if="handledRegs.length">
+        <button type="button" class="btn btn-ghost btn-sm accounts-regs-toggle" @click="showHandled = !showHandled">
+          {{ showHandled ? '收起已处理' : '查看已处理（' + handledRegs.length + '）' }}
+        </button>
+        <table v-if="showHandled" class="data-table accounts-table">
+          <colgroup><col style="width: 200px"><col style="width: 150px"><col style="width: 100px"><col><col style="width: 200px"></colgroup>
+          <thead><tr><th>姓名</th><th>手机号</th><th>结果</th><th>驳回原因</th><th>处理人 / 时间</th></tr></thead>
+          <tbody>
+            <tr v-for="x in handledRegs" :key="x.id">
+              <td><span class="ellipsis">{{ x.name }}</span></td>
+              <td class="accounts-phone">{{ x.phone }}</td>
+              <td><Tag :tone="x.status === 'Approved' ? 'success' : 'neutral'">{{ x.statusText }}</Tag></td>
+              <td><span class="ellipsis accounts-dept" :class="{ 'text-faint': !x.rejectReason }">{{ x.rejectReason || '—' }}</span></td>
+              <td class="accounts-phone">{{ x.reviewedByName || '—' }} · {{ regTime(x.reviewedAt) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </template>
+    </section>
+
     <section class="card">
       <div class="toolbar">
         <div class="tabs" role="tablist" aria-label="按角色筛选">
@@ -376,7 +544,7 @@ export default {
           <thead>
             <tr>
               <th>姓名</th><th>手机号</th><th>角色</th><th>部门</th>
-              <th>微信绑定</th><th>电脑登录密码</th><th>状态</th><th class="text-right">操作</th>
+              <th>微信绑定</th><th>登录密码</th><th>状态</th><th class="text-right">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -422,9 +590,11 @@ export default {
       </template>
     </section>
 
-    <p class="accounts-note"><Icon name="info" :size="14" />员工首次使用小程序时，用登记的手机号快速验证即可绑定微信。</p>
+    <p class="accounts-note"><Icon name="info" :size="14" />员工用手机号 + 密码登录小程序，登录后自动绑定微信用于接收工单提醒。忘记密码时在这里「重置密码」。</p>
   </div>
 
   <AccountsEditModal v-if="editing" :employee="editing.employee" @close="editing = null" @saved="onSaved" />
+  <RegistrationApproveModal v-if="approving" :item="approving" @close="approving = null" @done="onRegDone" />
+  <RegistrationRejectModal v-if="rejecting" :item="rejecting" @close="rejecting = null" @done="onRegDone" />
   <AccountsPasswordModal v-if="pwdTarget" :employee="pwdTarget" @close="pwdTarget = null" @saved="onPasswordSaved" />`,
 };

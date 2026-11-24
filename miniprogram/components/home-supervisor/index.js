@@ -95,6 +95,7 @@ Component(subscribe.bindTaps({
     ticks: TICKS,
     grid: GRID,
     todos: [],
+    pendingRegistrations: 0,
     sheetShow: false,
     sheetOrder: null
   },
@@ -143,6 +144,7 @@ Component(subscribe.bindTaps({
 
       this.setData({
         status: 'ok',
+        pendingRegistrations: Number(d.pendingRegistrations) || 0,
         greeting: greetingOf(now) + '，' + ((d.user && d.user.name) || ''),
         onSiteCount: d.onSiteCount || 0,
         todoCount: todos.filter((t) => !t.assigned).length,

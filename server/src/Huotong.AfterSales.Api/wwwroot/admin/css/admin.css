@@ -928,3 +928,11 @@ h1, h2, h3, p { margin: 0; }
 .files-filters .att-filter-select { width: 110px; }
 .att-name-wrap { flex-wrap: wrap; row-gap: 2px; }
 .att-name-wrap > .ellipsis { max-width: 100%; }
+
+/* v1.5 账号管理：注册申请 */
+.accounts-regs { margin-bottom: 16px; }
+.accounts-regs-head { padding: 14px 16px 10px; }
+.accounts-regs-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+.accounts-regs-count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--brand); color: #FFFFFF; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
+.accounts-regs-empty { padding: 4px 16px 14px; font-size: 13px; color: var(--muted); }
+.accounts-regs-toggle { margin: 6px 10px 10px; }

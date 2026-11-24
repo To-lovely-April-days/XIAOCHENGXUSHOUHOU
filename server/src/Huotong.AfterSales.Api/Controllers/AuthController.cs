@@ -27,6 +27,16 @@ public class AuthController : ApiControllerBase
     [HttpPost("password-login")]
     public async Task<ApiResponse<LoginResult>> PasswordLogin([FromBody] PasswordLoginRequest req) => Ok(await _password.Login(req));
 
+    /// <summary>v1.5 小程序账号密码登录（所有角色）。40310 = 审核中，40311 = 注册被驳回</summary>
+    [HttpPost("account-login")]
+    public async Task<ApiResponse<LoginResult>> AccountLogin([FromServices] AccountService accounts, [FromBody] AccountLoginRequest req) =>
+        Ok(await accounts.Login(req));
+
+    /// <summary>v1.5 小程序注册申请，等主管审批</summary>
+    [HttpPost("register")]
+    public async Task<ApiResponse<RegisterResult>> Register([FromServices] AccountService accounts, [FromBody] RegisterRequest req) =>
+        Ok(await accounts.Register(req));
+
     [HttpPost("login")]
     public async Task<ApiResponse<LoginResult>> Login([FromBody] LoginRequest req) => Ok(await _auth.Login(req));
 

@@ -74,6 +74,8 @@ builder.Services.AddScoped<AdminReportService>();
 builder.Services.AddScoped<FileCenterService>();
 builder.Services.AddScoped<PasswordService>();
 builder.Services.AddSingleton<LoginThrottle>();
+builder.Services.AddSingleton<RegisterThrottle>();
+builder.Services.AddScoped<AccountService>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(o => JsonSetup.Configure(o.JsonSerializerOptions))

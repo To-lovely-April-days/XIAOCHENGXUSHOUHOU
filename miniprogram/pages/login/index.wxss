@@ -239,6 +239,79 @@ page {
   color: #6E6E73;
 }
 
+/* ---------- 表单（v1.5 账号密码） ---------- */
+.form {
+  margin-top: 32rpx;
+}
+
+.field {
+  margin-top: 24rpx;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 12rpx;
+  font-size: 25rpx;
+  line-height: 36rpx;
+  font-weight: 600;
+  color: #3A3A3C;
+}
+
+.field-box {
+  display: flex;
+  align-items: center;
+  height: 96rpx;
+  padding: 0 28rpx;
+  border-radius: 22rpx;
+  background: #F6F6F4;
+  border: 2rpx solid #ECECEA;
+}
+
+.field-input {
+  flex: 1;
+  min-width: 0;
+  height: 96rpx;
+  font-size: 30rpx;
+  color: #1D1D1F;
+}
+
+.field-ph {
+  color: #AEAEB2;
+  font-size: 28rpx;
+}
+
+.field-eye {
+  flex-shrink: 0;
+  margin-left: 16rpx;
+  padding: 16rpx 0 16rpx 16rpx;
+  font-size: 25rpx;
+  font-weight: 600;
+  color: #6E6E73;
+}
+
+.switch-row {
+  margin-top: 32rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  font-size: 26rpx;
+  line-height: 40rpx;
+  color: #6E6E73;
+}
+
+.switch-link {
+  padding: 12rpx 8rpx;
+  font-weight: 600;
+  color: #C81E2B;
+}
+
+.alert-link {
+  margin-top: 8rpx;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
 /* ---------- 主操作按钮 ---------- */
 .cta-wrap {
   margin-top: 44rpx;

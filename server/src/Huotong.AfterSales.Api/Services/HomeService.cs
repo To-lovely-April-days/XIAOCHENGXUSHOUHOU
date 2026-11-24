@@ -131,6 +131,7 @@ public class HomeService
         var orderNames = await _db.Orders.Select(o => new { o.Id, o.CustomerName }).ToDictionaryAsync(o => o.Id, o => o.CustomerName);
 
         var dto = new SupervisorHomeDto { User = _view.User(me), Now = now };
+        dto.PendingRegistrations = await _db.Registrations.CountAsync(r => r.Status == RegistrationStatus.Pending);
         dto.OnSiteCount = todayPairs.Where(p => p.IsRunning(today)).Select(p => p.Arrive.EngineerId).Distinct().Count();
 
         var accepted = await _db.Orders.Where(o => o.Status == OrderStatus.Accepted && o.AssigneeId != null)

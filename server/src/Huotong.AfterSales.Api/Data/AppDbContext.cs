@@ -19,6 +19,7 @@ public class AppDbContext : DbContext
     public DbSet<OrderDevice> OrderDevices => Set<OrderDevice>();
     public DbSet<OrderTransfer> OrderTransfers => Set<OrderTransfer>();
     public DbSet<OrderExit> OrderExits => Set<OrderExit>();
+    public DbSet<Registration> Registrations => Set<Registration>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -34,6 +35,19 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.OpenId);
             e.HasOne(x => x.AvatarFile).WithMany().HasForeignKey(x => x.AvatarFileId).OnDelete(DeleteBehavior.SetNull);
             e.Ignore(x => x.Surname);
+        });
+
+        b.Entity<Registration>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(50);
+            e.Property(x => x.Phone).HasMaxLength(20);
+            e.Property(x => x.PasswordHash).HasMaxLength(256);
+            e.Property(x => x.OpenId).HasMaxLength(64);
+            e.Property(x => x.RejectReason).HasMaxLength(200);
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            e.HasIndex(x => x.Phone).IsUnique();
+            e.HasIndex(x => x.Status);
+            e.HasOne(x => x.ReviewedBy).WithMany().HasForeignKey(x => x.ReviewedById).OnDelete(DeleteBehavior.SetNull);
         });
 
         b.Entity<WorkOrder>(e =>

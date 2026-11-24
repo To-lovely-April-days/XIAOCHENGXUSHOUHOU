@@ -183,10 +183,14 @@ Page({
     this.load();
   },
 
+  goPassword() {
+    wx.navigateTo({ url: '/pages/password/index' });
+  },
+
   onLogout() {
     wx.showModal({
       title: '退出登录',
-      content: '退出后不会自动登录，需要在登录页点「微信登录」重新进入。',
+      content: '退出后需要重新输入手机号和密码登录，这部手机也不再收到工单提醒。',
       confirmText: '退出',
       confirmColor: '#C81E2B',
       success: (r) => { if (r.confirm) auth.logout(); }

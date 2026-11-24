@@ -326,6 +326,12 @@ export const admin = {
   unbind: (id) => post(`/admin/employees/${id}/unbind`),
   /** 设置/重置密码 @param {number} id @param {string} password */
   setPassword: (id, password) => post(`/admin/employees/${id}/password`, { password }),
+  /** v1.5 注册申请：待审批的全部 + 最近处理过的 50 条
+   * @returns {Promise<{pendingCount:number,items:{id:number,name:string,phone:string,status:'Pending'|'Approved'|'Rejected',statusText:string,rejectReason:?string,submittedAt:string,reviewedAt:?string,reviewedByName:?string}[]}>} */
+  registrations: () => get('/admin/registrations'),
+  /** @param {{role:string,name?:string,department?:string}} body 通过并分配角色 */
+  approveRegistration: (id, body) => post(`/admin/registrations/${id}/approve`, body),
+  rejectRegistration: (id, reason) => post(`/admin/registrations/${id}/reject`, { reason }),
   /**
    * 工单文件中心（v1.2）。v1.3：attachmentType 只看某一类附件；keyword 增加匹配项目编号。
    * @param {{keyword?:string,type?:'Image'|'Video'|'Document',source?:string,attachmentType?:'Sat'|'RepairForm'|'Other',uploaderId?:number|string,orderId?:number|string,restricted?:boolean,from?:string,to?:string,page?:number,pageSize?:number}} [params]

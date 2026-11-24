@@ -12,9 +12,6 @@ const subscribe = require('./subscribe.js');
 
 const LOGIN_PAGE = '/pages/login/index';
 const HOME_PAGE = '/pages/home/index';
-/** 用户主动退出后置位：此后不再静默自动登录，直到用户在登录页点「微信登录」 */
-const SIGNED_OUT_KEY = 'signedOut';
-
 let pending = null; // 进行中的 ensureLogin，避免并发重复登录
 
 function app() {
@@ -57,7 +54,6 @@ function setSession(token, user) {
   if (token) {
     wx.setStorageSync(http.TOKEN_KEY, token);
     a.globalData.token = token;
-    setSignedOut(false);
   }
   a.globalData.user = user || null;
   notifyUserChange();
@@ -69,27 +65,18 @@ function setUser(user) {
   notifyUserChange();
 }
 
-/** 是否处于「用户主动退出」状态 */
-function isSignedOut() {
-  try { return !!wx.getStorageSync(SIGNED_OUT_KEY); } catch (e) { return false; }
-}
-
-function setSignedOut(flag) {
-  try {
-    if (flag) wx.setStorageSync(SIGNED_OUT_KEY, 1);
-    else wx.removeStorageSync(SIGNED_OUT_KEY);
-  } catch (e) { /* ignore */ }
-}
-
-/** 退出登录：清 token/user 并记住已退出（不再自动登录），reLaunch 登录页 */
+/** 退出登录：先让后端解除微信绑定（失败也照常退出），再清本地登录态并回到登录页 */
 function logout() {
-  http.clearToken();
-  const a = app();
-  if (a && a.globalData) { a.globalData.user = null; a.globalData.token = ''; }
-  setSignedOut(true);
-  pending = null;
-  notifyUserChange();
-  wx.reLaunch({ url: LOGIN_PAGE });
+  const done = () => {
+    http.clearToken();
+    const a = app();
+    if (a && a.globalData) { a.globalData.user = null; a.globalData.token = ''; }
+    pending = null;
+    notifyUserChange();
+    wx.reLaunch({ url: LOGIN_PAGE });
+  };
+  if (!getToken()) { done(); return; }
+  api.me.logout({ silent: true }).then(done, done);
 }
 
 /**
@@ -112,33 +99,18 @@ function wxLogin() {
   });
 }
 
-/**
- * 用 wx.login 走一遍 POST /api/auth/login。
- * @returns {Promise<Object>} LoginResult；已绑定时已 setSession
- */
-function silentLogin() {
-  return wxLogin()
-    .then((code) => api.auth.login(code, { silent: true }))
-    .then((res) => {
-      if (res && !res.needBind && res.token) setSession(res.token, res.user);
-      return res;
-    });
-}
-
-function toLogin(ticket) {
+function toLogin() {
   const pages = getCurrentPages();
   const cur = pages[pages.length - 1];
   if (cur && '/' + cur.route === LOGIN_PAGE) return;
-  wx.reLaunch({ url: LOGIN_PAGE + (ticket ? '?ticket=' + encodeURIComponent(ticket) : '') });
+  wx.reLaunch({ url: LOGIN_PAGE });
 }
 
 /**
  * 确保已登录。
  * - 已有 token 且 globalData.user → 直接返回
  * - 有 token 无 user → GET /api/me
- * - 无 token 且用户主动退出过 → reLaunch 登录页，reject（{code:'SIGNED_OUT'}），不自动登录
- * - 无 token → wx.login + POST /api/auth/login；needBind → reLaunch 登录页（带 ticket）
- * 需要绑定或登录失败时 reject（{code:'NEED_BIND'|'LOGIN_FAILED'}），并已跳转登录页；页面 catch 后忽略即可。
+ * - 无 token → reLaunch 登录页（v1.5：账号密码登录，不再用微信身份静默登录），reject（{code:'NEED_LOGIN'}）；页面 catch 后忽略即可。
  * 有 token 但 GET /api/me 因网络/服务端异常失败（非 401）时 reject（{code:'LOAD_FAILED', message}），不跳转；
  * 页面应展示错误态并提供重试（再次调用 ensureLogin）。可用 isLoadFailed(err) 判断。
  * v1.4：登录就绪后顺带刷新订阅消息的配置与授权状态缓存（utils/subscribe.js；静默，不影响登录结果）。
@@ -169,19 +141,9 @@ function resolveLogin() {
       if (err && err.code === 40100) return Promise.reject({ code: 'AUTH_EXPIRED', message: err.message, data: err });
       return Promise.reject({ code: 'LOAD_FAILED', message: (err && err.message) || '网络异常，请重试', data: err });
     });
-  } else if (isSignedOut()) {
-    // 用户主动退出过：不静默登录，停在登录页等用户点「微信登录」
-    toLogin();
-    return Promise.reject({ code: 'SIGNED_OUT', message: '已退出登录' });
   } else {
-    pending = silentLogin().then((res) => {
-      if (res && !res.needBind && res.user) return res.user;
-      toLogin(res && res.bindTicket);
-      return Promise.reject({ code: 'NEED_BIND', message: '需要绑定账号' });
-    }, (err) => {
-      toLogin();
-      return Promise.reject({ code: 'LOGIN_FAILED', message: (err && err.message) || '登录失败', data: err });
-    });
+    toLogin();
+    return Promise.reject({ code: 'NEED_LOGIN', message: '请先登录' });
   }
 
   const p = pending;
@@ -203,10 +165,8 @@ module.exports = {
   setSession,
   setUser,
   logout,
-  isSignedOut,
-  setSignedOut,
   refreshUser,
-  silentLogin,
+  wxLogin,
   LOGIN_PAGE,
   HOME_PAGE
 };

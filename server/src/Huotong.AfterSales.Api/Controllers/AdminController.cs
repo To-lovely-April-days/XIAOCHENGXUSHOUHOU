@@ -66,6 +66,18 @@ public class AdminController : ApiControllerBase
     public async Task<ApiResponse<FileCenterPage>> Files([FromServices] FileCenterService center, [FromQuery] FileCenterQuery q) =>
         Ok(await center.Query(q, Me));
 
+    // ---------- v1.5 注册审批 ----------
+    [HttpGet("registrations")]
+    public async Task<ApiResponse<RegistrationListDto>> Registrations([FromServices] AccountService accounts) => Ok(await accounts.List());
+
+    [HttpPost("registrations/{id:int}/approve")]
+    public async Task<ApiResponse<RegistrationDto>> ApproveRegistration([FromServices] AccountService accounts, int id,
+        [FromBody] RegistrationApproveRequest req) => Ok(await accounts.Approve(id, req, Me));
+
+    [HttpPost("registrations/{id:int}/reject")]
+    public async Task<ApiResponse<RegistrationDto>> RejectRegistration([FromServices] AccountService accounts, int id,
+        [FromBody] RegistrationRejectRequest req) => Ok(await accounts.Reject(id, req, Me));
+
     [HttpGet("employees")]
     public async Task<ApiResponse<List<EmployeeDto>>> Employees() => Ok(await _admin.Employees());
 

@@ -2,6 +2,9 @@ namespace Huotong.AfterSales.Api.Domain;
 
 public enum Role { Engineer, Sales, Supervisor }
 
+/// <summary>v1.5 小程序注册申请的状态</summary>
+public enum RegistrationStatus { Pending, Approved, Rejected }
+
 public enum OrderStatus { Pending, Accepted, InProgress, OnHold, Submitted, Closed, Voided }
 
 public enum OrderSource { SalesReferral, CustomerDirect, Inspection, ReturnLogistics }

@@ -22,6 +22,31 @@ public class Employee
     public string Surname => string.IsNullOrEmpty(Name) ? "" : Name.Substring(0, 1);
 }
 
+/// <summary>
+/// v1.5 小程序注册申请：员工自己填姓名 / 手机号 / 密码，主管在后台审批通过后才生成 Employee。
+/// 一个手机号只有一行（驳回后重新提交会复用这一行）。
+/// </summary>
+public class Registration
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public string Phone { get; set; } = "";
+    /// <summary>与 Employee.PasswordHash 同一种哈希；通过后原样转给 Employee 并在这里清空</summary>
+    public string? PasswordHash { get; set; }
+    /// <summary>提交申请时的微信 openid（只用于限流与排查，不作为登录凭据）</summary>
+    public string? OpenId { get; set; }
+    public RegistrationStatus Status { get; set; }
+    public string? RejectReason { get; set; }
+    public int? ReviewedById { get; set; }
+    public Employee? ReviewedBy { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+    /// <summary>通过后生成的员工</summary>
+    public int? EmployeeId { get; set; }
+    public DateTime CreatedAt { get; set; }
+    /// <summary>最近一次提交时间（重新提交会更新）</summary>
+    public DateTime SubmittedAt { get; set; }
+}
+
 public class WorkOrder
 {
     public int Id { get; set; }

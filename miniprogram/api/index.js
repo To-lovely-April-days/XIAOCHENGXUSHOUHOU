@@ -65,6 +65,24 @@ const auth = {
    */
   bind(bindTicket, phoneCode, opts) {
     return post('/api/auth/bind', { bindTicket: bindTicket, phoneCode: phoneCode }, Object.assign({ auth: false }, opts));
+  },
+  /**
+   * POST /api/auth/account-login（v1.5）手机号 + 密码登录
+   * @param {string} phone
+   * @param {string} password
+   * @param {string} code wx.login 的 code，可为空串；有则顺带把当前微信绑到账号上（订阅消息用）
+   * @returns {Promise<LoginResult>} 错误：40310 账号审核中；40311 注册被驳回（message 含原因）；40300 已停用；40000 手机号或密码错误 / 尝试过多
+   */
+  accountLogin(phone, password, code, opts) {
+    return post('/api/auth/account-login', { phone: phone, password: password, code: code || '' }, Object.assign({ auth: false }, opts));
+  },
+  /**
+   * POST /api/auth/register（v1.5）提交注册申请，等主管在电脑后台审批
+   * @param {{name:string,phone:string,password:string,code:string}} body code 为 wx.login 的 code（必填）
+   * @returns {Promise<{status:'Pending',message:string}>} 错误：40900 手机号已有账号 / 已在审批中；40000 校验不通过或提交过于频繁
+   */
+  register(body, opts) {
+    return post('/api/auth/register', body, Object.assign({ auth: false }, opts));
   }
 };
 
@@ -92,6 +110,19 @@ const me = {
    */
   getSubscribeConfig(opts) {
     return get('/api/me/subscribe', null, opts);
+  },
+  /**
+   * PUT /api/me/password 修改自己的密码
+   * @param {string} oldPassword 原密码（账号还没设过密码时可空）
+   * @param {string} newPassword 至少 8 位，同时含字母和数字
+   * @returns {Promise<User>}
+   */
+  changePassword(oldPassword, newPassword, opts) {
+    return put('/api/me/password', { oldPassword: oldPassword, newPassword: newPassword }, opts);
+  },
+  /** POST /api/me/logout（v1.5）退出登录：解除微信绑定，不再往这个微信发提醒 */
+  logout(opts) {
+    return post('/api/me/logout', {}, opts);
   }
 };
 

@@ -1,0 +1,16 @@
+/* pages/password 修改密码（v1.5） */
+page { background: #F6F6F4; }
+.pwd-page { padding: 24rpx 32rpx calc(48rpx + env(safe-area-inset-bottom)); }
+.pwd-card { background: #FFFFFF; border-radius: 32rpx; box-shadow: var(--shadow); padding: 0 32rpx; }
+.pwd-field { display: flex; align-items: center; min-height: 108rpx; border-bottom: 2rpx solid #F0F0EE; }
+.pwd-field:last-child { border-bottom: none; }
+.pwd-label { width: 190rpx; flex-shrink: 0; font-size: 28rpx; color: #1D1D1F; }
+.pwd-input { flex: 1; min-width: 0; height: 108rpx; font-size: 28rpx; color: #1D1D1F; }
+.pwd-ph { color: #AEAEB2; }
+.pwd-show { margin-top: 28rpx; padding: 8rpx; display: flex; align-items: center; gap: 14rpx; font-size: 26rpx; color: #6E6E73; }
+.pwd-check { width: 34rpx; height: 34rpx; border-radius: 10rpx; border: 3rpx solid #C7C7C5; background: #FFFFFF; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.pwd-check.is-on { background: #1D1D1F; border-color: #1D1D1F; }
+.pwd-error { margin-top: 24rpx; padding: 20rpx 24rpx; border-radius: 20rpx; background: #FBEDEE; font-size: 26rpx; line-height: 38rpx; color: #C81E2B; }
+.pwd-btn { margin-top: 40rpx; height: 100rpx; border-radius: 24rpx; background: #1D1D1F; color: #FFFFFF; font-size: 32rpx; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.pwd-btn.is-busy { background: #8E8E93; }
+.pwd-note { margin-top: 28rpx; padding: 0 8rpx; font-size: 24rpx; line-height: 38rpx; color: #8E8E93; }

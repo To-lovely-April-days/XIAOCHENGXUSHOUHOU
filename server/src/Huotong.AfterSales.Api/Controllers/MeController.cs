@@ -32,6 +32,14 @@ public class MeController : ApiControllerBase
     [HttpPut("avatar")]
     public async Task<ApiResponse<UserDto>> Avatar([FromBody] AvatarRequest req) => Ok(await _home.SetAvatar(Me, req.FileId));
 
+    /// <summary>v1.5 退出登录：解除微信绑定（不再往这个微信发提醒）</summary>
+    [HttpPost("logout")]
+    public async Task<ApiResponse<object?>> Logout([FromServices] AccountService accounts)
+    {
+        await accounts.Logout(Me);
+        return Ok<object?>(null);
+    }
+
     [HttpPut("password")]
     public async Task<ApiResponse<UserDto>> Password([FromBody] ChangePasswordRequest req) => Ok(await _password.ChangeMine(Me, req));
 }

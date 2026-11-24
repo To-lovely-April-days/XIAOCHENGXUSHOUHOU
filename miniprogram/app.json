@@ -5,6 +5,7 @@
     "pages/hours/index",
     "pages/me/index",
     "pages/login/index",
+    "pages/password/index",
     "pages/privacy/index",
     "pages/my-orders/index",
     "pages/order-detail/index",

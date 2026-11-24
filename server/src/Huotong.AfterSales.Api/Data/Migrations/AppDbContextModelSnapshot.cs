@@ -424,6 +424,66 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                     b.ToTable("Punches");
                 });
 
+            modelBuilder.Entity("Huotong.AfterSales.Api.Domain.Registration", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("EmployeeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OpenId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PasswordHash")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RejectReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ReviewedById")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Phone")
+                        .IsUnique();
+
+                    b.HasIndex("ReviewedById");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("Registrations");
+                });
+
             modelBuilder.Entity("Huotong.AfterSales.Api.Domain.StatusLog", b =>
                 {
                     b.Property<int>("Id")
@@ -923,6 +983,16 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                     b.Navigation("PhotoFile");
 
                     b.Navigation("SupplementBy");
+                });
+
+            modelBuilder.Entity("Huotong.AfterSales.Api.Domain.Registration", b =>
+                {
+                    b.HasOne("Huotong.AfterSales.Api.Domain.Employee", "ReviewedBy")
+                        .WithMany()
+                        .HasForeignKey("ReviewedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("ReviewedBy");
                 });
 
             modelBuilder.Entity("Huotong.AfterSales.Api.Domain.StatusLog", b =>

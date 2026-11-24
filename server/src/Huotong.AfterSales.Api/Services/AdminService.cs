@@ -49,6 +49,7 @@ public class AdminService
             PendingRequests = await _db.OrderRequests.CountAsync(r => r.Status == RequestStatus.Pending),
             Unpriced = orders.Count(o => !o.PriceSet && o.Status != OrderStatus.Voided),
             PriceSuggestions = (await HomeService.PendingPriceSuggestions(_db)).Count,
+            PendingRegistrations = await _db.Registrations.CountAsync(r => r.Status == RegistrationStatus.Pending),
             UpdatedAt = now
         };
     }
@@ -270,7 +271,11 @@ public class AdminService
     public async Task<EmployeeDto> CreateEmployee(EmployeeCreateRequest r)
     {
         var v = await ValidateEmployee(r, null);
+        if (!string.IsNullOrEmpty(r.Password)) PasswordPolicy.Ensure(r.Password, "初始密码");
         var e = new Employee { Name = v.Name, Phone = v.Phone, Role = v.Role, Department = v.Dept, Enabled = true, CreatedAt = _clock.Now };
+        if (!string.IsNullOrEmpty(r.Password)) e.PasswordHash = PasswordPolicy.Hash(e, r.Password);
+        // v1.5：主管直接建了账号，同手机号还在排队 / 被驳回的注册申请就没有意义了
+        _db.Registrations.RemoveRange(await _db.Registrations.Where(x => x.Phone == v.Phone && x.Status != RegistrationStatus.Approved).ToListAsync());
         _db.Employees.Add(e);
         await _db.SaveChangesAsync();
         return ToDto(e);

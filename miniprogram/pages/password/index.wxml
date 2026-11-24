@@ -1,0 +1,31 @@
+<view class="pwd-page">
+  <view class="pwd-card">
+    <view class="pwd-field">
+      <text class="pwd-label">原密码</text>
+      <input class="pwd-input" password="{{!show}}" maxlength="64" value="{{oldPassword}}" data-k="oldPassword" bindinput="onInput"
+             placeholder="请输入原密码" placeholder-class="pwd-ph" />
+    </view>
+    <view class="pwd-field">
+      <text class="pwd-label">新密码</text>
+      <input class="pwd-input" password="{{!show}}" maxlength="64" value="{{newPassword}}" data-k="newPassword" bindinput="onInput"
+             placeholder="至少 8 位，包含字母和数字" placeholder-class="pwd-ph" />
+    </view>
+    <view class="pwd-field">
+      <text class="pwd-label">确认新密码</text>
+      <input class="pwd-input" password="{{!show}}" maxlength="64" value="{{confirm}}" data-k="confirm" bindinput="onInput"
+             placeholder="再输入一次新密码" placeholder-class="pwd-ph" confirm-type="done" bindconfirm="onSubmit" />
+    </view>
+  </view>
+
+  <view class="pwd-show" bindtap="toggleShow" aria-role="checkbox" aria-checked="{{show}}">
+    <view class="pwd-check {{show ? 'is-on' : ''}}">
+      <ui-icon wx:if="{{show}}" name="check" color="#FFFFFF" size="11" stroke="3" />
+    </view>
+    <text>显示密码</text>
+  </view>
+
+  <view wx:if="{{error}}" class="pwd-error" aria-role="alert">{{error}}</view>
+
+  <view class="pwd-btn {{busy ? 'is-busy' : ''}}" hover-class="btn-hover" bindtap="onSubmit" aria-role="button">{{busy ? '保存中…' : '保存'}}</view>
+  <view class="pwd-note">这个密码同时用于小程序和电脑后台登录。忘记原密码请联系售后主管在后台重置。</view>
+</view>

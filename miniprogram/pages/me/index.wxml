@@ -51,6 +51,10 @@
   </view>
 
   <view class="menu card">
+    <view class="menu-item" hover-class="menu-hover" bindtap="goPassword">
+      <text class="menu-text">修改密码</text>
+      <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+    </view>
     <view class="menu-item" hover-class="menu-hover" bindtap="goPrivacy">
       <text class="menu-text">用户隐私保护指引</text>
       <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
@@ -62,7 +66,7 @@
     </view>
   </view>
 
-  <view class="foot-note">当前微信已绑定员工账号。更换手机或微信，请联系售后主管在后台解绑后重新验证。姓名、角色和手机号由主管维护。</view>
+  <view class="foot-note">登录账号是你的手机号。忘记密码请联系售后主管在电脑后台重置。姓名、角色和手机号由主管维护。</view>
 
   <view class="logout-btn" hover-class="btn-hover" bindtap="onLogout" aria-role="button">退出登录</view>
 </view>

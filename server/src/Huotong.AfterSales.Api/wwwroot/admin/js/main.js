@@ -77,7 +77,7 @@ const AppShell = {
       return Object.keys(ROUTES).map(path => ({
         path, title: ROUTES[path].title, icon: ROUTES[path].icon,
         active: route.path === path,
-        count: path === '/orders' ? store.counts.pending : null,
+        count: path === '/orders' ? store.counts.pending : (path === '/accounts' ? store.counts.registrations : null),
       }));
     },
     quick() {

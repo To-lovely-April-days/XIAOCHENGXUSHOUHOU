@@ -11,6 +11,19 @@ public class PasswordLoginRequest { public string? Phone { get; set; } public st
 public class ChangePasswordRequest { public string? OldPassword { get; set; } public string? NewPassword { get; set; } }
 public class SetPasswordRequest { public string? Password { get; set; } }
 
+/// <summary>v1.5 小程序账号密码登录；Code = wx.login 的 code（可空，有则顺带把当前微信绑到账号上，用于订阅消息）</summary>
+public class AccountLoginRequest { public string? Phone { get; set; } public string? Password { get; set; } public string? Code { get; set; } }
+/// <summary>v1.5 小程序注册申请；Code = wx.login 的 code（必填）</summary>
+public class RegisterRequest
+{
+    public string? Name { get; set; }
+    public string? Phone { get; set; }
+    public string? Password { get; set; }
+    public string? Code { get; set; }
+}
+public class RegistrationApproveRequest { public Role? Role { get; set; } public string? Name { get; set; } public string? Department { get; set; } }
+public class RegistrationRejectRequest { public string? Reason { get; set; } }
+
 public class LoginResult
 {
     public string? Token { get; set; }
@@ -132,6 +145,8 @@ public class EmployeeCreateRequest
     public string? Phone { get; set; }
     public Role? Role { get; set; }
     public string? Department { get; set; }
+    /// <summary>v1.5 新增账号时可顺带设初始密码（可空）；编辑时忽略</summary>
+    public string? Password { get; set; }
 }
 
 public class EmployeeUpdateRequest : EmployeeCreateRequest

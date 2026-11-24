@@ -46,3 +46,10 @@
 .todo-sub.gray { color: #6E6E73; }
 .todo-btn { height: 72rpx; padding: 0 28rpx; border-radius: 20rpx; background: #F0F0EE; color: #1D1D1F; font-size: 28rpx; font-weight: 600; display: inline-flex; align-items: center; flex-shrink: 0; }
 .todo-btn.primary { background: #1D1D1F; color: #FFFFFF; padding: 0 32rpx; }
+
+/* v1.5 待审批注册申请提示 */
+.reg-banner { display: flex; align-items: center; gap: 20rpx; margin-bottom: 24rpx; padding: 24rpx 28rpx; border-radius: 28rpx; background: #FFF7E8; border: 2rpx solid rgba(196, 126, 10, 0.18); }
+.reg-dot { width: 14rpx; height: 14rpx; border-radius: 50%; background: #C47E0A; flex-shrink: 0; }
+.reg-body { flex: 1; min-width: 0; }
+.reg-title { font-size: 28rpx; line-height: 40rpx; font-weight: 600; color: #1D1D1F; }
+.reg-sub { margin-top: 4rpx; font-size: 24rpx; line-height: 36rpx; color: #6E6E73; }

@@ -12,6 +12,15 @@
 </view>
 
 <view wx:else class="main">
+  <!-- v1.5 待审批的注册申请（审批在电脑后台做） -->
+  <view wx:if="{{pendingRegistrations > 0}}" class="reg-banner" aria-role="status">
+    <view class="reg-dot"></view>
+    <view class="reg-body">
+      <view class="reg-title">有 <text class="greet-num">{{pendingRegistrations}}</text> 个账号待审批</view>
+      <view class="reg-sub">请到电脑后台「账号管理」里通过或驳回</view>
+    </view>
+  </view>
+
   <!-- 今日现场时间轴 -->
   <view class="tl-card" aria-label="今日现场时间轴">
     <view class="tl-head">

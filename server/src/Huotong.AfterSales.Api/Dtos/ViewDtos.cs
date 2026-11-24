@@ -171,6 +171,8 @@ public class SupervisorHomeDto
     public int OnSiteCount { get; set; }
     public List<TimelineRowDto> Timeline { get; set; } = new();
     public List<TodoDto> Todos { get; set; } = new();
+    /// <summary>v1.5 待审批的注册申请数</summary>
+    public int PendingRegistrations { get; set; }
 }
 
 public class EngineerLoadDto
@@ -197,6 +199,8 @@ public class OverviewDto
     public int PendingRequests { get; set; }
     public int Unpriced { get; set; }
     public int PriceSuggestions { get; set; }
+    /// <summary>v1.5 待审批的注册申请数</summary>
+    public int PendingRegistrations { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
 
@@ -212,6 +216,34 @@ public class EmployeeDto
     public bool Bound { get; set; }
     public string? AvatarUrl { get; set; }
     public bool HasPassword { get; set; }
+}
+
+/// <summary>v1.5 注册申请</summary>
+public class RegistrationDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public string Phone { get; set; } = "";
+    public RegistrationStatus Status { get; set; }
+    public string StatusText { get; set; } = "";
+    public string? RejectReason { get; set; }
+    public DateTime SubmittedAt { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+    public string? ReviewedByName { get; set; }
+    public int? EmployeeId { get; set; }
+}
+
+public class RegistrationListDto
+{
+    public int PendingCount { get; set; }
+    public List<RegistrationDto> Items { get; set; } = new();
+}
+
+/// <summary>v1.5 提交注册后的结果</summary>
+public class RegisterResult
+{
+    public RegistrationStatus Status { get; set; }
+    public string Message { get; set; } = "";
 }
 
 // ---------- PC 主管后台（API.md §9） ----------

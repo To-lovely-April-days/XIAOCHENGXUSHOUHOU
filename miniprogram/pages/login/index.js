@@ -1,27 +1,44 @@
 /**
- * 登录绑定（原型 03）。
- * 第 1 步：勾选隐私指引 → 手机号快速验证（getPhoneNumber）→ POST /api/auth/bind
- * 第 2 步：设置头像（chooseAvatar → 上传 Avatar → PUT /api/me/avatar），可跳过
- * 用户主动退出后进入时停在「已退出」状态，点「微信登录」才重新登录（不自动登录）。
- * query.ticket：ensureLogin 发现未绑定时带过来的 bindTicket（10 分钟有效）。
+ * 登录 / 注册（v1.5：账号密码）。
+ * login    ：手机号 + 密码 → POST /api/auth/account-login（顺带 wx.login 的 code，让后端把当前微信绑到账号上，用于工单提醒）
+ * register ：姓名 / 手机号 / 密码 / 确认密码 → POST /api/auth/register，等主管在电脑后台审批
+ * pending  ：已提交或登录时发现还在审核中
+ * avatar   ：首次登录且还没头像时引导设置（chooseAvatar → 上传 Avatar → PUT /api/me/avatar），可跳过
  */
 const api = require('../../api/index.js');
 const auth = require('../../utils/auth.js');
 const avatar = require('../../utils/avatar.js');
 const format = require('../../utils/format.js');
 
-const TICKET_TTL = 8 * 60 * 1000; // 留余量，票据实际 10 分钟
-const NOT_FOUND_TEXT = '未找到账号，请联系售后主管在后台添加';
+const LAST_PHONE_KEY = 'lastPhone';
+const CODE_PENDING = 40310;
+const CODE_REJECTED = 40311;
+const MOBILE_RE = /^1\d{10}$/;
+
+/** 与后端一致：至少 8 位，同时含字母和数字 */
+function passwordError(p) {
+  if (!p) return '请输入密码';
+  if (p.length < 8 || !/[A-Za-z]/.test(p) || !/\d/.test(p)) return '密码至少 8 位，且需同时包含字母和数字';
+  if (p.length > 64) return '密码不能超过 64 位';
+  return '';
+}
 
 Page({
   data: {
-    step: 'verify',
+    step: 'login',
     agreed: false,
     tried: false,
     shakeAgree: false,
     busy: false,
     error: '',
-    loginHint: '',
+    canReapply: false, // 登录时发现注册被驳回：错误条里给「修改后重新提交」
+    name: '',
+    phone: '',
+    password: '',
+    confirm: '',
+    showPwd: false,
+    pendingTitle: '',
+    pendingDesc: '',
     user: null,
     surname: '',
     roleName: '',
@@ -31,6 +48,14 @@ Page({
     uploading: false
   },
 
+  onLoad() {
+    let last = '';
+    try { last = wx.getStorageSync(LAST_PHONE_KEY) || ''; } catch (e) { /* ignore */ }
+    if (last) this.setData({ phone: String(last) });
+    // 已登录（如从别处误入登录页）直接回首页
+    if (auth.getToken() && auth.getUser()) this.goHome();
+  },
+
   onUnload() {
     if (this._shakeTimer) {
       clearTimeout(this._shakeTimer);
@@ -38,74 +63,38 @@ Page({
     }
   },
 
-  onLoad(query) {
-    this.ticket = query && query.ticket ? decodeURIComponent(query.ticket) : '';
-    this.ticketAt = this.ticket ? Date.now() : 0;
-    if (this.ticket) return;
-    if (auth.isSignedOut()) {
-      this.setData({ step: 'signedOut' });
-      return;
-    }
-    this.prepareTicket(true);
+  onInput(e) {
+    const k = e.currentTarget.dataset.k;
+    const patch = { error: '', canReapply: false };
+    patch[k] = e.detail.value;
+    this.setData(patch);
   },
 
-  /** 已退出状态下点「微信登录」：已绑定则直接进首页，未绑定则进入手机号验证 */
-  onWechatLogin() {
+  togglePwd() {
+    this.setData({ showPwd: !this.data.showPwd });
+  },
+
+  toRegister() {
     if (this.data.busy) return;
-    this.setData({ busy: true, error: '' });
-    wx.showLoading({ title: '登录中', mask: true });
-    auth.setSignedOut(false);
-    this.prepareTicket(true)
-      .then((ticket) => { if (ticket !== null) this.setData({ step: 'verify' }); })
-      .catch((err) => {
-        auth.setSignedOut(true);
-        this.setData({ error: (err && err.message) || '微信登录失败，请检查网络后重试' });
-      })
-      .then(() => {
-        wx.hideLoading();
-        this.setData({ busy: false });
-      });
+    this.setData({ step: 'register', error: '', canReapply: false, password: '', confirm: '', tried: false });
   },
 
-  /** 取 bindTicket；已绑定则直接登录 */
-  prepareTicket(quiet) {
-    return auth.silentLogin().then((res) => {
-      if (res && !res.needBind && res.token) {
-        this.goHome();
-        return null;
-      }
-      this.ticket = (res && res.bindTicket) || '';
-      this.ticketAt = Date.now();
-      this.setData({ loginHint: '' });
-      return this.ticket;
-    }).catch((err) => {
-      const msg = (err && err.message) || '微信登录失败，请检查网络后重试';
-      this.setData({ loginHint: msg });
-      if (!quiet) wx.showToast({ title: msg, icon: 'none' });
-      return Promise.reject(err);
-    });
-  },
-
-  ensureTicket() {
-    if (this.ticket && Date.now() - this.ticketAt < TICKET_TTL) return Promise.resolve(this.ticket);
-    return this.prepareTicket(false);
+  toLoginStep() {
+    if (this.data.busy) return;
+    this.setData({ step: 'login', error: '', canReapply: false, password: '', confirm: '', tried: false });
   },
 
   toggleAgree() {
     const next = !this.data.agreed;
-    this.setData({
-      agreed: next,
-      tried: next ? false : this.data.tried,
-      error: ''
-    });
+    this.setData({ agreed: next, tried: next ? false : this.data.tried });
   },
 
   openPrivacy() {
     wx.navigateTo({ url: '/pages/privacy/index' });
   },
 
-  /** 未勾选时点击验证按钮：高亮并轻抖协议区域引导勾选 */
-  onVerifyBlocked() {
+  /** 未勾选隐私指引：高亮并轻抖勾选区域 */
+  nudgeAgree() {
     if (this._shakeTimer) clearTimeout(this._shakeTimer);
     this.setData({ tried: true, shakeAgree: false }, () => {
       this.setData({ shakeAgree: true });
@@ -116,58 +105,92 @@ Page({
     });
   },
 
-  onAgreePrivacy() { /* 按钮同时带 agreePrivacyAuthorization，点击即同意隐私协议 */ },
+  fail(msg) {
+    this.setData({ error: msg, canReapply: false });
+  },
 
-  onGetPhone(e) {
-    const code = e.detail && e.detail.code;
-    if (!code) {
-      const msg = (e.detail && e.detail.errMsg) || '';
-      if (!/deny|cancel/.test(msg)) wx.showToast({ title: '获取手机号失败，请重试', icon: 'none' });
-      return;
-    }
+  /* ---------- 登录 ---------- */
+  onSubmitLogin() {
     if (this.data.busy) return;
-    this.setData({ busy: true, error: '' });
-    wx.showLoading({ title: '验证中', mask: true });
-    this.ensureTicket()
-      .then((ticket) => {
-        if (ticket === null) return null; // 已直接登录
-        return api.auth.bind(ticket, code, { silent: true }).then((res) => this.onLoggedIn(res));
-      })
-      .catch((err) => this.onBindError(err))
+    const phone = String(this.data.phone || '').trim();
+    const password = this.data.password || '';
+    if (!MOBILE_RE.test(phone)) return this.fail('请输入 11 位手机号');
+    if (!password) return this.fail('请输入密码');
+    if (!this.data.agreed) return this.nudgeAgree();
+
+    this.setData({ busy: true, error: '', canReapply: false });
+    wx.showLoading({ title: '登录中', mask: true });
+    // 拿不到微信 code 也能登录，只是暂时收不到工单提醒
+    auth.wxLogin().catch(() => '')
+      .then((code) => api.auth.accountLogin(phone, password, code, { silent: true }))
+      .then((res) => this.onLoggedIn(res, phone))
+      .catch((err) => this.onLoginError(err))
       .then(() => {
         wx.hideLoading();
         this.setData({ busy: false });
       });
   },
 
-  onBindError(err) {
-    if (!err) return;
-    const code = err.code;
-    if (code === 40401) {
-      this.setData({ error: err.message || NOT_FOUND_TEXT });
-      wx.showModal({ title: '未找到账号', content: (err.message || NOT_FOUND_TEXT) + '，并核对登记的手机号是否与本机微信绑定的手机号一致。', showCancel: false, confirmColor: '#1D1D1F' });
+  onLoginError(err) {
+    const code = err && err.code;
+    if (code === CODE_PENDING) {
+      this.setData({
+        step: 'pending', password: '', error: '',
+        pendingTitle: '账号正在审核中',
+        pendingDesc: '管理员审批通过后，就可以用手机号和密码登录了。如果着急使用，请联系售后主管。'
+      });
       return;
     }
-    if (code === 40900) {
-      this.setData({ error: err.message || '该账号已绑定其他微信，请联系主管解绑' });
-      wx.showModal({ title: '无法绑定', content: err.message || '该账号已绑定其他微信，请联系主管解绑', showCancel: false, confirmColor: '#1D1D1F' });
+    if (code === CODE_REJECTED) {
+      this.setData({ error: err.message || '注册申请未通过，可修改后重新提交', canReapply: true });
       return;
     }
-    if (code === 40000 || code === 40100) this.ticket = ''; // 票据可能失效，下次重新获取
-    this.setData({ error: err.message || '验证失败，请重试' });
+    this.fail((err && err.message) || '登录失败，请检查网络后重试');
   },
 
-  /* ---------- 绑定成功 → 第 2 步 ---------- */
-  onLoggedIn(res) {
-    if (!res || !res.token || !res.user) {
-      this.setData({ error: '登录失败，请重试' });
-      return;
-    }
+  onLoggedIn(res, phone) {
+    if (!res || !res.token || !res.user) return this.fail('登录失败，请重试');
+    try { wx.setStorageSync(LAST_PHONE_KEY, phone); } catch (e) { /* ignore */ }
     auth.setSession(res.token, res.user);
+    if (res.user.avatarUrl) return this.goHome();
     this.applyUser(res.user);
-    this.setData({ step: 'avatar', error: '' });
+    this.setData({ step: 'avatar', error: '', password: '' });
   },
 
+  /* ---------- 注册 ---------- */
+  onSubmitRegister() {
+    if (this.data.busy) return;
+    const d = this.data;
+    const name = String(d.name || '').trim();
+    const phone = String(d.phone || '').trim();
+    if (!name) return this.fail('请填写姓名');
+    if (name.length > 20) return this.fail('姓名不能超过 20 个字');
+    if (!MOBILE_RE.test(phone)) return this.fail('请输入 11 位手机号');
+    const pe = passwordError(d.password);
+    if (pe) return this.fail(pe);
+    if (d.password !== d.confirm) return this.fail('两次输入的密码不一致');
+    if (!d.agreed) return this.nudgeAgree();
+
+    this.setData({ busy: true, error: '', canReapply: false });
+    wx.showLoading({ title: '提交中', mask: true });
+    auth.wxLogin()
+      .then((code) => api.auth.register({ name: name, phone: phone, password: d.password, code: code }, { silent: true }))
+      .then(() => {
+        try { wx.setStorageSync(LAST_PHONE_KEY, phone); } catch (e) { /* ignore */ }
+        this.setData({
+          step: 'pending', password: '', confirm: '',
+          pendingTitle: '已提交，等待管理员审批',
+          pendingDesc: '审批通过后，用刚才填写的手机号和密码登录即可。如果着急使用，请联系售后主管。'
+        });
+      })
+      .catch((err) => this.fail((err && err.message) || '提交失败，请检查网络后重试'))
+      .then(() => {
+        wx.hideLoading();
+        this.setData({ busy: false });
+      });
+  },
+
+  /* ---------- 首次登录 → 设置头像 ---------- */
   applyUser(u) {
     this.setData({
       user: u,
