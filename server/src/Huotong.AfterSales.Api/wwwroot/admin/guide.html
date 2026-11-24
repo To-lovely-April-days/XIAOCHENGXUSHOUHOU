@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<!-- 由 docs/guide/login-tutorial.html 生成，改内容请改那个文件后重新生成 -->
+<title>霍桐售后登录注册演示</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>html{-webkit-text-size-adjust:100%}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<style>
+/* 布局：左边是会自己操作的设备（手机 / 电脑后台），右边是这一步的说明、播放控制和步骤清单；窄屏时上下叠放 */
+:root {
+  --bg: #F6F6F4;
+  --surface: #FFFFFF;
+  --surface-2: #EFEFEC;
+  --line: #E3E3DF;
+  --ink: #1D1D1F;
+  --ink-2: #5E5E63;
+  --ink-3: #8A8A90;
+  --brand: #C81E2B;
+  --brand-soft: #FBEDEE;
+  --ok: #2F7A4B;
+  --ok-soft: #E8F3EC;
+  --bezel: #1D1D1F;
+  --shadow: 0 18px 40px rgba(29, 29, 31, .12);
+  /* 设备屏幕里画的是小程序和后台本身的样子，两种主题下都保持它们真实的浅色界面 */
+  --app-bg: #F6F6F4;
+  --app-card: #FFFFFF;
+  --app-field: #F6F6F4;
+  --app-line: #ECECEA;
+  --app-ink: #1D1D1F;
+  --app-ink-2: #6E6E73;
+  --app-ink-3: #AEAEB2;
+  --app-red: #C81E2B;
+  --app-red-soft: #FBEDEE;
+  --app-green: #2F7A4B;
+  --app-amber-bg: #FFF7E8;
+  --app-amber: #C47E0A;
+  --app-dark: #1D1D1F;
+  --app-on-dark: #FFFFFF;
+  --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-num: "SF Pro Text", "Helvetica Neue", Arial, var(--font);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161617; --surface: #222224; --surface-2: #2C2C2F; --line: #3A3A3E;
+    --ink: #F2F2F3; --ink-2: #B4B4BA; --ink-3: #85858C;
+    --brand: #F0606B; --brand-soft: #3A2023; --ok: #6FC08D; --ok-soft: #1F3227;
+    --bezel: #0B0B0C; --shadow: 0 18px 40px rgba(0, 0, 0, .5);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161617; --surface: #222224; --surface-2: #2C2C2F; --line: #3A3A3E;
+  --ink: #F2F2F3; --ink-2: #B4B4BA; --ink-3: #85858C;
+  --brand: #F0606B; --brand-soft: #3A2023; --ok: #6FC08D; --ok-soft: #1F3227;
+  --bezel: #0B0B0C; --shadow: 0 18px 40px rgba(0, 0, 0, .5);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.6; }
+.wrap {
+  max-width: 1040px; margin: 0 auto; padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+h1 { margin: 0; font-size: 26px; line-height: 1.3; font-weight: 700; text-wrap: balance; }
+.lede { margin: 6px 0 0; color: var(--ink-2); max-width: 36em; }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; color: var(--brand); margin-bottom: 6px; }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.tab {
+  font: inherit; font-weight: 600; cursor: pointer; padding: 9px 16px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink-2);
+}
+.tab[aria-selected="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.tab small { font-weight: 400; opacity: .75; margin-left: 4px; }
+
+.demo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 400px); gap: 32px; margin-top: 20px; align-items: start; }
+.stage {
+  min-width: 0; min-height: 640px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  background: var(--surface-2); border-radius: 28px; padding: 20px 16px;
+}
+.where { font-size: 12px; font-weight: 600; color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
+.where i { width: 7px; height: 7px; border-radius: 50%; background: var(--brand); display: block; }
+.side { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+
+.now { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 18px 20px; }
+.now-count { font-size: 12px; font-weight: 600; color: var(--ink-3); font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.now h2 { margin: 2px 0 6px; font-size: 20px; line-height: 1.35; text-wrap: balance; }
+.now p { margin: 0; color: var(--ink-2); }
+.who { display: inline-block; margin-top: 10px; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); }
+.who.sup { background: var(--brand-soft); color: var(--brand); }
+
+.controls { display: flex; gap: 8px; }
+.btn {
+  font: inherit; font-weight: 600; cursor: pointer; height: 44px; padding: 0 16px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+}
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.main { flex: 1; background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.btn:focus-visible, .tab:focus-visible, .step:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; counter-reset: s; }
+.step {
+  counter-increment: s; width: 100%; text-align: left; font: inherit; cursor: pointer; display: flex; align-items: center; gap: 12px;
+  padding: 9px 10px; border-radius: 12px; border: 0; background: transparent; color: var(--ink-2);
+}
+.step::before {
+  content: counter(s); flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 12px; font-weight: 700; font-family: var(--font-num); background: var(--surface); border: 1px solid var(--line); color: var(--ink-2);
+}
+.step.done::before { content: "✓"; background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+.step.cur { background: var(--surface); color: var(--ink); font-weight: 600; }
+.step.cur::before { background: var(--brand); border-color: var(--brand); color: #FFFFFF; }
+.step span { min-width: 0; }
+
+/* ---------- 设备 ---------- */
+.device { position: relative; flex: none; }
+.phone { width: 292px; height: 590px; border-radius: 40px; background: var(--bezel); padding: 9px; box-shadow: var(--shadow); }
+.phone .screen { width: 100%; height: 100%; border-radius: 32px; }
+.laptop { width: 100%; max-width: 540px; border-radius: 14px; background: var(--bezel); padding: 26px 6px 6px; box-shadow: var(--shadow); }
+.laptop::before { content: "shouhou.sh-htlab.com/admin"; position: absolute; top: 6px; left: 14px; right: 14px; font-size: 10px; color: #9A9AA0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-num); }
+.laptop .screen { border-radius: 9px; min-height: 380px; }
+.screen { position: relative; overflow: hidden; background: var(--app-bg); color: var(--app-ink); font-size: 12px; line-height: 1.5; }
+.scroll { height: 100%; overflow-y: auto; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+
+.finger {
+  position: absolute; z-index: 20; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; pointer-events: none;
+  background: rgba(200, 30, 43, .22); border: 2px solid rgba(200, 30, 43, .75); opacity: 0;
+  transition: left .55s cubic-bezier(.3, .7, .2, 1), top .55s cubic-bezier(.3, .7, .2, 1), opacity .2s;
+}
+.finger.on { opacity: 1; }
+.finger.press { animation: press .38s ease; }
+@keyframes press { 40% { transform: scale(.62); background: rgba(200, 30, 43, .5); } }
+
+/* ---------- 小程序界面 ---------- */
+.a-top { padding: 28px 18px 14px; text-align: center; }
+.a-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; border-radius: 11px; background: var(--app-field); }
+.a-seg span { height: 30px; display: grid; place-items: center; border-radius: 8px; font-size: 12px; color: var(--app-ink-2); }
+.a-seg .on { background: var(--app-card); color: var(--app-ink); font-weight: 700; box-shadow: 0 1px 2px rgba(29, 29, 31, .14); }
+.a-help { margin: 10px 12px 0; padding: 9px 12px; border-radius: 12px; background: #ECECE8; font-size: 10px; line-height: 1.6; color: #3A3A3C; }
+.a-brand { display: flex; align-items: center; justify-content: space-between; }
+.a-logo { font-weight: 800; font-size: 13px; letter-spacing: .04em; color: var(--app-red); }
+.a-pill { font-size: 10px; color: var(--app-ink-2); background: var(--app-card); border-radius: 999px; padding: 2px 8px; }
+.a-title { font-size: 19px; font-weight: 700; margin-top: 10px; }
+.a-sub { font-size: 10.5px; color: var(--app-ink-2); }
+.a-card { margin: 0 12px; padding: 16px 14px; border-radius: 20px; background: var(--app-card); box-shadow: 0 6px 18px rgba(29, 29, 31, .06); }
+.a-h { font-size: 16px; font-weight: 700; }
+.a-d { font-size: 10.5px; color: var(--app-ink-2); margin-top: 2px; }
+.a-f { margin-top: 9px; }
+.a-f label { display: block; font-size: 10.5px; font-weight: 600; color: var(--app-ink-2); margin-bottom: 3px; }
+.a-in { height: 38px; border-radius: 10px; background: var(--app-card); border: 1.5px solid #DEDEDA; padding: 0 10px; display: flex; align-items: center; gap: 7px; font-size: 13px; }
+.a-in svg { flex: none; }
+.a-in.focus { border-color: var(--app-dark); background: var(--app-card); }
+.a-in .ph { color: var(--app-ink-3); font-size: 12px; }
+.a-in.focus .val::after { content: ""; display: inline-block; width: 1.5px; height: 14px; margin-left: 1px; background: var(--app-red); vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.a-cta { margin-top: 14px; height: 40px; border-radius: 12px; background: var(--app-dark); color: var(--app-on-dark); font-weight: 600; font-size: 13.5px; display: grid; place-items: center; }
+.a-cta.red { background: var(--app-red); }
+.a-cta.busy { background: #8E8E93; }
+.a-cta.ghost { background: transparent; color: var(--app-ink-2); font-weight: 500; margin-top: 4px; }
+.a-consent { margin-top: 10px; padding: 2px 0; display: flex; gap: 7px; font-size: 10px; color: var(--app-ink-2); line-height: 1.5; }
+.a-consent .a-box.on { background: var(--app-red); border-color: var(--app-red); }
+.a-box { flex: none; width: 14px; height: 14px; margin-top: 1px; border-radius: 4px; border: 1.5px solid #C7C7C5; background: var(--app-card); display: grid; place-items: center; color: var(--app-on-dark); font-size: 9px; line-height: 1; }
+.a-box.on { background: var(--app-dark); border-color: var(--app-dark); }
+.a-link { color: var(--app-red); font-weight: 600; }
+.a-switch { margin-top: 12px; text-align: center; font-size: 11px; color: var(--app-ink-2); }
+.a-status { display: inline-block; font-size: 10.5px; font-weight: 600; color: #636366; background: var(--app-field); border-radius: 999px; padding: 3px 10px; margin-bottom: 10px; }
+.a-avatar { width: 76px; height: 76px; border-radius: 50%; margin: 18px auto 8px; background: var(--app-field); display: grid; place-items: center; font-size: 28px; font-weight: 700; color: var(--app-ink-2); }
+.a-center { text-align: center; }
+.a-home { padding: 34px 12px 60px; }
+.a-greet { font-size: 18px; font-weight: 700; padding: 0 4px; }
+.a-banner { margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: var(--app-amber-bg); display: flex; align-items: center; gap: 8px; }
+.a-banner b { display: block; font-size: 12px; }
+.a-banner span { font-size: 10px; color: var(--app-ink-2); }
+.a-banner .go { margin-left: auto; flex: none; background: var(--app-dark); color: var(--app-on-dark); font-size: 11px; font-weight: 600; border-radius: 999px; padding: 5px 11px; }
+.a-banner.ok { background: #E8F3EC; }
+.a-order { margin-top: 10px; padding: 12px; border-radius: 16px; background: var(--app-card); }
+.a-order b { font-size: 12.5px; }
+.a-order p { margin: 2px 0 0; font-size: 10.5px; color: var(--app-ink-2); }
+.a-tag { float: right; font-size: 10px; font-weight: 600; color: var(--app-amber); }
+.a-tabbar { position: absolute; left: 0; right: 0; bottom: 0; height: 48px; background: var(--app-card); border-top: 1px solid var(--app-line); display: grid; grid-template-columns: repeat(4, 1fr); text-align: center; align-items: center; font-size: 10.5px; color: var(--app-ink-3); }
+.a-tabbar .on { color: var(--app-ink); font-weight: 700; }
+.a-mask { position: absolute; inset: 0; background: rgba(0, 0, 0, .42); z-index: 5; display: flex; align-items: flex-end; }
+.a-sheet { width: 100%; background: var(--app-card); border-radius: 18px 18px 0 0; padding: 16px 16px 20px; }
+.a-sheet h4 { margin: 0; font-size: 13px; }
+.a-sheet .item { margin-top: 10px; padding: 9px 10px; border-radius: 10px; background: var(--app-field); font-size: 12px; font-weight: 600; }
+.a-sheet .always { margin-top: 12px; display: flex; align-items: center; gap: 7px; font-size: 11.5px; }
+.a-sheet .row { margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.a-sheet .row div { height: 36px; border-radius: 10px; display: grid; place-items: center; font-weight: 600; background: var(--app-field); }
+.a-sheet .row .yes { background: var(--app-green); color: var(--app-on-dark); }
+.a-toast { position: absolute; left: 50%; top: 44%; transform: translateX(-50%); z-index: 8; background: rgba(29, 29, 31, .88); color: #FFFFFF; font-size: 12px; padding: 9px 16px; border-radius: 10px; white-space: nowrap; }
+.a-profile { display: flex; align-items: center; gap: 12px; padding: 0 6px; }
+.a-profile .pic { width: 46px; height: 46px; border-radius: 50%; background: var(--app-card); display: grid; place-items: center; font-weight: 700; font-size: 17px; color: var(--app-ink-2); }
+.a-menu { margin-top: 12px; border-radius: 16px; background: var(--app-card); padding: 0 12px; }
+.a-menu div { display: flex; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid var(--app-line); font-size: 12.5px; }
+.a-menu div:last-child { border-bottom: 0; }
+.a-menu em { font-style: normal; color: var(--app-ink-3); font-size: 11px; }
+.a-nav { padding: 30px 14px 10px; font-size: 14px; font-weight: 700; text-align: center; }
+
+/* ---------- 电脑后台界面 ---------- */
+.d-page { padding: 14px; font-size: 11.5px; }
+.d-crumb { color: var(--app-ink-2); font-size: 10.5px; }
+.d-h { font-size: 16px; font-weight: 700; margin: 2px 0 10px; }
+.d-card { background: var(--app-card); border: 1px solid var(--app-line); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+.d-card h5 { margin: 0; padding: 9px 12px 2px; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+.d-card h5 i { font-style: normal; min-width: 16px; height: 16px; border-radius: 8px; background: var(--app-red); color: #FFFFFF; font-size: 10px; display: grid; place-items: center; }
+.d-card .hint { padding: 0 12px 6px; color: var(--app-ink-2); font-size: 10.5px; }
+.d-row { display: grid; grid-template-columns: 1.1fr 1.3fr 1fr; align-items: center; gap: 6px; padding: 7px 12px; border-top: 1px solid var(--app-line); }
+.d-row.head { color: var(--app-ink-2); font-size: 10.5px; background: #FAFAF9; }
+.d-row .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; color: var(--app-ink-2); }
+.d-row .act { display: flex; justify-content: flex-end; gap: 6px; }
+.d-btn { font-size: 10.5px; font-weight: 600; padding: 3px 9px; border-radius: 6px; background: var(--app-dark); color: var(--app-on-dark); white-space: nowrap; }
+.d-btn.plain { background: transparent; color: var(--app-red); }
+.d-btn.gray { background: var(--app-field); color: var(--app-ink); }
+.d-ok { color: var(--app-green); font-weight: 600; }
+.d-mask { position: absolute; inset: 0; background: rgba(0, 0, 0, .35); display: grid; place-items: center; z-index: 5; padding: 12px; }
+.d-modal { width: 100%; max-width: 280px; background: var(--app-card); border-radius: 12px; padding: 14px; }
+.d-modal h4 { margin: 0 0 8px; font-size: 13px; }
+.d-modal label { display: block; font-size: 10.5px; color: var(--app-ink-2); margin: 8px 0 3px; }
+.d-sel { height: 30px; border-radius: 7px; border: 1px solid var(--app-line); padding: 0 9px; display: flex; align-items: center; justify-content: space-between; }
+.d-sel.open { border-color: var(--app-dark); }
+.d-opts { margin-top: 4px; border: 1px solid var(--app-line); border-radius: 7px; overflow: hidden; }
+.d-opts div { padding: 6px 9px; border-bottom: 1px solid var(--app-line); }
+.d-opts div:last-child { border-bottom: 0; }
+.d-foot { margin-top: 12px; display: flex; justify-content: flex-end; gap: 6px; }
+.d-toast { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 8; background: var(--app-dark); color: #FFFFFF; font-size: 11px; padding: 6px 12px; border-radius: 8px; white-space: nowrap; }
+
+/* ---------- 常见情况 ---------- */
+.faq { margin-top: 44px; }
+.faq h2 { font-size: 18px; margin: 0 0 12px; }
+.faq dl { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 32px; }
+.faq div { padding: 14px 0; border-top: 1px solid var(--line); }
+.faq dt { font-weight: 600; }
+.faq dd { margin: 4px 0 0; color: var(--ink-2); }
+
+@media (max-width: 820px) {
+  h1 { font-size: 22px; }
+  .demo { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .stage { min-height: 0; padding: 16px 10px; }
+  .faq dl { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .finger { transition: none; }
+  .finger.press, .a-in.focus .val::after { animation: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">霍桐售后工单 · 小程序使用教程</div>
+    <h1>怎么注册、怎么登录</h1>
+    <p class="lede">下面的手机会自己操作一遍，照着做就行。可以随时暂停，也可以点右边的步骤直接跳过去看。</p>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="选择你的情况">
+    <button class="tab" role="tab" id="tab-register" data-flow="register" aria-selected="true">我还没有账号<small>先注册</small></button>
+    <button class="tab" role="tab" id="tab-login" data-flow="login" aria-selected="false">主管已帮我建好账号<small>直接登录</small></button>
+  </div>
+
+  <section class="demo" aria-label="操作演示">
+    <div class="stage">
+      <div class="where"><i></i><span id="where">小程序</span></div>
+      <div class="device phone" id="device">
+        <div class="screen"><div class="scroll" id="screen"></div><div class="finger" id="finger"></div></div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="now" aria-live="polite">
+        <div class="now-count" id="count">第 1 步，共 8 步</div>
+        <h2 id="stepTitle"></h2>
+        <p id="stepDesc"></p>
+        <span class="who" id="who"></span>
+      </div>
+      <div class="controls">
+        <button class="btn" id="prev" type="button">上一步</button>
+        <button class="btn main" id="toggle" type="button">暂停</button>
+        <button class="btn" id="next" type="button">下一步</button>
+      </div>
+      <ol class="steps" id="steps"></ol>
+    </div>
+  </section>
+
+  <section class="faq" aria-label="常见情况">
+    <h2>常见情况</h2>
+    <dl>
+      <div><dt>登录时提示“账号正在审核中”</dt><dd>注册已经提交，主管还没审批。把你注册的手机号告诉售后主管，请他在电脑后台的“账号管理”里通过。</dd></div>
+      <div><dt>登录时提示“注册申请未通过”</dt><dd>提示里会写原因。点“修改后重新提交”，按原因改好再提交一次。</dd></div>
+      <div><dt>提示“手机号或密码错误”</dt><dd>先核对手机号。连续输错 5 次会锁 10 分钟。主管帮你建的账号如果还没设密码，也会是这个提示，请主管设置一下。</dd></div>
+      <div><dt>忘记密码</dt><dd>请售后主管在电脑后台“账号管理”里点“重置密码”。登录后可以在“我的 → 修改密码”里改成自己的。</dd></div>
+      <div><dt>提示“该手机号已有账号”</dt><dd>说明主管已经帮你建过账号，不用注册。回到登录页，用手机号和密码直接登录。</dd></div>
+      <div><dt>换了手机</dt><dd>在新手机上用同样的手机号和密码登录，再开启一次工单提醒，提醒就会发到新手机。</dd></div>
+    </dl>
+  </section>
+</div>
+
+<script>
+(function () {
+  var NAME = '李晓明', PHONE = '13800001234', PWD = 'Htlab2026';
+  var dots = function (s) { return s ? new Array(s.length + 1).join('•') : ''; };
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+
+  var ICONS = {
+    phone: '<path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 6 6L15 14l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
+    lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/>'
+  };
+  function icon(name) {
+    return name ? '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5E5E63" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ICONS[name] + '</svg>' : '';
+  }
+  function seg(on) {
+    return '<div class="a-seg"><span' + (on === 'login' ? ' class="on"' : '') + ' data-t="toLogin">登录</span><span' + (on === 'register' ? ' class="on"' : '') + ' data-t="toRegister">注册</span></div>';
+  }
+  function field(s, key, label, ph, secret, ic) {
+    var v = s[key] || '';
+    return '<div class="a-f"><label>' + label + '</label><div class="a-in' + (s.focus === key ? ' focus' : '') + '" data-t="' + key + '">' + icon(ic) +
+      (v || s.focus === key ? '<span class="val">' + esc(secret ? dots(v) : v) + '</span>' : '<span class="ph">' + ph + '</span>') + '</div></div>';
+  }
+  function consent(s) {
+    return '<div class="a-consent" data-t="consent"><span class="a-box' + (s.agreed ? ' on' : '') + '">' + (s.agreed ? '✓' : '') +
+      '</span><span>已阅读并同意 <span class="a-link">《用户隐私保护指引》</span></span></div>';
+  }
+  var topOf = function (sub) {
+    return '<div class="a-top"><span class="a-logo">HTLAB 霍桐仪器</span><div class="a-title">霍桐售后工单</div><div class="a-sub">' + sub + '</div></div>';
+  };
+  var top = topOf('工单流转 · 现场打卡 · 工时协同');
+  var tabbar = function (on) {
+    return '<div class="a-tabbar">' + ['首页', '工单', '工时', '我的'].map(function (t) { return '<span' + (t === on ? ' class="on"' : '') + ' data-t="tab-' + t + '">' + t + '</span>'; }).join('') + '</div>';
+  };
+
+  var SCREENS = {
+    login: function (s) {
+      return top + '<div class="a-card">' + seg('login') +
+        field(s, 'phone', '手机号', '11 位手机号', false, 'phone') + field(s, 'password', '密码', '请输入密码', true, 'lock') +
+        '<div class="a-cta red' + (s.busy ? ' busy' : '') + '" data-t="cta">' + (s.busy ? '登录中…' : '登录') + '</div>' + consent(s) + '</div>' +
+        '<div class="a-help">忘记密码请联系售后主管在电脑后台重置，登录后可在「我的」里修改。</div>';
+    },
+    register: function (s) {
+      return topOf('提交后由管理员审批并分配角色') + '<div class="a-card">' + seg('register') +
+        field(s, 'name', '姓名', '请填写真实姓名', false, 'user') + field(s, 'phone', '手机号', '11 位手机号', false, 'phone') +
+        field(s, 'password', '密码', '至少 8 位，包含字母和数字', true, 'lock') + field(s, 'confirm', '确认密码', '再输入一次密码', true, 'lock') +
+        '<div class="a-cta red' + (s.busy ? ' busy' : '') + '" data-t="cta">' + (s.busy ? '提交中…' : '提交注册') + '</div>' + consent(s) + '</div>';
+    },
+    pending: function () {
+      return top + '<div class="a-card"><span class="a-status">等待审批</span><div class="a-h">已提交，等待管理员审批</div>' +
+        '<div class="a-d" style="margin-top:6px">审批通过后，用刚才填写的手机号和密码登录即可。如果着急使用，请联系售后主管。</div>' +
+        '<div class="a-cta red" data-t="cta">返回登录</div></div>';
+    },
+    avatar: function () {
+      return top + '<div class="a-card a-center"><span class="a-status" style="color:#2F7A4B">登录成功</span><div class="a-h">' + NAME + ' · 售后工程师</div>' +
+        '<div class="a-avatar">李</div><div class="a-d">头像会显示在工单和打卡记录中，不设置则默认显示姓氏</div>' +
+        '<div class="a-cta red">使用微信头像</div><div class="a-cta ghost" data-t="skip">暂不设置，直接进入</div></div>';
+    },
+    home: function (s) {
+      var banner = s.subscribed
+        ? '<div class="a-banner ok"><div><b>工单提醒已开启</b><span>有新工单会在微信“服务通知”里提醒你</span></div></div>'
+        : '<div class="a-banner"><div><b>开启工单提醒</b><span>指派给你的工单会在微信里提醒</span></div><span class="go" data-t="go">去开启</span></div>';
+      var sheet = s.sheet ? '<div class="a-mask"><div class="a-sheet"><h4>霍桐售后工单 申请发送以下消息</h4><div class="item">工单处理进度通知</div>' +
+        '<div class="always" data-t="always"><span class="a-box' + (s.always ? ' on' : '') + '">' + (s.always ? '✓' : '') + '</span>总是保持以上选择，不再询问</div>' +
+        '<div class="row"><div>取消</div><div class="yes" data-t="allow">允许</div></div></div></div>' : '';
+      return '<div class="a-home"><div class="a-greet">下午好，' + NAME + '</div>' + banner +
+        '<div class="a-order"><span class="a-tag">待启动</span><b>苏州某生物科技有限公司</b><p>反应釜不加热 · 上门服务</p></div>' +
+        '<div class="a-order"><span class="a-tag">进行中</span><b>上海某材料研究所</b><p>温控偏差 · 上门服务</p></div></div>' +
+        tabbar('首页') + sheet + (s.toast ? '<div class="a-toast">' + s.toast + '</div>' : '');
+    },
+    me: function () {
+      return '<div class="a-home"><div class="a-profile"><div class="pic">李</div><div><div class="a-greet" style="padding:0">' + NAME + '</div>' +
+        '<div class="a-sub">售后工程师 · 138****1234</div></div></div>' +
+        '<div class="a-menu"><div>更换头像<em>相册 / 拍照</em></div><div>工单提醒<em>已开启</em></div></div>' +
+        '<div class="a-menu"><div data-t="pwd">修改密码<em>›</em></div><div>用户隐私保护指引<em>›</em></div><div>当前版本<em>1.6.0</em></div></div></div>' + tabbar('我的');
+    },
+    password: function (s) {
+      return '<div class="a-nav">修改密码</div><div class="a-card">' + field(s, 'oldPassword', '原密码', '请输入原密码', true) +
+        field(s, 'newPassword', '新密码', '至少 8 位，包含字母和数字', true) + field(s, 'confirm', '确认新密码', '再输入一次新密码', true) +
+        '<div class="a-cta' + (s.busy ? ' busy' : '') + '" data-t="cta">' + (s.busy ? '保存中…' : '保存') + '</div></div>' +
+        (s.toast ? '<div class="a-toast">' + s.toast + '</div>' : '');
+    },
+    admin: function (s) {
+      var reg = s.approved
+        ? '<div class="hint" style="padding-bottom:10px">没有待审批的注册申请</div>'
+        : '<div class="hint">员工在小程序里提交的注册，通过并分配角色后才能登录</div>' +
+          '<div class="d-row head"><span>姓名</span><span>手机号</span><span></span></div>' +
+          '<div class="d-row"><b>' + NAME + '</b><span class="num">' + PHONE + '</span><span class="act"><span class="d-btn" data-t="approve">通过</span><span class="d-btn plain">驳回</span></span></div>';
+      var modal = s.modal ? '<div class="d-mask"><div class="d-modal"><h4>通过注册申请</h4><label>姓名</label><div class="d-sel">' + NAME + '</div>' +
+        '<label>角色（必选）</label><div class="d-sel' + (s.open ? ' open' : '') + '" data-t="role"><span>' + (s.role || '请选择') + '</span><span>⌄</span></div>' +
+        (s.open ? '<div class="d-opts"><div data-t="opt">售后工程师</div><div>销售</div><div>售后主管</div></div>' : '') +
+        '<div class="d-foot"><span class="d-btn gray">取消</span><span class="d-btn" data-t="ok">通过</span></div></div></div>' : '';
+      return '<div class="d-page"><div class="d-crumb">账号管理 / 员工账号</div><div class="d-h">账号管理</div>' +
+        '<div class="d-card"><h5>注册申请' + (s.approved ? '' : '<i>1</i>') + '</h5>' + reg + '</div>' +
+        '<div class="d-card"><div class="d-row head"><span>姓名</span><span>手机号</span><span>角色</span></div>' +
+        '<div class="d-row"><b>张主管</b><span class="num">139****0001</span><span>售后主管</span></div>' +
+        '<div class="d-row"><b>王工</b><span class="num">139****0004</span><span>售后工程师</span></div>' +
+        (s.approved ? '<div class="d-row"><b>' + NAME + '</b><span class="num">' + PHONE + '</span><span class="d-ok">售后工程师</span></div>' : '') +
+        '</div></div>' + modal + (s.toast ? '<div class="d-toast">' + s.toast + '</div>' : '');
+    }
+  };
+
+  /* 每一步是一串操作：screen 换页面、type 打字、tap 手指点一下、set 改状态、wait 停一会儿 */
+  var S = function (name, state) { return { op: 'screen', name: name, state: state || {} }; };
+  var T = function (key, text) { return { op: 'type', key: key, text: text }; };
+  var P = function (sel) { return { op: 'tap', sel: sel }; };
+  var X = function (patch) { return { op: 'set', patch: patch }; };
+  var W = function (ms) { return { op: 'wait', ms: ms }; };
+  var enableReminder = [S('home'), W(700), P('go'), X({ sheet: true }), W(700), P('always'), X({ always: true }), W(600), P('allow'),
+    X({ sheet: false, subscribed: true, toast: '已开启' }), W(1100), X({ toast: '' })];
+
+  var FLOWS = {
+    register: [
+      { title: '在登录页点上方的「注册」', who: '你', desc: '打开小程序会先到登录页。还没有账号的同事，点卡片顶部的「注册」切换到注册。',
+        ops: [S('login'), W(900), P('toRegister'), W(300)] },
+      { title: '填写姓名、手机号和密码', who: '你', desc: '姓名填真实姓名，手机号填自己在用的号码，它就是以后的登录账号。密码至少 8 位，要同时有字母和数字，再输入一遍确认。',
+        ops: [S('register'), W(500), T('name', NAME), T('phone', PHONE), T('password', PWD), T('confirm', PWD), X({ focus: '' })] },
+      { title: '勾选隐私指引，点「提交注册」', who: '你', desc: '先勾选下面的《用户隐私保护指引》，再点「提交注册」。没勾选的话按钮点了不会提交。',
+        ops: [S('register', { name: NAME, phone: PHONE, password: PWD, confirm: PWD }), W(500), P('consent'), X({ agreed: true }), W(500), P('cta'), X({ busy: true }), W(700)] },
+      { title: '看到「等待管理员审批」', who: '你', desc: '出现这个页面就是提交成功了。这时还不能登录。把你注册用的手机号告诉售后主管，请他审批。',
+        ops: [S('pending'), W(1600)] },
+      { title: '主管在电脑后台点「通过」', who: '售后主管', desc: '主管打开电脑后台的「账号管理」，在最上面的「注册申请」里点「通过」，选好角色再确认。这一步由主管来做。',
+        ops: [S('admin'), W(900), P('approve'), X({ modal: true }), W(700), P('role'), X({ open: true }), W(600), P('opt'), X({ open: false, role: '售后工程师' }), W(600), P('ok'),
+          X({ modal: false, approved: true, toast: '已通过，「' + NAME + '」现在可以登录了' }), W(1400), X({ toast: '' })] },
+      { title: '回到小程序，输入手机号和密码登录', who: '你', desc: '主管通过后，回到小程序的登录页，输入注册时的手机号和密码，勾选隐私指引，点「登录」。',
+        ops: [S('login'), W(500), T('phone', PHONE), T('password', PWD), X({ focus: '' }), P('consent'), X({ agreed: true }), W(400), P('cta'), X({ busy: true }), W(700)] },
+      { title: '设置头像，进入首页', who: '你', desc: '第一次登录会请你设置头像，会显示在工单和打卡记录里。也可以先点「暂不设置，直接进入」，以后在「我的」里再换。',
+        ops: [S('avatar'), W(1100), P('skip'), S('home'), W(600)] },
+      { title: '开启工单提醒', who: '你', desc: '点首页顶部的「去开启」。微信弹窗里先勾「总是保持以上选择，不再询问」，再点「允许」。不勾的话只能收到一次提醒。',
+        ops: enableReminder }
+    ],
+    login: [
+      { title: '输入手机号和密码', who: '你', desc: '主管已经在电脑后台建好账号的同事不用注册。手机号就是账号，初始密码找主管要。',
+        ops: [S('login'), W(700), T('phone', PHONE), T('password', PWD), X({ focus: '' })] },
+      { title: '勾选隐私指引，点「登录」', who: '你', desc: '先勾选《用户隐私保护指引》，再点「登录」。登录一次后 30 天内不用再输密码。',
+        ops: [S('login', { phone: PHONE, password: PWD }), W(500), P('consent'), X({ agreed: true }), W(500), P('cta'), X({ busy: true }), W(700), S('home')] },
+      { title: '开启工单提醒', who: '你', desc: '点首页顶部的「去开启」。微信弹窗里先勾「总是保持以上选择，不再询问」，再点「允许」。不勾的话只能收到一次提醒。',
+        ops: enableReminder },
+      { title: '把初始密码改成自己的', who: '你', desc: '点底部「我的」，再点「修改密码」。输入主管给的原密码，再输入两遍新密码，点「保存」。这个密码也用于电脑后台。',
+        ops: [S('home', { subscribed: true }), W(500), P('tab-我的'), S('me'), W(700), P('pwd'), S('password'), W(400), T('oldPassword', PWD), T('newPassword', 'Xiaoming88'),
+          T('confirm', 'Xiaoming88'), X({ focus: '' }), P('cta'), X({ busy: true }), W(500), X({ busy: false, toast: '密码已修改' }), W(1300)] }
+    ]
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var screenEl = $('screen'), finger = $('finger'), device = $('device');
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var flow = 'register', cur = 0, playing = !reduced, token = 0, view = { name: 'login', state: {} };
+
+  function draw() {
+    var isAdmin = view.name === 'admin';
+    device.className = 'device ' + (isAdmin ? 'laptop' : 'phone');
+    $('where').textContent = isAdmin ? '电脑后台（主管操作）' : '小程序';
+    screenEl.innerHTML = SCREENS[view.name](view.state);
+  }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function hideFinger() { finger.className = 'finger'; }
+
+  /** 把一步的操作瞬间做完，显示这一步结束时的样子（暂停、跳步、减少动效时用） */
+  function settle(step) {
+    step.ops.forEach(function (o) {
+      if (o.op === 'screen') view = { name: o.name, state: Object.assign({}, o.state) };
+      else if (o.op === 'type') view.state[o.key] = o.text;
+      else if (o.op === 'set') Object.assign(view.state, o.patch);
+    });
+    view.state.focus = '';
+    hideFinger();
+    draw();
+  }
+
+  async function exec(o, my) {
+    if (o.op === 'screen') { view = { name: o.name, state: Object.assign({}, o.state) }; hideFinger(); draw(); return sleep(350); }
+    if (o.op === 'set') { Object.assign(view.state, o.patch); draw(); return; }
+    if (o.op === 'wait') return sleep(o.ms);
+    if (o.op === 'type') {
+      await tap(o.key, my);
+      if (my !== token) return;
+      view.state.focus = o.key; view.state[o.key] = ''; draw();
+      for (var i = 1; i <= o.text.length; i++) {
+        await sleep(70);
+        if (my !== token) return;
+        view.state[o.key] = o.text.slice(0, i); draw();
+      }
+      return sleep(280);
+    }
+    if (o.op === 'tap') return tap(o.sel, my);
+  }
+  async function tap(sel, my) {
+    var el = screenEl.querySelector('[data-t="' + sel + '"]');
+    if (!el) return;
+    // 只滚动设备屏幕内部，不能带着整个网页一起滚
+    var sr = screenEl.getBoundingClientRect(), er = el.getBoundingClientRect();
+    if (er.bottom > sr.bottom - 8) screenEl.scrollTop += er.bottom - sr.bottom + 12;
+    else if (er.top < sr.top + 8) screenEl.scrollTop -= sr.top - er.top + 12;
+    var box = finger.parentNode.getBoundingClientRect(), r = el.getBoundingClientRect();
+    finger.style.left = (r.left - box.left + r.width / 2) + 'px';
+    finger.style.top = (r.top - box.top + r.height / 2) + 'px';
+    finger.className = 'finger on';
+    await sleep(620);
+    if (my !== token) return;
+    finger.className = 'finger on press';
+    await sleep(400);
+  }
+
+  function meta() {
+    var steps = FLOWS[flow], st = steps[cur];
+    $('count').textContent = '第 ' + (cur + 1) + ' 步，共 ' + steps.length + ' 步';
+    $('stepTitle').textContent = st.title;
+    $('stepDesc').textContent = st.desc;
+    $('who').textContent = '由' + st.who + '操作';
+    $('who').className = 'who' + (st.who === '你' ? '' : ' sup');
+    $('prev').disabled = cur === 0;
+    $('next').disabled = cur === steps.length - 1;
+    $('toggle').textContent = playing ? '暂停' : (cur === steps.length - 1 ? '从头播放' : '继续播放');
+    $('steps').innerHTML = steps.map(function (s, i) {
+      return '<li><button type="button" class="step' + (i === cur ? ' cur' : (i < cur ? ' done' : '')) + '" data-i="' + i + '"' +
+        (i === cur ? ' aria-current="step"' : '') + '><span>' + esc(s.title) + '</span></button></li>';
+    }).join('');
+    Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (t) { t.setAttribute('aria-selected', t.dataset.flow === flow ? 'true' : 'false'); });
+  }
+
+  async function play(i) {
+    var my = ++token, steps = FLOWS[flow];
+    cur = i; playing = true; meta();
+    for (var k = 0; k < steps[i].ops.length; k++) {
+      await exec(steps[i].ops[k], my);
+      if (my !== token) return;
+    }
+    await sleep(1700);
+    if (my !== token) return;
+    if (i + 1 < steps.length) play(i + 1);
+    else { playing = false; hideFinger(); meta(); }
+  }
+  function show(i) { token++; playing = false; cur = i; settle(FLOWS[flow][i]); meta(); }
+
+  $('toggle').addEventListener('click', function () {
+    if (playing) show(cur);
+    else play(cur === FLOWS[flow].length - 1 ? 0 : cur);
+  });
+  $('prev').addEventListener('click', function () { if (cur > 0) show(cur - 1); });
+  $('next').addEventListener('click', function () { if (cur < FLOWS[flow].length - 1) show(cur + 1); });
+  $('steps').addEventListener('click', function (e) {
+    var b = e.target.closest('.step');
+    if (b) show(Number(b.dataset.i));
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (t) {
+    t.addEventListener('click', function () {
+      flow = t.dataset.flow;
+      if (reduced) show(0); else play(0);
+    });
+  });
+
+  // 先画出第一步的静止画面，再开始自动播放
+  view = { name: 'login', state: {} };
+  draw(); meta();
+  if (playing) play(0);
+})();
+</script>
+</body>
+</html>
