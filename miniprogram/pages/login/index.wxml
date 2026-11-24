@@ -1,37 +1,27 @@
 <view class="login">
-  <!-- 顶部精密光学氛围层（纯 CSS，不拦截点击） -->
-  <view class="hero-bg" aria-hidden="true">
-    <view class="bg-glow"></view>
-    <view class="bg-arc bg-arc-outer"></view>
-    <view class="bg-arc bg-arc-inner"></view>
-  </view>
-
   <nav-bar back="{{false}}" fixed="{{false}}" background="transparent" />
 
-  <!-- 品牌页头 -->
+  <!-- 品牌页头（居中） -->
   <view class="hero">
-    <view class="brand-bar">
-      <image class="logo-img" src="/assets/logo.png" mode="aspectFit" />
-      <view class="scope-pill">
-        <view class="scope-dot"></view>
-        <text>内部员工端</text>
-      </view>
-    </view>
+    <image class="logo-img" src="/assets/logo.png" mode="aspectFit" />
     <view class="hero-title">霍桐售后工单</view>
-    <view class="hero-sub">售后工单流转 · 现场打卡 · 工时协同</view>
+    <view class="hero-sub">{{step === 'register' ? '提交后由管理员审批并分配角色' : '工单流转 · 现场打卡 · 工时协同'}}</view>
   </view>
 
   <!-- 主功能卡片 -->
   <view class="auth-card">
     <!-- ===== 登录 ===== -->
     <block wx:if="{{step === 'login'}}">
-      <view class="card-title">账号登录</view>
-      <view class="card-desc">用手机号和密码登录。登录一次后 30 天内不用再输密码。</view>
+      <view class="seg" aria-role="tablist">
+        <view class="seg-item {{step === 'login' ? 'is-on' : ''}}" bindtap="toLoginStep" aria-role="tab" aria-selected="{{step === 'login'}}">登录</view>
+        <view class="seg-item {{step === 'register' ? 'is-on' : ''}}" bindtap="toRegister" aria-role="tab" aria-selected="{{step === 'register'}}">注册</view>
+      </view>
 
       <view class="form">
       <view class="field">
         <text class="field-label">手机号</text>
         <view class="field-box">
+          <ui-icon name="phone" color="#5E5E63" size="20" />
           <input class="field-input num-plain" type="number" maxlength="11" value="{{phone}}" data-k="phone" bindinput="onInput"
                  placeholder="11 位手机号" placeholder-class="field-ph" />
         </view>
@@ -39,6 +29,7 @@
       <view class="field">
         <text class="field-label">密码</text>
         <view class="field-box">
+          <ui-icon name="lock" color="#5E5E63" size="20" />
           <input class="field-input" password="{{!showPwd}}" maxlength="64" value="{{password}}" data-k="password" bindinput="onInput"
                  placeholder="请输入密码" placeholder-class="field-ph" confirm-type="done" bindconfirm="onSubmitLogin" />
           <text class="field-eye" catchtap="togglePwd" aria-role="button">{{showPwd ? '隐藏' : '显示'}}</text>
@@ -71,21 +62,20 @@
         </view>
       </view>
 
-      <view class="switch-row">
-        <text>还没有账号？</text>
-        <text class="switch-link" bindtap="toRegister" aria-role="button">注册账号</text>
-      </view>
     </block>
 
     <!-- ===== 注册 ===== -->
     <block wx:elif="{{step === 'register'}}">
-      <view class="card-title">注册账号</view>
-      <view class="card-desc">提交后由管理员审批并分配角色，通过后即可登录。</view>
+      <view class="seg" aria-role="tablist">
+        <view class="seg-item {{step === 'login' ? 'is-on' : ''}}" bindtap="toLoginStep" aria-role="tab" aria-selected="{{step === 'login'}}">登录</view>
+        <view class="seg-item {{step === 'register' ? 'is-on' : ''}}" bindtap="toRegister" aria-role="tab" aria-selected="{{step === 'register'}}">注册</view>
+      </view>
 
       <view class="form">
         <view class="field">
           <text class="field-label">姓名</text>
           <view class="field-box">
+          <ui-icon name="user" color="#5E5E63" size="20" />
             <input class="field-input" maxlength="20" value="{{name}}" data-k="name" bindinput="onInput"
                    placeholder="请填写真实姓名" placeholder-class="field-ph" />
           </view>
@@ -93,6 +83,7 @@
       <view class="field">
         <text class="field-label">手机号</text>
         <view class="field-box">
+          <ui-icon name="phone" color="#5E5E63" size="20" />
           <input class="field-input num-plain" type="number" maxlength="11" value="{{phone}}" data-k="phone" bindinput="onInput"
                  placeholder="11 位手机号" placeholder-class="field-ph" />
         </view>
@@ -100,6 +91,7 @@
       <view class="field">
         <text class="field-label">密码</text>
         <view class="field-box">
+          <ui-icon name="lock" color="#5E5E63" size="20" />
           <input class="field-input" password="{{!showPwd}}" maxlength="64" value="{{password}}" data-k="password" bindinput="onInput"
                  placeholder="至少 8 位，包含字母和数字" placeholder-class="field-ph" confirm-type="next" />
           <text class="field-eye" catchtap="togglePwd" aria-role="button">{{showPwd ? '隐藏' : '显示'}}</text>
@@ -108,6 +100,7 @@
       <view class="field">
         <text class="field-label">确认密码</text>
         <view class="field-box">
+          <ui-icon name="lock" color="#5E5E63" size="20" />
           <input class="field-input" password="{{!showPwd}}" maxlength="64" value="{{confirm}}" data-k="confirm" bindinput="onInput"
                  placeholder="再输入一次密码" placeholder-class="field-ph" confirm-type="done" bindconfirm="onSubmitRegister" />
           <text class="field-eye" catchtap="togglePwd" aria-role="button">{{showPwd ? '隐藏' : '显示'}}</text>
@@ -137,10 +130,6 @@
         <text class="alert-text">{{error}}</text>
       </view>
 
-      <view class="switch-row">
-        <text>已有账号？</text>
-        <text class="switch-link" bindtap="toLoginStep" aria-role="button">返回登录</text>
-      </view>
     </block>
 
     <!-- ===== 等待审批 ===== -->
@@ -217,11 +206,10 @@
   </view>
 
   <!-- 辅助说明条 -->
-  <view wx:if="{{step === 'login'}}" class="help-card">
+  <view wx:if="{{step === 'login' || step === 'register'}}" class="help-card">
     <view class="help-icon"><ui-icon name="wx-info" color="#8E8E93" size="17" /></view>
     <view class="help-body">
-      <view class="help-title">忘记密码怎么办？</view>
-      <view class="help-desc">请联系售后主管在电脑后台重置密码，登录后可在「我的」里自己修改。</view>
+      <view class="help-desc">{{step === 'register' ? '手机号就是以后的登录账号。主管已经帮你建好账号的，不用注册，直接登录。' : '忘记密码请联系售后主管在电脑后台重置，登录后可在「我的」里修改。'}}</view>
     </view>
   </view>
 

@@ -75,12 +75,12 @@ Page({
   },
 
   toRegister() {
-    if (this.data.busy) return;
+    if (this.data.busy || this.data.step === 'register') return;
     this.setData({ step: 'register', error: '', canReapply: false, password: '', confirm: '', tried: false });
   },
 
   toLoginStep() {
-    if (this.data.busy) return;
+    if (this.data.busy || this.data.step === 'login') return;
     this.setData({ step: 'login', error: '', canReapply: false, password: '', confirm: '', tried: false });
   },
 

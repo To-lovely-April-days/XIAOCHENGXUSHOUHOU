@@ -713,3 +713,148 @@ page {
   letter-spacing: 1.5rpx;
   color: #AEAEB2;
 }
+
+/* ============ v1.6 登录 / 注册页改版（方案 D：品牌色卡片）============
+   居中 logo + 白色卡片 + 顶部「登录 / 注册」分段切换 + 带图标的描边输入框 + 品牌红主按钮。
+   下面的规则覆盖上面旧版的同名样式。 */
+.hero {
+  padding: 8rpx 40rpx 44rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.logo-img {
+  width: 184rpx;
+  height: 128rpx;
+}
+
+.hero-title {
+  margin-top: 24rpx;
+  font-size: 44rpx;
+  line-height: 60rpx;
+  letter-spacing: 0;
+}
+
+.hero-sub {
+  margin-top: 4rpx;
+}
+
+.auth-card {
+  margin: 0 40rpx;
+  padding: 40rpx;
+  border-radius: 48rpx;
+  border: none;
+  box-shadow: 0 20rpx 60rpx rgba(29, 29, 31, 0.08);
+}
+
+.seg {
+  display: flex;
+  gap: 8rpx;
+  padding: 8rpx;
+  border-radius: 28rpx;
+  background: #F6F6F4;
+}
+
+.seg-item {
+  flex: 1;
+  height: 88rpx;
+  border-radius: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30rpx;
+  font-weight: 500;
+  color: #5E5E63;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.seg-item.is-on {
+  background: #FFFFFF;
+  color: #1D1D1F;
+  font-weight: 700;
+  box-shadow: 0 2rpx 6rpx rgba(29, 29, 31, 0.12);
+}
+
+.form {
+  margin-top: 16rpx;
+}
+
+.field {
+  margin-top: 28rpx;
+}
+
+.field-label {
+  font-size: 26rpx;
+  color: #5E5E63;
+}
+
+.field-box {
+  height: 104rpx;
+  padding: 0 28rpx;
+  gap: 20rpx;
+  border-radius: 24rpx;
+  background: #FFFFFF;
+  border: 3rpx solid #DEDEDA;
+}
+
+.field-input {
+  height: 96rpx;
+  font-size: 32rpx;
+}
+
+.field-ph {
+  color: #8A8A8E;
+  font-size: 30rpx;
+}
+
+.field-eye {
+  color: #B01A26;
+  font-size: 28rpx;
+}
+
+.cta-btn {
+  height: 108rpx;
+  border-radius: 24rpx;
+  font-size: 34rpx;
+}
+
+.cta-active {
+  background: #C81E2B;
+  box-shadow: 0 12rpx 28rpx rgba(200, 30, 43, 0.22);
+}
+
+.consent-row {
+  padding: 8rpx 0 0;
+  background: transparent;
+  border-color: transparent;
+}
+
+.consent-row.consent-warn {
+  padding: 20rpx 22rpx;
+}
+
+.check-box.is-on {
+  background: #C81E2B;
+  border-color: #C81E2B;
+}
+
+.consent-link,
+.alert-link {
+  color: #B01A26;
+}
+
+.help-card {
+  margin: 32rpx 40rpx 0;
+  padding: 28rpx 32rpx;
+  border-radius: 32rpx;
+  background: #ECECE8;
+  border: none;
+}
+
+.help-desc {
+  font-size: 26rpx;
+  line-height: 42rpx;
+  color: #3A3A3C;
+}
