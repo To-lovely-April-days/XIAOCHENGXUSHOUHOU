@@ -281,7 +281,8 @@ h1 { margin: 0; font-size: 26px; line-height: 1.3; font-weight: 700; text-wrap: 
   <section class="faq" aria-label="常见情况">
     <h2>常见情况</h2>
     <dl>
-      <div><dt>登录时提示“账号正在审核中”</dt><dd>注册已经提交，主管还没审批。把你注册的手机号告诉售后主管，请他在电脑后台的“账号管理”里通过。</dd></div>
+      <div><dt>登录时提示“账号正在审核中”</dt><dd>注册已经提交，还没有审批。审批人会收到微信提醒；着急的话可以直接联系有审批权限的同事。</dd></div>
+      <div><dt>没收到审批结果的微信通知</dt><dd>提交注册时如果没点“允许”，就收不到通知。不影响注册，过一会儿直接用手机号和密码登录试试，能登进去就是已经通过了。</dd></div>
       <div><dt>登录时提示“注册申请未通过”</dt><dd>提示里会写原因。点“修改后重新提交”，按原因改好再提交一次。</dd></div>
       <div><dt>提示“手机号或密码错误”</dt><dd>先核对手机号。连续输错 5 次会锁 10 分钟。主管帮你建的账号如果还没设密码，也会是这个提示，请主管设置一下。</dd></div>
       <div><dt>忘记密码</dt><dd>请售后主管在电脑后台“账号管理”里点“重置密码”。登录后可以在“我的 → 修改密码”里改成自己的。</dd></div>
@@ -313,6 +314,20 @@ h1 { margin: 0; font-size: 26px; line-height: 1.3; font-weight: 700; text-wrap: 
     return '<div class="a-f"><label>' + label + '</label><div class="a-in' + (s.focus === key ? ' focus' : '') + '" data-t="' + key + '">' + icon(ic) +
       (v || s.focus === key ? '<span class="val">' + esc(secret ? dots(v) : v) + '</span>' : '<span class="ph">' + ph + '</span>') + '</div></div>';
   }
+  /** 微信的订阅消息授权弹窗（示意） */
+  function subSheet(s, item, withAlways) {
+    if (!s.sheet) return '';
+    return '<div class="a-mask"><div class="a-sheet"><h4>霍桐售后工单 申请发送以下消息</h4><div class="item">' + item + '</div>' +
+      (withAlways ? '<div class="always" data-t="always"><span class="a-box' + (s.always ? ' on' : '') + '">' + (s.always ? '✓' : '') + '</span>总是保持以上选择，不再询问</div>' : '') +
+      '<div class="row"><div>取消</div><div class="yes" data-t="allow">允许</div></div></div></div>';
+  }
+  /** 微信「服务通知」里的一条消息（示意） */
+  function notice(title, rows) {
+    return '<div class="a-nav">服务通知</div><div class="a-card" style="padding:14px">' +
+      '<div style="font-size:11px;color:#6E6E73">霍桐售后工单</div><div class="a-h" style="margin-top:4px">' + title + '</div>' +
+      rows.map(function (r) { return '<div style="display:flex;gap:10px;margin-top:8px;font-size:12px"><span style="width:56px;flex:none;color:#6E6E73">' + r[0] + '</span><span>' + r[1] + '</span></div>'; }).join('') +
+      '<div data-t="open" style="margin-top:12px;padding-top:10px;border-top:1px solid #ECECEA;font-size:12px;color:#576B95">进入小程序查看 ›</div></div>';
+  }
   function consent(s) {
     return '<div class="a-consent" data-t="consent"><span class="a-box' + (s.agreed ? ' on' : '') + '">' + (s.agreed ? '✓' : '') +
       '</span><span>已阅读并同意 <span class="a-link">《用户隐私保护指引》</span></span></div>';
@@ -336,11 +351,12 @@ h1 { margin: 0; font-size: 26px; line-height: 1.3; font-weight: 700; text-wrap: 
       return topOf('提交后由管理员审批并分配角色') + '<div class="a-card">' + seg('register') +
         field(s, 'name', '姓名', '请填写真实姓名', false, 'user') + field(s, 'phone', '手机号', '11 位手机号', false, 'phone') +
         field(s, 'password', '密码', '至少 8 位，包含字母和数字', true, 'lock') + field(s, 'confirm', '确认密码', '再输入一次密码', true, 'lock') +
-        '<div class="a-cta red' + (s.busy ? ' busy' : '') + '" data-t="cta">' + (s.busy ? '提交中…' : '提交注册') + '</div>' + consent(s) + '</div>';
+        '<div class="a-cta red' + (s.busy ? ' busy' : '') + '" data-t="cta">' + (s.busy ? '提交中…' : '提交注册') + '</div>' + consent(s) + '</div>' +
+        subSheet(s, '审核结果通知', false);
     },
     pending: function () {
       return top + '<div class="a-card"><span class="a-status">等待审批</span><div class="a-h">已提交，等待管理员审批</div>' +
-        '<div class="a-d" style="margin-top:6px">审批通过后，用刚才填写的手机号和密码登录即可。如果着急使用，请联系售后主管。</div>' +
+        '<div class="a-d" style="margin-top:6px">审批有结果后，微信会通知你。通过后用刚才填写的手机号和密码登录即可。</div>' +
         '<div class="a-cta red" data-t="cta">返回登录</div></div>';
     },
     avatar: function () {
@@ -364,12 +380,35 @@ h1 { margin: 0; font-size: 26px; line-height: 1.3; font-weight: 700; text-wrap: 
       return '<div class="a-home"><div class="a-profile"><div class="pic">李</div><div><div class="a-greet" style="padding:0">' + NAME + '</div>' +
         '<div class="a-sub">售后工程师 · 138****1234</div></div></div>' +
         '<div class="a-menu"><div>更换头像<em>相册 / 拍照</em></div><div>工单提醒<em>已开启</em></div></div>' +
-        '<div class="a-menu"><div data-t="pwd">修改密码<em>›</em></div><div>用户隐私保护指引<em>›</em></div><div>当前版本<em>1.6.0</em></div></div></div>' + tabbar('我的');
+        '<div class="a-menu"><div data-t="pwd">修改密码<em>›</em></div><div>用户隐私保护指引<em>›</em></div><div>当前版本<em>1.7.0</em></div></div></div>' + tabbar('我的');
     },
     password: function (s) {
       return '<div class="a-nav">修改密码</div><div class="a-card">' + field(s, 'oldPassword', '原密码', '请输入原密码', true) +
         field(s, 'newPassword', '新密码', '至少 8 位，包含字母和数字', true) + field(s, 'confirm', '确认新密码', '再输入一次新密码', true) +
         '<div class="a-cta' + (s.busy ? ' busy' : '') + '" data-t="cta">' + (s.busy ? '保存中…' : '保存') + '</div></div>' +
+        (s.toast ? '<div class="a-toast">' + s.toast + '</div>' : '');
+    },
+    noticeNew: function () {
+      return notice('用户注册审核通知', [['申请人', NAME], ['手机号', PHONE], ['申请时间', '今天 14:20'], ['备注', NAME + ' 申请注册账号，请审批']]);
+    },
+    noticeResult: function () {
+      return notice('审核结果通知', [['申请人', NAME], ['审核结果', '已通过'], ['备注', '审批已通过，请用手机号和密码登录'], ['审核时间', '今天 14:35']]);
+    },
+    approvals: function (s) {
+      var btn = 'flex:1;height:34px;border-radius:9px;display:grid;place-items:center;font-size:12.5px;font-weight:600;';
+      var list = s.approved
+        ? '<div class="a-card a-center" style="margin-top:8px;color:#6E6E73">没有待审批的注册申请</div>'
+        : '<div class="a-card" style="margin-top:8px"><div style="display:flex;justify-content:space-between"><b style="font-size:14px">' + NAME + '</b><span style="font-size:10.5px;color:#6E6E73">今天 14:20</span></div>' +
+          '<div class="a-d">' + PHONE + '</div><div style="display:flex;gap:8px;margin-top:10px">' +
+          '<div style="' + btn + 'background:#F0F0EE">驳回</div><div data-t="approve" style="' + btn + 'background:#C81E2B;color:#FFFFFF">通过</div></div></div>';
+      var sheet = s.modal ? '<div class="a-mask"><div class="a-sheet"><h4>通过注册申请</h4><div class="a-d">' + NAME + ' · ' + PHONE + '</div>' +
+        '<div class="a-f"><div class="a-in"><span class="ph" style="width:38px">姓名</span><span>' + NAME + '</span></div></div>' +
+        '<div class="a-f"><div class="a-in" data-t="role"><span class="ph" style="width:38px">岗位</span><span' + (s.role ? '' : ' class="ph"') + '>' + (s.role || '请选择') + '</span></div></div>' +
+        '<div class="a-f"><div class="a-in"><span class="ph" style="width:38px">部门</span><span' + (s.dept ? '' : ' class="ph"') + '>' + (s.dept || '请选择') + '</span></div></div>' +
+        '<div class="row"><div>取消</div><div class="yes" data-t="ok" style="background:#C81E2B">通过</div></div></div></div>' : '';
+      return '<div class="a-nav">注册审批</div>' +
+        '<div class="a-banner" style="margin:0 12px"><div><b>新申请提醒</b><span>有人提交注册时微信会提醒你</span></div><span style="margin-left:auto;font-size:11px;color:#6E6E73">已开启</span></div>' +
+        '<div style="margin:12px 16px 0;font-size:13px;font-weight:700">待审批 ' + (s.approved ? 0 : 1) + '</div>' + list + sheet +
         (s.toast ? '<div class="a-toast">' + s.toast + '</div>' : '');
     },
     admin: function (s) {
@@ -407,14 +446,19 @@ h1 { margin: 0; font-size: 26px; line-height: 1.3; font-weight: 700; text-wrap: 
         ops: [S('login'), W(900), P('toRegister'), W(300)] },
       { title: '填写姓名、手机号和密码', who: '你', desc: '姓名填真实姓名，手机号填自己在用的号码，它就是以后的登录账号。密码至少 8 位，要同时有字母和数字，再输入一遍确认。',
         ops: [S('register'), W(500), T('name', NAME), T('phone', PHONE), T('password', PWD), T('confirm', PWD), X({ focus: '' })] },
-      { title: '勾选隐私指引，点「提交注册」', who: '你', desc: '先勾选下面的《用户隐私保护指引》，再点「提交注册」。没勾选的话按钮点了不会提交。',
-        ops: [S('register', { name: NAME, phone: PHONE, password: PWD, confirm: PWD }), W(500), P('consent'), X({ agreed: true }), W(500), P('cta'), X({ busy: true }), W(700)] },
-      { title: '看到「等待管理员审批」', who: '你', desc: '出现这个页面就是提交成功了。这时还不能登录。把你注册用的手机号告诉售后主管，请他审批。',
+      { title: '勾选隐私指引，提交，并允许通知', who: '你', desc: '先勾选《用户隐私保护指引》，再点「提交注册」。这时微信会弹出通知授权，点「允许」，审批有结果时微信才能通知你。',
+        ops: [S('register', { name: NAME, phone: PHONE, password: PWD, confirm: PWD }), W(500), P('consent'), X({ agreed: true }), W(500), P('cta'), X({ sheet: true }), W(800),
+          P('allow'), X({ sheet: false, busy: true }), W(700)] },
+      { title: '看到「等待管理员审批」', who: '你', desc: '出现这个页面就是提交成功了。这时还不能登录，等审批人处理就行，不用再做别的。',
         ops: [S('pending'), W(1600)] },
-      { title: '主管在电脑后台点「通过」', who: '售后主管', desc: '主管打开电脑后台的「账号管理」，在最上面的「注册申请」里点「通过」，选好角色再确认。这一步由主管来做。',
-        ops: [S('admin'), W(900), P('approve'), X({ modal: true }), W(700), P('role'), X({ open: true }), W(600), P('opt'), X({ open: false, role: '售后工程师' }), W(600), P('ok'),
-          X({ modal: false, approved: true, toast: '已通过，「' + NAME + '」现在可以登录了' }), W(1400), X({ toast: '' })] },
-      { title: '回到小程序，输入手机号和密码登录', who: '你', desc: '主管通过后，回到小程序的登录页，输入注册时的手机号和密码，勾选隐私指引，点「登录」。',
+      { title: '审批人收到微信提醒', who: '审批人', desc: '有注册审批权限的同事会在微信「服务通知」里收到一条提醒，点开直接进入审批页面。这一步和下一步由审批人来做。',
+        ops: [S('noticeNew'), W(1300), P('open'), W(300)] },
+      { title: '审批人在小程序里点「通过」', who: '审批人', desc: '在「注册审批」里点「通过」，选好岗位和部门再确认。也可以在「我的 → 注册审批」里进来，或者去电脑后台审批。',
+        ops: [S('approvals'), W(700), P('approve'), X({ modal: true }), W(700), P('role'), X({ role: '售后工程师', dept: '售后部门' }), W(700), P('ok'),
+          X({ modal: false, approved: true, toast: '已通过' }), W(1200), X({ toast: '' })] },
+      { title: '你收到「审批已通过」的微信通知', who: '你', desc: '审批通过后，你的微信「服务通知」里会收到一条审核结果通知。点开它就回到小程序的登录页。如果被驳回，通知里会写原因。',
+        ops: [S('noticeResult'), W(1500), P('open'), W(300)] },
+      { title: '输入手机号和密码登录', who: '你', desc: '在登录页输入注册时的手机号和密码，勾选隐私指引，点「登录」。',
         ops: [S('login'), W(500), T('phone', PHONE), T('password', PWD), X({ focus: '' }), P('consent'), X({ agreed: true }), W(400), P('cta'), X({ busy: true }), W(700)] },
       { title: '设置头像，进入首页', who: '你', desc: '第一次登录会请你设置头像，会显示在工单和打卡记录里。也可以先点「暂不设置，直接进入」，以后在「我的」里再换。',
         ops: [S('avatar'), W(1100), P('skip'), S('home'), W(600)] },
@@ -442,7 +486,8 @@ h1 { margin: 0; font-size: 26px; line-height: 1.3; font-weight: 700; text-wrap: 
   function draw() {
     var isAdmin = view.name === 'admin';
     device.className = 'device ' + (isAdmin ? 'laptop' : 'phone');
-    $('where').textContent = isAdmin ? '电脑后台（主管操作）' : '小程序';
+    var isNotice = view.name === 'noticeNew' || view.name === 'noticeResult';
+    $('where').textContent = isAdmin ? '电脑后台（主管操作）' : (isNotice ? '微信 · 服务通知' : (view.name === 'approvals' ? '小程序（审批人操作）' : '小程序'));
     screenEl.innerHTML = SCREENS[view.name](view.state);
   }
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
