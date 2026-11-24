@@ -130,7 +130,11 @@ h1 { margin: 0; font-size: 26px; line-height: 1.3; font-weight: 700; text-wrap: 
 @keyframes press { 40% { transform: scale(.62); background: rgba(200, 30, 43, .5); } }
 
 /* ---------- 小程序界面 ---------- */
-.a-top { padding: 30px 18px 12px; }
+.a-top { padding: 28px 18px 14px; text-align: center; }
+.a-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; border-radius: 11px; background: var(--app-field); }
+.a-seg span { height: 30px; display: grid; place-items: center; border-radius: 8px; font-size: 12px; color: var(--app-ink-2); }
+.a-seg .on { background: var(--app-card); color: var(--app-ink); font-weight: 700; box-shadow: 0 1px 2px rgba(29, 29, 31, .14); }
+.a-help { margin: 10px 12px 0; padding: 9px 12px; border-radius: 12px; background: #ECECE8; font-size: 10px; line-height: 1.6; color: #3A3A3C; }
 .a-brand { display: flex; align-items: center; justify-content: space-between; }
 .a-logo { font-weight: 800; font-size: 13px; letter-spacing: .04em; color: var(--app-red); }
 .a-pill { font-size: 10px; color: var(--app-ink-2); background: var(--app-card); border-radius: 999px; padding: 2px 8px; }
@@ -141,15 +145,18 @@ h1 { margin: 0; font-size: 26px; line-height: 1.3; font-weight: 700; text-wrap: 
 .a-d { font-size: 10.5px; color: var(--app-ink-2); margin-top: 2px; }
 .a-f { margin-top: 9px; }
 .a-f label { display: block; font-size: 10.5px; font-weight: 600; color: var(--app-ink-2); margin-bottom: 3px; }
-.a-in { height: 36px; border-radius: 10px; background: var(--app-field); border: 1px solid var(--app-line); padding: 0 10px; display: flex; align-items: center; font-size: 13px; }
+.a-in { height: 38px; border-radius: 10px; background: var(--app-card); border: 1.5px solid #DEDEDA; padding: 0 10px; display: flex; align-items: center; gap: 7px; font-size: 13px; }
+.a-in svg { flex: none; }
 .a-in.focus { border-color: var(--app-dark); background: var(--app-card); }
 .a-in .ph { color: var(--app-ink-3); font-size: 12px; }
 .a-in.focus .val::after { content: ""; display: inline-block; width: 1.5px; height: 14px; margin-left: 1px; background: var(--app-red); vertical-align: -2px; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 .a-cta { margin-top: 14px; height: 40px; border-radius: 12px; background: var(--app-dark); color: var(--app-on-dark); font-weight: 600; font-size: 13.5px; display: grid; place-items: center; }
+.a-cta.red { background: var(--app-red); }
 .a-cta.busy { background: #8E8E93; }
 .a-cta.ghost { background: transparent; color: var(--app-ink-2); font-weight: 500; margin-top: 4px; }
-.a-consent { margin-top: 10px; padding: 8px 9px; border-radius: 10px; background: #FAF9F7; display: flex; gap: 7px; font-size: 10px; color: var(--app-ink-2); line-height: 1.5; }
+.a-consent { margin-top: 10px; padding: 2px 0; display: flex; gap: 7px; font-size: 10px; color: var(--app-ink-2); line-height: 1.5; }
+.a-consent .a-box.on { background: var(--app-red); border-color: var(--app-red); }
 .a-box { flex: none; width: 14px; height: 14px; margin-top: 1px; border-radius: 4px; border: 1.5px solid #C7C7C5; background: var(--app-card); display: grid; place-items: center; color: var(--app-on-dark); font-size: 9px; line-height: 1; }
 .a-box.on { background: var(--app-dark); border-color: var(--app-dark); }
 .a-link { color: var(--app-red); font-weight: 600; }
@@ -290,44 +297,56 @@ h1 { margin: 0; font-size: 26px; line-height: 1.3; font-weight: 700; text-wrap: 
   var dots = function (s) { return s ? new Array(s.length + 1).join('•') : ''; };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
 
-  function field(s, key, label, ph, secret) {
+  var ICONS = {
+    phone: '<path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 6 6L15 14l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
+    lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/>'
+  };
+  function icon(name) {
+    return name ? '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5E5E63" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ICONS[name] + '</svg>' : '';
+  }
+  function seg(on) {
+    return '<div class="a-seg"><span' + (on === 'login' ? ' class="on"' : '') + ' data-t="toLogin">登录</span><span' + (on === 'register' ? ' class="on"' : '') + ' data-t="toRegister">注册</span></div>';
+  }
+  function field(s, key, label, ph, secret, ic) {
     var v = s[key] || '';
-    return '<div class="a-f"><label>' + label + '</label><div class="a-in' + (s.focus === key ? ' focus' : '') + '" data-t="' + key + '">' +
+    return '<div class="a-f"><label>' + label + '</label><div class="a-in' + (s.focus === key ? ' focus' : '') + '" data-t="' + key + '">' + icon(ic) +
       (v || s.focus === key ? '<span class="val">' + esc(secret ? dots(v) : v) + '</span>' : '<span class="ph">' + ph + '</span>') + '</div></div>';
   }
   function consent(s) {
     return '<div class="a-consent" data-t="consent"><span class="a-box' + (s.agreed ? ' on' : '') + '">' + (s.agreed ? '✓' : '') +
       '</span><span>已阅读并同意 <span class="a-link">《用户隐私保护指引》</span></span></div>';
   }
-  var top = '<div class="a-top"><div class="a-brand"><span class="a-logo">HTLAB 霍桐仪器</span><span class="a-pill">内部员工端</span></div>' +
-    '<div class="a-title">霍桐售后工单</div><div class="a-sub">售后工单流转 · 现场打卡 · 工时协同</div></div>';
+  var topOf = function (sub) {
+    return '<div class="a-top"><span class="a-logo">HTLAB 霍桐仪器</span><div class="a-title">霍桐售后工单</div><div class="a-sub">' + sub + '</div></div>';
+  };
+  var top = topOf('工单流转 · 现场打卡 · 工时协同');
   var tabbar = function (on) {
     return '<div class="a-tabbar">' + ['首页', '工单', '工时', '我的'].map(function (t) { return '<span' + (t === on ? ' class="on"' : '') + ' data-t="tab-' + t + '">' + t + '</span>'; }).join('') + '</div>';
   };
 
   var SCREENS = {
     login: function (s) {
-      return top + '<div class="a-card"><div class="a-h">账号登录</div><div class="a-d">用手机号和密码登录。登录一次后 30 天内不用再输密码。</div>' +
-        field(s, 'phone', '手机号', '11 位手机号') + field(s, 'password', '密码', '请输入密码', true) +
-        '<div class="a-cta' + (s.busy ? ' busy' : '') + '" data-t="cta">' + (s.busy ? '登录中…' : '登录') + '</div>' + consent(s) +
-        '<div class="a-switch">还没有账号？<span class="a-link" data-t="toRegister">注册账号</span></div></div>';
+      return top + '<div class="a-card">' + seg('login') +
+        field(s, 'phone', '手机号', '11 位手机号', false, 'phone') + field(s, 'password', '密码', '请输入密码', true, 'lock') +
+        '<div class="a-cta red' + (s.busy ? ' busy' : '') + '" data-t="cta">' + (s.busy ? '登录中…' : '登录') + '</div>' + consent(s) + '</div>' +
+        '<div class="a-help">忘记密码请联系售后主管在电脑后台重置，登录后可在「我的」里修改。</div>';
     },
     register: function (s) {
-      return top + '<div class="a-card"><div class="a-h">注册账号</div><div class="a-d">提交后由管理员审批并分配角色，通过后即可登录。</div>' +
-        field(s, 'name', '姓名', '请填写真实姓名') + field(s, 'phone', '手机号', '11 位手机号') +
-        field(s, 'password', '密码', '至少 8 位，包含字母和数字', true) + field(s, 'confirm', '确认密码', '再输入一次密码', true) +
-        '<div class="a-cta' + (s.busy ? ' busy' : '') + '" data-t="cta">' + (s.busy ? '提交中…' : '提交注册') + '</div>' + consent(s) +
-        '<div class="a-switch">已有账号？<span class="a-link">返回登录</span></div></div>';
+      return topOf('提交后由管理员审批并分配角色') + '<div class="a-card">' + seg('register') +
+        field(s, 'name', '姓名', '请填写真实姓名', false, 'user') + field(s, 'phone', '手机号', '11 位手机号', false, 'phone') +
+        field(s, 'password', '密码', '至少 8 位，包含字母和数字', true, 'lock') + field(s, 'confirm', '确认密码', '再输入一次密码', true, 'lock') +
+        '<div class="a-cta red' + (s.busy ? ' busy' : '') + '" data-t="cta">' + (s.busy ? '提交中…' : '提交注册') + '</div>' + consent(s) + '</div>';
     },
     pending: function () {
       return top + '<div class="a-card"><span class="a-status">等待审批</span><div class="a-h">已提交，等待管理员审批</div>' +
         '<div class="a-d" style="margin-top:6px">审批通过后，用刚才填写的手机号和密码登录即可。如果着急使用，请联系售后主管。</div>' +
-        '<div class="a-cta" data-t="cta">返回登录</div></div>';
+        '<div class="a-cta red" data-t="cta">返回登录</div></div>';
     },
     avatar: function () {
       return top + '<div class="a-card a-center"><span class="a-status" style="color:#2F7A4B">登录成功</span><div class="a-h">' + NAME + ' · 售后工程师</div>' +
         '<div class="a-avatar">李</div><div class="a-d">头像会显示在工单和打卡记录中，不设置则默认显示姓氏</div>' +
-        '<div class="a-cta">使用微信头像</div><div class="a-cta ghost" data-t="skip">暂不设置，直接进入</div></div>';
+        '<div class="a-cta red">使用微信头像</div><div class="a-cta ghost" data-t="skip">暂不设置，直接进入</div></div>';
     },
     home: function (s) {
       var banner = s.subscribed
@@ -345,7 +364,7 @@ h1 { margin: 0; font-size: 26px; line-height: 1.3; font-weight: 700; text-wrap: 
       return '<div class="a-home"><div class="a-profile"><div class="pic">李</div><div><div class="a-greet" style="padding:0">' + NAME + '</div>' +
         '<div class="a-sub">售后工程师 · 138****1234</div></div></div>' +
         '<div class="a-menu"><div>更换头像<em>相册 / 拍照</em></div><div>工单提醒<em>已开启</em></div></div>' +
-        '<div class="a-menu"><div data-t="pwd">修改密码<em>›</em></div><div>用户隐私保护指引<em>›</em></div><div>当前版本<em>1.5.0</em></div></div></div>' + tabbar('我的');
+        '<div class="a-menu"><div data-t="pwd">修改密码<em>›</em></div><div>用户隐私保护指引<em>›</em></div><div>当前版本<em>1.6.0</em></div></div></div>' + tabbar('我的');
     },
     password: function (s) {
       return '<div class="a-nav">修改密码</div><div class="a-card">' + field(s, 'oldPassword', '原密码', '请输入原密码', true) +
@@ -384,7 +403,7 @@ h1 { margin: 0; font-size: 26px; line-height: 1.3; font-weight: 700; text-wrap: 
 
   var FLOWS = {
     register: [
-      { title: '在登录页点「注册账号」', who: '你', desc: '打开小程序会先到登录页。还没有账号的同事，点页面下方的「注册账号」。',
+      { title: '在登录页点上方的「注册」', who: '你', desc: '打开小程序会先到登录页。还没有账号的同事，点卡片顶部的「注册」切换到注册。',
         ops: [S('login'), W(900), P('toRegister'), W(300)] },
       { title: '填写姓名、手机号和密码', who: '你', desc: '姓名填真实姓名，手机号填自己在用的号码，它就是以后的登录账号。密码至少 8 位，要同时有字母和数字，再输入一遍确认。',
         ops: [S('register'), W(500), T('name', NAME), T('phone', PHONE), T('password', PWD), T('confirm', PWD), X({ focus: '' })] },
