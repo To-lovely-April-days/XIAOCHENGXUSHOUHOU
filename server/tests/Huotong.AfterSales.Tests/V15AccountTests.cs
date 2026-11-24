@@ -101,11 +101,11 @@ public sealed class V15AccountTests : V11TestBase
     public async Task ApproveCreatesEmployeeWhoCanLogInAndGetsBound()
     {
         await _acc.Register(Reg());
-        var dto = await _acc.Approve(RegId(), new RegistrationApproveRequest { Role = Role.Engineer, Name = "李新", Department = "售后部" }, Sup);
+        var dto = await _acc.Approve(RegId(), new RegistrationApproveRequest { Role = Role.Engineer, Name = "李新", Department = "售后部门" }, Sup);
         Assert.Equal(RegistrationStatus.Approved, dto.Status);
         Assert.Equal("赵主管", dto.ReviewedByName);
         var emp = Db.Employees.AsNoTracking().Single(e => e.Phone == NewPhone);
-        Assert.Equal((Role.Engineer, "李新", "售后部", true), (emp.Role, emp.Name, emp.Department, emp.Enabled));
+        Assert.Equal((Role.Engineer, "李新", "售后部门", true), (emp.Role, emp.Name, emp.Department, emp.Enabled));
         Assert.Null(emp.OpenId);
         Assert.Null(Db.Registrations.AsNoTracking().Single().PasswordHash);
         Assert.Equal(0, (await Admin.Overview()).PendingRegistrations);
@@ -115,7 +115,7 @@ public sealed class V15AccountTests : V11TestBase
         Assert.Equal("李新", r.User!.Name);
         Assert.Equal("openid-phone1", Db.Employees.AsNoTracking().Single(e => e.Id == emp.Id).OpenId);
 
-        await Fails(40900, "该申请已处理过，请刷新", () => _acc.Approve(RegId(), new RegistrationApproveRequest { Role = Role.Sales }, Sup));
+        await Fails(40900, "该申请已处理过，请刷新", () => _acc.Approve(RegId(), new RegistrationApproveRequest { Role = Role.Sales, Department = "销售部门" }, Sup));
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public sealed class V15AccountTests : V11TestBase
     {
         await _acc.Register(Reg());
         await Fails(40000, "请选择角色", () => _acc.Approve(RegId(), new RegistrationApproveRequest(), Sup));
-        await Fails(40400, "注册申请不存在", () => _acc.Approve(9999, new RegistrationApproveRequest { Role = Role.Sales }, Sup));
+        await Fails(40400, "注册申请不存在", () => _acc.Approve(9999, new RegistrationApproveRequest { Role = Role.Sales, Department = "销售部门" }, Sup));
     }
 
     [Fact]
@@ -209,11 +209,11 @@ public sealed class V15AccountTests : V11TestBase
     public async Task AdminCreateWithInitialPasswordCanLogInAndClearsPendingRegistration()
     {
         await _acc.Register(Reg());
-        await Admin.CreateEmployee(new EmployeeCreateRequest { Name = "直接建的", Phone = NewPhone, Role = Role.Sales, Password = "Init1234" });
+        await Admin.CreateEmployee(new EmployeeCreateRequest { Name = "直接建的", Phone = NewPhone, Role = Role.Sales, Department = "销售部门", Password = "Init1234" });
         Assert.Empty(Db.Registrations.AsNoTracking());
         Assert.Equal("直接建的", (await _acc.Login(Login(pwd: "Init1234"))).User!.Name);
         await Fails(40000, "初始密码需同时包含字母和数字", () =>
-            Admin.CreateEmployee(new EmployeeCreateRequest { Name = "某人", Phone = "13711113333", Role = Role.Sales, Password = "12345678" }));
+            Admin.CreateEmployee(new EmployeeCreateRequest { Name = "某人", Phone = "13711113333", Role = Role.Sales, Department = "销售部门", Password = "12345678" }));
     }
 
     [Fact]
@@ -224,7 +224,7 @@ public sealed class V15AccountTests : V11TestBase
         Db.Employees.Add(new Employee { Name = "占号", Phone = NewPhone, Role = Role.Sales, Enabled = true, CreatedAt = Clock.Now });
         await Db.SaveChangesAsync();
         await Fails(40900, "该手机号已有账号，无需再审批，可直接驳回这条申请", () =>
-            _acc.Approve(id, new RegistrationApproveRequest { Role = Role.Engineer }, Sup));
+            _acc.Approve(id, new RegistrationApproveRequest { Role = Role.Engineer, Department = "售后部门" }, Sup));
         Assert.Equal(RegistrationStatus.Pending, Db.Registrations.AsNoTracking().Single().Status);
     }
 }

@@ -40,7 +40,8 @@ public class HomeService
                     (o.AssigneeId == me.Id || o.Assistants.Any(a => a.EngineerId == me.Id)) && Doing.Contains(o.Status));
                 break;
             case Role.Sales:
-                dto.ActiveOrderCount = await _db.Orders.CountAsync(o => o.CreatorId == me.Id && o.Status != OrderStatus.Closed && o.Status != OrderStatus.Voided);
+                dto.ActiveOrderCount = await _db.Orders.CountAsync(o => (o.CreatorId == me.Id || (user.SalesManager && o.Creator!.Role == Role.Sales))
+                    && o.Status != OrderStatus.Closed && o.Status != OrderStatus.Voided);
                 break;
             case Role.Supervisor:
                 dto.ActiveOrderCount = await _db.Orders.CountAsync(o => o.Status == OrderStatus.Pending || o.Status == OrderStatus.Submitted);

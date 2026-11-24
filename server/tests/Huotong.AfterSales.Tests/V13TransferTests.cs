@@ -665,7 +665,7 @@ public sealed class V13TransferTests : V13TestBase
         var t2 = await StartTransfer(id2, Chen, a);
 
         // 只改姓名 / 手机号 / 部门：不触发
-        await UpdateEmp("甲工", r => { r.Name = "甲工改"; r.Phone = "13700009999"; r.Department = "技术部"; });
+        await UpdateEmp("甲工", r => { r.Name = "甲工改"; r.Phone = "13700009999"; r.Department = "软件部门"; });
         Assert.Equal(TransferStatus.Pending, TransferRow(t1).Status);
         Assert.Equal(TransferStatus.Pending, TransferRow(t2).Status);
         Assert.Equal("王工 转交给 甲工改，待 甲工改 确认", (await Orders.Detail(id1, Sup)).PendingTransfer!.Text);

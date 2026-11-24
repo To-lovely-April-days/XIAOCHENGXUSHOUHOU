@@ -21,7 +21,14 @@ public class RegisterRequest
     public string? Password { get; set; }
     public string? Code { get; set; }
 }
-public class RegistrationApproveRequest { public Role? Role { get; set; } public string? Name { get; set; } public string? Department { get; set; } }
+public class RegistrationApproveRequest
+{
+    public Role? Role { get; set; }
+    public Position? Position { get; set; }
+    public bool? IsAdmin { get; set; }
+    public string? Name { get; set; }
+    public string? Department { get; set; }
+}
 public class RegistrationRejectRequest { public string? Reason { get; set; } }
 
 public class LoginResult
@@ -144,6 +151,10 @@ public class EmployeeCreateRequest
     public string? Name { get; set; }
     public string? Phone { get; set; }
     public Role? Role { get; set; }
+    /// <summary>v1.7 岗位；传了就以它为准，没传按 Role 推</summary>
+    public Position? Position { get; set; }
+    /// <summary>v1.7 管理员权限（管理员岗位恒为 true）</summary>
+    public bool? IsAdmin { get; set; }
     public string? Department { get; set; }
     /// <summary>v1.5 新增账号时可顺带设初始密码（可空）；编辑时忽略</summary>
     public string? Password { get; set; }

@@ -8,6 +8,10 @@ public class Employee
     public string Name { get; set; } = "";
     public string Phone { get; set; } = "";
     public Role Role { get; set; }
+    /// <summary>v1.7 岗位（显示用）；与 Role 对不上时（旧数据 / 直接改了 Role）以 Role 为准，见 DisplayPosition</summary>
+    public Position Position { get; set; }
+    /// <summary>v1.7 管理员权限：能登录电脑后台、管理账号、审批注册。管理员岗位恒为 true</summary>
+    public bool IsAdmin { get; set; }
     public string Department { get; set; } = "";
     public bool Enabled { get; set; } = true;
     public string? OpenId { get; set; }
@@ -20,6 +24,9 @@ public class Employee
     public DateTime CreatedAt { get; set; }
 
     public string Surname => string.IsNullOrEmpty(Name) ? "" : Name.Substring(0, 1);
+    /// <summary>显示用岗位：Position 与 Role 一致时用 Position，否则按 Role 推出</summary>
+    public Position DisplayPosition => Positions.ToRole(Position) == Role ? Position : Positions.FromRole(Role);
+    public bool IsSalesManager => DisplayPosition == Position.SalesManager;
 }
 
 /// <summary>

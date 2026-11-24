@@ -31,6 +31,9 @@ public class AppDbContext : DbContext
             e.Property(x => x.OpenId).HasMaxLength(64);
             e.Property(x => x.PasswordHash).HasMaxLength(256);
             e.Property(x => x.Role).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Position).HasConversion<string>().HasMaxLength(20);
+            e.Ignore(x => x.DisplayPosition);
+            e.Ignore(x => x.IsSalesManager);
             e.HasIndex(x => x.Phone).IsUnique();
             e.HasIndex(x => x.OpenId);
             e.HasOne(x => x.AvatarFile).WithMany().HasForeignKey(x => x.AvatarFileId).OnDelete(DeleteBehavior.SetNull);

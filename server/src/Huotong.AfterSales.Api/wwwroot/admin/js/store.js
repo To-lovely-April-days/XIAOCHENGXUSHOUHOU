@@ -17,15 +17,15 @@ export const store = reactive({
 });
 
 /**
- * 拉取 /api/me 并校验角色（仅 Supervisor）。
+ * 拉取 /api/me 并校验管理员权限（v1.7：user.isAdmin）。
  * @returns {Promise<object>} user
  */
 export async function loadMe() {
   const r = await api.me.get();
-  if (!r || !r.user || r.user.role !== 'Supervisor') {
+  if (!r || !r.user || !r.user.isAdmin) {
     api.clearToken();
     store.user = null;
-    const err = new api.ApiError('仅售后主管可登录电脑后台', 40300, 403);
+    const err = new api.ApiError('该账号没有电脑后台的管理员权限', 40300, 403);
     throw err;
   }
   store.user = r.user;

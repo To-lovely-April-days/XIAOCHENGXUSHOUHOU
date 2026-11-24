@@ -54,7 +54,7 @@ export default {
                v-model="password" placeholder="请输入密码" @input="error = ''"></label>
       <div class="login-error" role="alert">{{ error }}</div>
       <button type="submit" class="btn btn-primary btn-block btn-lg" :disabled="submitting">{{ submitting ? '登录中…' : '登录' }}</button>
-      <div class="login-tip">账号密码与小程序相同，仅售后主管可登录电脑后台。忘记密码请联系其他主管在「账号管理」中重置。</div>
+      <div class="login-tip">账号密码与小程序相同，需要有管理员权限才能登录电脑后台。忘记密码请联系其他主管在「账号管理」中重置。</div>
     </form>
   </div>`,
 };

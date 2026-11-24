@@ -211,6 +211,8 @@ public class EmployeeDto
     public string Phone { get; set; } = "";
     public Role Role { get; set; }
     public string RoleName { get; set; } = "";
+    public Position Position { get; set; }
+    public bool IsAdmin { get; set; }
     public string Department { get; set; } = "";
     public bool Enabled { get; set; }
     public bool Bound { get; set; }

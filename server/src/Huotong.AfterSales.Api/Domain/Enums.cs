@@ -2,6 +2,46 @@ namespace Huotong.AfterSales.Api.Domain;
 
 public enum Role { Engineer, Sales, Supervisor }
 
+/// <summary>
+/// v1.7 岗位（显示用的角色）。权限判断仍然只看 Role：
+/// Engineer → Role.Engineer；Sales / SalesManager → Role.Sales；Supervisor / Admin → Role.Supervisor。
+/// 销售主管比销售多看到「所有销售建的工单」；管理员岗位自带管理员权限（Employee.IsAdmin）。
+/// </summary>
+public enum Position { Engineer, Sales, SalesManager, Supervisor, Admin }
+
+public static class Positions
+{
+    public static Role ToRole(Position p) => p switch
+    {
+        Position.Engineer => Role.Engineer,
+        Position.Sales or Position.SalesManager => Role.Sales,
+        _ => Role.Supervisor
+    };
+
+    public static Position FromRole(Role r) => r switch
+    {
+        Role.Engineer => Position.Engineer,
+        Role.Sales => Position.Sales,
+        _ => Position.Supervisor
+    };
+
+    public static string Name(Position p) => p switch
+    {
+        Position.Engineer => "售后工程师",
+        Position.Sales => "销售",
+        Position.SalesManager => "销售主管",
+        Position.Supervisor => "售后主管",
+        Position.Admin => "管理员",
+        _ => p.ToString()
+    };
+}
+
+/// <summary>v1.7 固定的部门清单</summary>
+public static class Departments
+{
+    public static readonly string[] All = { "售后部门", "销售部门", "软件部门", "总经办" };
+}
+
 /// <summary>v1.5 小程序注册申请的状态</summary>
 public enum RegistrationStatus { Pending, Approved, Rejected }
 

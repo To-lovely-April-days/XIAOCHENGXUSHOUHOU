@@ -37,6 +37,9 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                     b.Property<bool>("Enabled")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsAdmin")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -51,6 +54,11 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Position")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");

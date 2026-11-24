@@ -936,3 +936,7 @@ h1, h2, h3, p { margin: 0; }
 .accounts-regs-count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--brand); color: #FFFFFF; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
 .accounts-regs-empty { padding: 4px 16px 14px; font-size: 13px; color: var(--muted); }
 .accounts-regs-toggle { margin: 6px 10px 10px; }
+
+/* v1.7 岗位 / 管理员权限 */
+.accounts-admin-tag { margin-left: 6px; }
+.accounts-admin-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); cursor: pointer; }

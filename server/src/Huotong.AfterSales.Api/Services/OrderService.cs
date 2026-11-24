@@ -129,8 +129,9 @@ public partial class OrderService
 
     public async Task<ListResult<OrderListItem>> Created(CurrentUser user, string? group)
     {
+        // v1.7 销售主管：看所有销售 / 销售主管建的工单；普通销售只看自己建的
         var orders = await _view.Orders()
-            .Where(o => o.CreatorId == user.Id && o.Status != OrderStatus.Voided)
+            .Where(o => (o.CreatorId == user.Id || (user.SalesManager && o.Creator!.Role == Role.Sales)) && o.Status != OrderStatus.Voided)
             .OrderByDescending(o => o.CreatedAt).ThenByDescending(o => o.Id)
             .ToListAsync();
         var counts = new Dictionary<string, int>

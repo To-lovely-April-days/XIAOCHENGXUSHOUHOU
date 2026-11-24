@@ -119,7 +119,7 @@ public class PasswordService
         }
         _throttle.Reset(phone);
         if (!emp.Enabled) throw BizException.Forbidden("账号已停用");
-        if (emp.Role != Role.Supervisor) throw BizException.Forbidden("仅售后主管可登录电脑后台");
+        if (!emp.IsAdmin) throw BizException.Forbidden("该账号没有电脑后台的管理员权限");
         if (rehashed != null)
         {
             emp.PasswordHash = rehashed;
@@ -175,8 +175,8 @@ public class PasswordService
         if (await db.Employees.AnyAsync(e => e.Phone == normalized)) return (false, "该手机号已被其他员工使用");
         var emp = new Employee
         {
-            Name = name.Trim(), Phone = normalized, Role = Role.Supervisor, Department = "售后部",
-            Enabled = true, CreatedAt = now
+            Name = name.Trim(), Phone = normalized, Role = Role.Supervisor, Position = Position.Admin, IsAdmin = true,
+            Department = "总经办", Enabled = true, CreatedAt = now
         };
         emp.PasswordHash = PasswordPolicy.Hash(emp, password);
         db.Employees.Add(emp);

@@ -245,7 +245,7 @@ public class AdminService
 
     public EmployeeDto ToDto(Employee e) => new()
     {
-        Id = e.Id, Name = e.Name, Phone = e.Phone, Role = e.Role, RoleName = EnumText.RoleName(e.Role), Department = e.Department,
+        Id = e.Id, Name = e.Name, Phone = e.Phone, Role = e.Role, RoleName = Positions.Name(e.DisplayPosition), Position = e.DisplayPosition, IsAdmin = e.IsAdmin, Department = e.Department,
         Enabled = e.Enabled, Bound = !string.IsNullOrEmpty(e.OpenId), AvatarUrl = e.AvatarFile == null ? null : _files.Url(e.AvatarFile),
         HasPassword = !string.IsNullOrEmpty(e.PasswordHash)
     };
@@ -253,26 +253,44 @@ public class AdminService
     public async Task<List<EmployeeDto>> Employees() =>
         (await _db.Employees.Include(e => e.AvatarFile).OrderBy(e => e.Role).ThenBy(e => e.Id).ToListAsync()).Select(ToDto).ToList();
 
-    private async Task<(string Name, string Phone, Role Role, string Dept)> ValidateEmployee(EmployeeCreateRequest r, int? selfId)
+    /// <summary>v1.7 岗位：优先 Position，没传按 Role 推；都没传报错</summary>
+    public static Position ResolvePosition(Position? position, Role? role) =>
+        position ?? (role != null ? Positions.FromRole(role.Value) : throw BizException.BadRequest("请选择角色"));
+
+    /// <summary>v1.7 部门必须是固定清单里的一个</summary>
+    public static string ResolveDepartment(string? department, string? current = null)
+    {
+        var dept = (department ?? "").Trim();
+        if (current != null && dept == current.Trim()) return dept; // 编辑时没动部门（含旧数据里的老写法）：原样保留
+        if (dept.Length == 0) throw BizException.BadRequest("请选择部门");
+        if (!Departments.All.Contains(dept)) throw BizException.BadRequest("部门不在可选范围内");
+        return dept;
+    }
+
+    private async Task<(string Name, string Phone, Position Position, string Dept)> ValidateEmployee(EmployeeCreateRequest r, int? selfId, string? currentDept = null)
     {
         if (string.IsNullOrWhiteSpace(r.Name)) throw BizException.BadRequest("请填写姓名");
         var name = r.Name.Trim();
         if (name.Length > 20) throw BizException.BadRequest("姓名不能超过 20 个字");
         var phone = AuthService.NormalizePhone(r.Phone ?? "");
         if (!MobileRe.IsMatch(phone)) throw BizException.BadRequest("请填写 11 位手机号");
-        if (r.Role == null) throw BizException.BadRequest("请选择角色");
-        var dept = (r.Department ?? "").Trim();
-        if (dept.Length > 50) throw BizException.BadRequest("部门不能超过 50 个字");
+        var position = ResolvePosition(r.Position, r.Role);
+        var dept = ResolveDepartment(r.Department, currentDept);
         if (await _db.Employees.AnyAsync(e => e.Phone == phone && e.Id != selfId))
             throw BizException.Conflict("该手机号已登记");
-        return (name, phone, r.Role.Value, dept);
+        return (name, phone, position, dept);
     }
 
     public async Task<EmployeeDto> CreateEmployee(EmployeeCreateRequest r)
     {
         var v = await ValidateEmployee(r, null);
         if (!string.IsNullOrEmpty(r.Password)) PasswordPolicy.Ensure(r.Password, "初始密码");
-        var e = new Employee { Name = v.Name, Phone = v.Phone, Role = v.Role, Department = v.Dept, Enabled = true, CreatedAt = _clock.Now };
+        var e = new Employee
+        {
+            Name = v.Name, Phone = v.Phone, Position = v.Position, Role = Positions.ToRole(v.Position),
+            IsAdmin = v.Position == Position.Admin || r.IsAdmin == true,
+            Department = v.Dept, Enabled = true, CreatedAt = _clock.Now
+        };
         if (!string.IsNullOrEmpty(r.Password)) e.PasswordHash = PasswordPolicy.Hash(e, r.Password);
         // v1.5：主管直接建了账号，同手机号还在排队 / 被驳回的注册申请就没有意义了
         _db.Registrations.RemoveRange(await _db.Registrations.Where(x => x.Phone == v.Phone && x.Status != RegistrationStatus.Approved).ToListAsync());
@@ -284,18 +302,23 @@ public class AdminService
     public async Task<EmployeeDto> UpdateEmployee(int id, EmployeeUpdateRequest r, CurrentUser user)
     {
         var e = await _db.Employees.Include(x => x.AvatarFile).FirstOrDefaultAsync(x => x.Id == id) ?? throw BizException.NotFound("员工不存在");
-        var v = await ValidateEmployee(r, id);
-        if (id == user.Id && (r.Enabled == false || v.Role != Role.Supervisor))
-            throw BizException.Conflict("不能停用自己或修改自己的角色");
+        var v = await ValidateEmployee(r, id, e.Department);
+        var role = Positions.ToRole(v.Position);
+        // 没传 isAdmin（旧客户端）时保持原样；管理员岗位恒为管理员
+        var isAdmin = v.Position == Position.Admin || (r.IsAdmin ?? e.IsAdmin);
+        if (id == user.Id && (r.Enabled == false || role != Role.Supervisor || !isAdmin))
+            throw BizException.Conflict("不能停用自己、修改自己的角色或取消自己的管理员权限");
         // v1.3：校验之后的读写包在事务里（停用 / 改角色时要连带失效待确认的转交）；没有待确认转交时行为与以前完全一样
         await using var tx = await _db.Database.BeginTransactionAsync();
         var wasActiveEngineer = e.Enabled && e.Role == Role.Engineer;
-        var revoke = e.Phone != v.Phone || e.Role != v.Role || (r.Enabled == false && e.Enabled);
+        var revoke = e.Phone != v.Phone || e.Role != role || e.DisplayPosition != v.Position || e.IsAdmin != isAdmin || (r.Enabled == false && e.Enabled);
         if (e.Phone != v.Phone) e.OpenId = null; // 手机号变更需重新绑定
         if (revoke) e.TokenVersion++;             // 旧登录令牌失效
         e.Name = v.Name;
         e.Phone = v.Phone;
-        e.Role = v.Role;
+        e.Role = role;
+        e.Position = v.Position;
+        e.IsAdmin = isAdmin;
         e.Department = v.Dept;
         if (r.Enabled != null) e.Enabled = r.Enabled.Value;
         if (wasActiveEngineer && !(e.Enabled && e.Role == Role.Engineer))

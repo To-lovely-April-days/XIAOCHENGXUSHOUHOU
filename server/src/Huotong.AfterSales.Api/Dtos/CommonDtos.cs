@@ -14,6 +14,9 @@ public class UserBrief
 public class UserDto : UserBrief
 {
     public string RoleName { get; set; } = "";
+    /// <summary>v1.7 岗位；role 仍是权限角色（Engineer / Sales / Supervisor）</summary>
+    public Position Position { get; set; }
+    public bool IsAdmin { get; set; }
     public string Department { get; set; } = "";
     public string PhoneMasked { get; set; } = "";
     public string? Phone { get; set; }

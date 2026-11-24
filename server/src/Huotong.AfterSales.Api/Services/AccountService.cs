@@ -237,11 +237,10 @@ public class AccountService
     /// <summary>通过：必须选角色；可顺手改姓名、填部门。生成 Employee，密码沿用注册时填的</summary>
     public async Task<RegistrationDto> Approve(int id, RegistrationApproveRequest req, CurrentUser user)
     {
-        if (req.Role == null) throw BizException.BadRequest("请选择角色");
+        var position = AdminService.ResolvePosition(req.Position, req.Role);
         var name = string.IsNullOrWhiteSpace(req.Name) ? null : req.Name.Trim();
         if (name != null && name.Length > 20) throw BizException.BadRequest("姓名不能超过 20 个字");
-        var dept = (req.Department ?? "").Trim();
-        if (dept.Length > 50) throw BizException.BadRequest("部门不能超过 50 个字");
+        var dept = AdminService.ResolveDepartment(req.Department);
 
         await using var tx = await _db.Database.BeginTransactionAsync();
         var r = await LoadPending(id);
@@ -250,7 +249,8 @@ public class AccountService
         var now = _clock.Now;
         var emp = new Employee
         {
-            Name = name ?? r.Name, Phone = r.Phone, Role = req.Role.Value, Department = dept, Enabled = true,
+            Name = name ?? r.Name, Phone = r.Phone, Position = position, Role = Positions.ToRole(position),
+            IsAdmin = position == Position.Admin || req.IsAdmin == true, Department = dept, Enabled = true,
             PasswordHash = r.PasswordHash, CreatedAt = now
         };
         _db.Employees.Add(emp);

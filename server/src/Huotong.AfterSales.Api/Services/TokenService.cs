@@ -23,6 +23,8 @@ public class TokenService
         [ClaimsExtensions.RoleClaim] = e.Role.ToString(),
         [ClaimsExtensions.TokenVersionClaim] = e.TokenVersion.ToString(),
         ["name"] = e.Name,
+        [ClaimsExtensions.AdminClaim] = e.IsAdmin ? "1" : "0",
+        [ClaimsExtensions.SalesManagerClaim] = e.IsSalesManager ? "1" : "0",
     }, TimeSpan.FromDays(_opt.ExpireDays), "huotong-app");
 
     /// <summary>绑定票据：10 分钟，含 openid，purpose=bind</summary>

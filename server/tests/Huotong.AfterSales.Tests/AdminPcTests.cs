@@ -123,7 +123,7 @@ public sealed class AdminPcTests : IDisposable
         await _pwd.SetFor(li.Id, new SetPasswordRequest { Password = "Engineer2026" });
         var ex = await Biz(() => _pwd.Login(new PasswordLoginRequest { Phone = li.Phone, Password = "Engineer2026" }));
         Assert.Equal(40300, ex.Code);
-        Assert.Equal("仅售后主管可登录电脑后台", ex.Message);
+        Assert.Equal("该账号没有电脑后台的管理员权限", ex.Message);
 
         var zhao = _db.Employees.Single(e => e.Phone == ZhaoPhone);
         zhao.Enabled = false;

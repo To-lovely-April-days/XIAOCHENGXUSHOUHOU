@@ -43,7 +43,8 @@ public class SeedData
 
     private Employee E(string name, Role role, string phone, string dept) => new()
     {
-        Name = name, Role = role, Phone = phone, Department = dept, Enabled = true, CreatedAt = D(10, 1, 9)
+        Name = name, Role = role, Position = Positions.FromRole(role), IsAdmin = role == Role.Supervisor,
+        Phone = phone, Department = dept, Enabled = true, CreatedAt = D(10, 1, 9)
     };
 
     private async Task Run()

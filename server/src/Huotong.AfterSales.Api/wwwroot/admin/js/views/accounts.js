@@ -5,16 +5,27 @@ import * as api from '../api.js';
 import { route, updateQuery } from '../router.js';
 import { store, refreshCounts } from '../store.js';
 import { toast, toastError, confirm } from '../ui.js';
-import { ROLE } from '../enums.js';
 import { fmtMDHM } from '../format.js';
 
-const ROLE_TABS = [
-  { key: '', label: '全部' },
-  { key: 'Engineer', label: ROLE.Engineer.label },
-  { key: 'Sales', label: ROLE.Sales.label },
-  { key: 'Supervisor', label: ROLE.Supervisor.label },
-];
-const ROLE_KEYS = ['Engineer', 'Sales', 'Supervisor'];
+// v1.7 岗位（显示用的角色）与固定部门；权限角色 role 由后端按岗位推出
+const POS = {
+  Engineer: '售后工程师',
+  Sales: '销售',
+  SalesManager: '销售主管',
+  Supervisor: '售后主管',
+  Admin: '管理员',
+};
+const ROLE_KEYS = ['Engineer', 'Sales', 'SalesManager', 'Supervisor', 'Admin'];
+const ROLE_TABS = [{ key: '', label: '全部' }].concat(ROLE_KEYS.map(k => ({ key: k, label: POS[k] })));
+const ROLE = Object.fromEntries(ROLE_KEYS.map(k => [k, { label: POS[k] }]));
+const DEPARTMENTS = ['售后部门', '销售部门', '软件部门', '总经办'];
+/** 选了岗位、还没选部门时的默认部门 */
+const DEFAULT_DEPT = { Engineer: '售后部门', Supervisor: '售后部门', Sales: '销售部门', SalesManager: '销售部门', Admin: '总经办' };
+const POS_HINT = {
+  SalesManager: '销售主管能看到所有销售建的工单和价格，不能指派和审批。',
+  Supervisor: '售后主管在小程序里指派、审批、定价、验收；要登录电脑后台还需勾选管理员权限。',
+  Admin: '管理员拥有全部权限：电脑后台、账号管理，以及小程序里售后主管能做的所有操作。',
+};
 const MOBILE_RE = /^1\d{10}$/;
 
 /** 密码强度：≥ 8 位且同时含字母和数字（与后端规则一致） */
@@ -36,8 +47,9 @@ const AccountsEditModal = {
       form: {
         name: e ? e.name : '',
         phone: e ? e.phone : '',
-        role: e ? e.role : 'Engineer',
-        department: e ? (e.department || '') : '',
+        role: e ? (e.position || e.role) : 'Engineer',
+        department: e ? (e.department || '') : '售后部门',
+        isAdmin: e ? !!e.isAdmin : false,
         enabled: e ? e.enabled !== false : true,
         password: '',
       },
@@ -45,9 +57,17 @@ const AccountsEditModal = {
       serverError: '',
       saving: false,
       roleOptions: ROLE_KEYS.map(k => ({ value: k, label: ROLE[k].label })),
+      posHint: POS_HINT,
     };
   },
   computed: {
+    /** 部门下拉：固定四个；旧数据里的老写法保留为一个可选项，不强迫改 */
+    deptOptions() {
+      const cur = this.employee && this.employee.department;
+      return cur && !DEPARTMENTS.includes(cur) ? DEPARTMENTS.concat([cur]) : DEPARTMENTS;
+    },
+    adminLocked() { return this.form.role === 'Admin' || this.isSelf; },
+    adminOn() { return this.form.role === 'Admin' || this.form.isAdmin; },
     isEdit() { return !!this.employee; },
     isSelf() { return this.isEdit && store.user && store.user.id === this.employee.id; },
     phoneChanged() { return this.isEdit && this.employee.bound && this.form.phone.trim() !== this.employee.phone; },
@@ -63,16 +83,20 @@ const AccountsEditModal = {
       if (!phone) errors.phone = '请填写手机号';
       else if (!MOBILE_RE.test(phone)) errors.phone = '请填写 11 位手机号';
       if (!f.role) errors.role = '请选择角色';
-      if (f.department.trim().length > 50) errors.department = '部门不能超过 50 个字';
+      if (!f.department) errors.department = '请选择部门';
       if (!this.isEdit && f.password) { const pe = passwordError(f.password); if (pe) errors.password = pe; }
       this.errors = errors;
       return !Object.keys(errors).length;
+    },
+    onRoleChange() {
+      this.clearError('role');
+      if (!this.isEdit) this.form.department = DEFAULT_DEPT[this.form.role] || this.form.department;
     },
     clearError(k) { if (this.errors[k]) this.errors = { ...this.errors, [k]: '' }; this.serverError = ''; },
     async submit() {
       if (this.saving || !this.validate()) return;
       const f = this.form;
-      const body = { name: f.name.trim(), phone: f.phone.trim(), role: f.role, department: f.department.trim() };
+      const body = { name: f.name.trim(), phone: f.phone.trim(), position: f.role, department: f.department, isAdmin: this.adminOn };
       this.saving = true;
       this.serverError = '';
       try {
@@ -110,18 +134,31 @@ const AccountsEditModal = {
       </label>
       <label class="field">
         <span class="field-label">角色<span class="req">*</span></span>
-        <select class="select" :class="{ invalid: errors.role }" v-model="form.role" :disabled="isSelf" @change="clearError('role')">
+        <select class="select" :class="{ invalid: errors.role }" v-model="form.role" :disabled="isSelf" @change="onRoleChange">
           <option v-for="o in roleOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
         </select>
         <span v-if="errors.role" class="field-error">{{ errors.role }}</span>
         <span v-else-if="isSelf" class="field-hint">不能修改自己的角色</span>
+        <span v-else-if="posHint[form.role]" class="field-hint">{{ posHint[form.role] }}</span>
       </label>
       <label class="field">
-        <span class="field-label">部门</span>
-        <input class="input" :class="{ invalid: errors.department }" v-model="form.department" maxlength="50"
-          placeholder="如：售后服务部" autocomplete="off" @input="clearError('department')">
+        <span class="field-label">部门<span class="req">*</span></span>
+        <select class="select" :class="{ invalid: errors.department }" v-model="form.department" @change="clearError('department')">
+          <option value="" disabled>请选择</option>
+          <option v-for="d in deptOptions" :key="d" :value="d">{{ d }}</option>
+        </select>
         <span v-if="errors.department" class="field-error">{{ errors.department }}</span>
       </label>
+      <div class="field span-2">
+        <span class="field-label">管理员权限</span>
+        <div class="accounts-enable-row">
+          <button type="button" class="btn btn-secondary switch-btn" role="switch" :aria-checked="adminOn ? 'true' : 'false'"
+            :disabled="adminLocked" @click="form.isAdmin = !form.isAdmin; serverError = ''">
+            <span class="switch" :class="{ on: adminOn }"></span>{{ adminOn ? '已开启' : '未开启' }}
+          </button>
+          <span class="field-hint">{{ form.role === 'Admin' ? '管理员岗位自带管理员权限' : (isSelf ? '不能取消自己的管理员权限' : '开启后可登录电脑后台、管理账号、审批注册，并拥有售后主管的全部操作权限') }}</span>
+        </div>
+      </div>
       <div v-if="isEdit" class="field span-2">
         <span class="field-label">账号状态</span>
         <div class="accounts-enable-row">
@@ -212,22 +249,26 @@ const RegistrationApproveModal = {
   emits: ['close', 'done'],
   data() {
     return {
-      form: { name: this.item.name || '', role: '', department: '' },
+      form: { name: this.item.name || '', role: '', department: '', isAdmin: false },
+      departments: DEPARTMENTS,
+      posHint: POS_HINT,
       error: '',
       saving: false,
       roleOptions: ROLE_KEYS.map(k => ({ value: k, label: ROLE[k].label })),
     };
   },
   methods: {
+    defaultDept(role) { return DEFAULT_DEPT[role] || ''; },
     async submit() {
       if (this.saving) return;
       const name = this.form.name.trim();
       if (!name) { this.error = '请填写姓名'; return; }
       if (!this.form.role) { this.error = '请选择角色'; return; }
+      if (!this.form.department) { this.error = '请选择部门'; return; }
       this.saving = true;
       this.error = '';
       try {
-        const dto = await api.admin.approveRegistration(this.item.id, { role: this.form.role, name, department: this.form.department.trim() });
+        const dto = await api.admin.approveRegistration(this.item.id, { position: this.form.role, name, department: this.form.department, isAdmin: this.form.role === 'Admin' || this.form.isAdmin });
         toast(`已通过，「${name}」现在可以登录了`, 'success');
         this.$emit('done', dto);
       } catch (e) {
@@ -244,14 +285,20 @@ const RegistrationApproveModal = {
       <label class="field"><span class="field-label">姓名<span class="req">*</span></span>
         <input class="input" v-model="form.name" maxlength="20" autocomplete="off" @input="error = ''"></label>
       <label class="field"><span class="field-label">角色<span class="req">*</span></span>
-        <select class="select" v-model="form.role" @change="error = ''">
+        <select class="select" v-model="form.role" @change="error = ''; form.department = form.department || defaultDept(form.role)">
           <option value="" disabled>请选择</option>
           <option v-for="o in roleOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
         </select>
-        <span v-if="form.role === 'Supervisor'" class="field-hint text-warn">售后主管可以登录电脑后台、审批账号、查看价格，请谨慎授予。</span>
+        <span v-if="posHint[form.role]" class="field-hint" :class="{ 'text-warn': form.role === 'Admin' }">{{ posHint[form.role] }}</span>
       </label>
-      <label class="field"><span class="field-label">部门</span>
-        <input class="input" v-model="form.department" maxlength="50" placeholder="如：售后服务部" autocomplete="off"></label>
+      <label class="field"><span class="field-label">部门<span class="req">*</span></span>
+        <select class="select" v-model="form.department" @change="error = ''">
+          <option value="" disabled>请选择</option>
+          <option v-for="d in departments" :key="d" :value="d">{{ d }}</option>
+        </select></label>
+      <label v-if="form.role && form.role !== 'Admin'" class="accounts-admin-check">
+        <input type="checkbox" v-model="form.isAdmin"> 同时给管理员权限（可登录电脑后台、管理账号）
+      </label>
       <div v-if="error" class="field-error" role="alert">{{ error }}</div>
       <button type="submit" hidden></button>
     </form>
@@ -336,15 +383,16 @@ export default {
       return this.items.filter(e => (e.name || '').toLowerCase().includes(kw) || (e.phone || '').includes(digits));
     },
     counts() {
-      const c = { '': this.searched.length, Engineer: 0, Sales: 0, Supervisor: 0 };
-      this.searched.forEach(e => { if (c[e.role] != null) c[e.role]++; });
+      const c = { '': this.searched.length };
+      ROLE_KEYS.forEach(k => { c[k] = 0; });
+      this.searched.forEach(e => { const k = e.position || e.role; if (c[k] != null) c[k]++; });
       return c;
     },
     /** 与后端一致：按角色（工程师 → 销售 → 主管）再按 id 排序，新增的行也落在对应位置 */
     rows() {
-      const list = this.role ? this.searched.filter(e => e.role === this.role) : this.searched.slice();
+      const list = this.role ? this.searched.filter(e => (e.position || e.role) === this.role) : this.searched.slice();
       const rank = (r) => { const i = ROLE_KEYS.indexOf(r); return i < 0 ? ROLE_KEYS.length : i; };
-      return list.sort((a, b) => rank(a.role) - rank(b.role) || a.id - b.id);
+      return list.sort((a, b) => rank(a.position || a.role) - rank(b.position || b.role) || a.id - b.id);
     },
     summary() {
       const all = this.items;
@@ -400,7 +448,7 @@ export default {
     },
     setRole(key) { updateQuery({ role: key }); },
     onSearch(v) { updateQuery({ keyword: (v || '').trim() }); },
-    roleLabel(e) { return e.roleName || (ROLE[e.role] ? ROLE[e.role].label : e.role); },
+    roleLabel(e) { return e.roleName || POS[e.position] || POS[e.role] || e.role; },
     isSelf(e) { return this.meId != null && e.id === this.meId; },
     /** 用接口返回的 EmployeeDto 替换/插入本地行 */
     upsert(dto) {
@@ -415,7 +463,7 @@ export default {
       const wasCreate = !this.editing || !this.editing.employee;
       this.editing = null;
       this.upsert(dto);
-      if (wasCreate && dto && this.role && dto.role !== this.role) updateQuery({ role: '' });
+      if (wasCreate && dto && this.role && (dto.position || dto.role) !== this.role) updateQuery({ role: '' });
       if (dto && this.isSelf(dto)) store.user = { ...store.user, name: dto.name, phone: dto.phone, department: dto.department };
     },
     openPassword(e) { this.pwdTarget = { ...e }; },
@@ -450,7 +498,7 @@ export default {
       this.busyId = e.id;
       try {
         const dto = await api.admin.updateEmployee(e.id, {
-          name: e.name, phone: e.phone, role: e.role, department: e.department || '', enabled: enable,
+          name: e.name, phone: e.phone, position: e.position || e.role, isAdmin: !!e.isAdmin, department: e.department || '', enabled: enable,
         });
         if (dto && dto.id != null) this.upsert(dto);
         else e.enabled = enable;
@@ -538,8 +586,8 @@ export default {
       <template v-else>
         <table class="data-table accounts-table" :class="{ 'accounts-reloading': loading }">
           <colgroup>
-            <col style="width: 200px"><col style="width: 130px"><col style="width: 110px"><col style="min-width: 120px">
-            <col style="width: 100px"><col style="width: 120px"><col style="width: 80px"><col style="width: 260px">
+            <col style="width: 160px"><col style="width: 120px"><col style="width: 150px"><col style="min-width: 90px">
+            <col style="width: 90px"><col style="width: 100px"><col style="width: 80px"><col style="width: 260px">
           </colgroup>
           <thead>
             <tr>
@@ -557,7 +605,7 @@ export default {
                 </div>
               </td>
               <td class="accounts-phone">{{ e.phone }}</td>
-              <td>{{ roleLabel(e) }}</td>
+              <td>{{ roleLabel(e) }}<Tag v-if="e.isAdmin && e.position !== 'Admin'" tone="neutral" class="accounts-admin-tag">管理员</Tag></td>
               <td><span class="ellipsis accounts-dept" :class="{ 'text-faint': !e.department }">{{ e.department || '—' }}</span></td>
               <td>
                 <Tag v-if="e.bound" tone="success">已绑定</Tag>

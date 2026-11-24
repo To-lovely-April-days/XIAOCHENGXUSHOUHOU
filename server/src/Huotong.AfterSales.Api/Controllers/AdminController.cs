@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Huotong.AfterSales.Api.Controllers;
 
+/// <summary>报表类接口：售后主管即可；账号管理与注册审批：需要管理员权限（v1.7）</summary>
 [Route("api/admin")]
 [Authorize(Roles = "Supervisor")]
 public class AdminController : ApiControllerBase
@@ -67,30 +68,38 @@ public class AdminController : ApiControllerBase
         Ok(await center.Query(q, Me));
 
     // ---------- v1.5 注册审批 ----------
+    [Authorize(Policy = ClaimsExtensions.AdminPolicy)]
     [HttpGet("registrations")]
     public async Task<ApiResponse<RegistrationListDto>> Registrations([FromServices] AccountService accounts) => Ok(await accounts.List());
 
+    [Authorize(Policy = ClaimsExtensions.AdminPolicy)]
     [HttpPost("registrations/{id:int}/approve")]
     public async Task<ApiResponse<RegistrationDto>> ApproveRegistration([FromServices] AccountService accounts, int id,
         [FromBody] RegistrationApproveRequest req) => Ok(await accounts.Approve(id, req, Me));
 
+    [Authorize(Policy = ClaimsExtensions.AdminPolicy)]
     [HttpPost("registrations/{id:int}/reject")]
     public async Task<ApiResponse<RegistrationDto>> RejectRegistration([FromServices] AccountService accounts, int id,
         [FromBody] RegistrationRejectRequest req) => Ok(await accounts.Reject(id, req, Me));
 
+    [Authorize(Policy = ClaimsExtensions.AdminPolicy)]
     [HttpGet("employees")]
     public async Task<ApiResponse<List<EmployeeDto>>> Employees() => Ok(await _admin.Employees());
 
+    [Authorize(Policy = ClaimsExtensions.AdminPolicy)]
     [HttpPost("employees")]
     public async Task<ApiResponse<EmployeeDto>> CreateEmployee([FromBody] EmployeeCreateRequest req) => Ok(await _admin.CreateEmployee(req));
 
+    [Authorize(Policy = ClaimsExtensions.AdminPolicy)]
     [HttpPut("employees/{id:int}")]
     public async Task<ApiResponse<EmployeeDto>> UpdateEmployee(int id, [FromBody] EmployeeUpdateRequest req) =>
         Ok(await _admin.UpdateEmployee(id, req, Me));
 
+    [Authorize(Policy = ClaimsExtensions.AdminPolicy)]
     [HttpPost("employees/{id:int}/unbind")]
     public async Task<ApiResponse<EmployeeDto>> Unbind(int id) => Ok(await _admin.Unbind(id));
 
+    [Authorize(Policy = ClaimsExtensions.AdminPolicy)]
     [HttpPost("employees/{id:int}/password")]
     public async Task<ApiResponse<EmployeeDto>> SetPassword(int id, [FromBody] SetPasswordRequest req) =>
         Ok(_admin.ToDto(await _password.SetFor(id, req)));
