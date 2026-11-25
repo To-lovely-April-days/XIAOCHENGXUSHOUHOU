@@ -389,11 +389,11 @@ const orders = {
     return post('/api/orders/' + id + '/reject', { reason: reason || '' }, opts);
   },
   /**
-   * POST /api/orders/{id}/close 确认闭环（Supervisor）；有缺卡 → 40900「请先补录缺卡」；未定价 → 40900「请先设置服务价格（保内填 0）」
+   * POST /api/orders/{id}/close 确认闭环（Supervisor）；note = 备注（选填，≤200 字，写进状态记录）；有缺卡 → 40900「请先补录缺卡」；未定价 → 40900「请先设置服务价格（保内填 0）」
    * @returns {Promise<OrderDetail>}
    */
-  close(id, opts) {
-    return post('/api/orders/' + id + '/close', {}, opts);
+  close(id, note, opts) {
+    return post('/api/orders/' + id + '/close', { note: note || '' }, opts);
   },
   /**
    * POST /api/orders/{id}/attachments 添加附件（v1.2；服务端按建单人 / 负责人 / 协助人 / 主管判权；v1.3 起已闭环也能添加）

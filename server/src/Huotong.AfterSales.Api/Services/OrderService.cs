@@ -742,8 +742,9 @@ public partial class OrderService
         return await _view.BuildDetail(id, user);
     }
 
-    public async Task<OrderDetail> Close(int id, CurrentUser user)
+    public async Task<OrderDetail> Close(int id, CurrentUser user, string? note = null)
     {
+        note = Opt(note, "备注", 200);
         var o = await Load(id);
         var to = OrderStateMachine.Apply(o.Status, OrderAction.Close);
         var now = _clock.Now;
@@ -756,12 +757,13 @@ public partial class OrderService
         var me = await _view.LoadEmployee(user.Id);
         o.Status = to;
         o.ClosedAt = now;
-        AddLog(o, me, $"{me.Name} 确认闭环 → {EnumText.Status(to)}", to, now);
+        // 备注写在状态名后面的括号里，和「退回（原因）」同一种写法，时间线会把它单独显示出来
+        AddLog(o, me, $"{me.Name} 确认闭环 → {EnumText.Status(to)}" + (note == null ? "" : $"（{note}）"), to, now);
         await AutoCancelRequests(o, now);
         await _db.SaveChangesAsync();
         // v1.4：告诉建单人（销售或工程师）工单已闭环；内容不含价格
         if (o.Creator != null && o.Creator.Role != Role.Supervisor)
-            await Push(o, me, now, "工单已闭环", $"{me.Name}已确认闭环", o.Creator);
+            await Push(o, me, now, "工单已闭环", note == null ? $"{me.Name}已确认闭环" : $"{me.Name}已确认闭环：{note}", o.Creator);
         return await _view.BuildDetail(id, user);
     }
 

@@ -779,9 +779,11 @@ export default {
         } else if (b.key === 'close') {
           const hints = (d.closeHints || []).filter(Boolean);
           const msg = `确认 ${no}（${d.customerName}）已处理完成并闭环？` + (hints.length ? `\n提示：${hints.join('；')}` : '');
-          if (!(await confirm('确认闭环', msg, { okText: '确认闭环' }))) return;
+          const note = await confirm('确认闭环', msg,
+            { input: true, multiline: true, inputLabel: '备注', placeholder: '选填，会写入状态记录，建单人也能看到', okText: '确认闭环' });
+          if (note === null) return;
           this.busy = b.key;
-          res = await api.orders.close(d.id);
+          res = await api.orders.close(d.id, note);
           this.applied(res, '已确认闭环');
         }
       } catch (e) {

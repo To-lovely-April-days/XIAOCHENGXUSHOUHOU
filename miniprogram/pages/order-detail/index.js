@@ -1073,10 +1073,12 @@ Page(subscribe.bindTaps({
           break;
         }
         const hints = d.closeHints || [];
-        const content = '确认资料齐全并闭环此工单？闭环后不可再修改。' + (hints.length ? '\n提示：' + hints.join('；') : '');
-        this.confirm('确认闭环', content, '确认闭环').then(() => {
-          this.run(api.orders.close(id, { loading: '提交中' }), '已闭环');
+        // 有提示（如缺资料）时先让主管看一眼提示，再填备注；备注选填，会写进进度里
+        const ask = () => this.askReason('确认闭环', '备注（选填），闭环后不可再修改', '确认闭环', true).then((note) => {
+          this.run(api.orders.close(id, note, { loading: '提交中' }), '已闭环');
         });
+        if (hints.length) this.confirm('确认闭环', '提示：' + hints.join('；') + '\n仍要闭环吗？', '继续').then(ask);
+        else ask();
         break;
       }
       default:

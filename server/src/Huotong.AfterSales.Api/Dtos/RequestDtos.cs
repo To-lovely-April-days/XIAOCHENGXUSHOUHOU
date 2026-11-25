@@ -101,6 +101,8 @@ public class AssignRequest
     public List<int>? AssistantIds { get; set; }
 }
 public class ReasonRequest { public string? Reason { get; set; } }
+/// <summary>v1.9 确认闭环时的备注（选填，最多 200 字）</summary>
+public class CloseRequest { public string? Note { get; set; } }
 
 public class PriceRequest { public decimal? Price { get; set; } }
 public class PriceSuggestRequest { public decimal? Amount { get; set; } public string? Note { get; set; } }

@@ -83,7 +83,9 @@ public class OrdersController : ApiControllerBase
 
     [HttpPost("{id:int}/close")]
     [Authorize(Roles = "Supervisor")]
-    public async Task<ApiResponse<OrderDetail>> Close(int id) => Ok(await _orders.Close(id, Me));
+    public async Task<ApiResponse<OrderDetail>> Close(int id,
+        [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] CloseRequest? req = null) =>
+        Ok(await _orders.Close(id, Me, req?.Note));
 
     // ---------- v1.1：价格 ----------
 

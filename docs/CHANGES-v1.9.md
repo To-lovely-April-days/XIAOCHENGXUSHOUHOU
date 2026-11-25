@@ -17,3 +17,10 @@
 - 「管理这些文件」跳到 **全部文件** 视图并按该工单筛选，在那里删除、改类别、改可见范围（原有功能不变）。
 - 新接口 `GET /api/admin/files/folders?keyword=&page=&pageSize=` → `{items:[{orderId, orderNo, customerName, projectNo, deviceText, status, serviceType, fileCount, totalSize, lastUploadAt, satCount, onsiteRepairCount, factoryRepairCount}], total, totalFiles, totalSize, page, pageSize}`。
   只列出名下有文件的工单，按最近上传倒序。
+
+## 确认闭环时可以写备注
+
+- `POST /api/orders/{id}/close` 接受可选的 `{note}`（≤200 字，超出 → `40000 备注不能超过 200 个字`）。不带请求体、带 `{}` 都照常闭环，旧客户端不受影响。
+- 备注写进状态记录：`某某 确认闭环 → 已闭环（备注）`，和退回原因同一种写法，两个前端的时间线会把括号里的内容单独显示。
+- 给建单人的「工单已闭环」提醒里带上备注。
+- 小程序：点「确认闭环」弹出可输入的确认框（备注选填）；有闭环提示时先显示提示，再填备注。电脑后台：确认框里多一个备注输入框。

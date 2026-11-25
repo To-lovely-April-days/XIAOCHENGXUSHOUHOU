@@ -246,8 +246,8 @@ export const orders = {
   resume: (id) => post(`/orders/${id}/resume`),
   /** 退回处理中 @param {number} id @param {string} [reason] */
   reject: (id, reason) => post(`/orders/${id}/reject`, { reason: reason || '' }),
-  /** 确认闭环 @param {number} id */
-  close: (id) => post(`/orders/${id}/close`),
+  /** 确认闭环 @param {number} id @param {string} [note] 备注（选填，会写进状态记录） */
+  close: (id, note) => post(`/orders/${id}/close`, { note: note || '' }),
   /** 定价 / 改价（0 = 保内免费） @param {number} id @param {number} price */
   setPrice: (id, price) => post(`/orders/${id}/price`, { price }),
   /** 同意申请（暂停 / 协助人共用） @param {number} id @param {number} requestId */
