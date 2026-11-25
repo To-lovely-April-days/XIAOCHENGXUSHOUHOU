@@ -129,6 +129,10 @@ public class WorkOrder
     public string? Solution { get; set; }
     public string? PartsReplaced { get; set; }
     public RunStatus? RunStatus { get; set; }
+    /// <summary>v2.0 远程服务：客户怎么确认问题已解决（电话确认 / 微信确认 / 邮件确认 / 其他）</summary>
+    public string? CustomerConfirm { get; set; }
+    /// <summary>v2.0 返厂维修：寄回前的整机功能测试结果</summary>
+    public string? TestResult { get; set; }
 
     public List<Punch> Punches { get; set; } = new();
     public List<StatusLog> Logs { get; set; } = new();
@@ -199,6 +203,8 @@ public class StoredFile
     public int? DeletedById { get; set; }
     /// <summary>附件类别（v1.3）：只对附件有意义，其余文件恒为 Other。不要配置 HasDefaultValue；列默认值 'Other' 只写在迁移里</summary>
     public AttachmentType AttachmentType { get; set; }
+    /// <summary>v2.0 上门完工照片分「维修前 / 维修后」：Before | After；其他文件为 null</summary>
+    public string? PhotoStage { get; set; }
 }
 
 /// <summary>工单协助人（当前有效的；移除 = 删除行）</summary>
@@ -229,6 +235,8 @@ public class OrderRequest
     public string? Note { get; set; }
     public int? TargetEngineerId { get; set; }
     public Employee? TargetEngineer { get; set; }
+    /// <summary>v2.0 升级服务方式申请（Type = Escalate）要改成的服务方式；Note 里是「原因；已排查：…」</summary>
+    public ServiceType? TargetServiceType { get; set; }
     public int? DeciderId { get; set; }
     public Employee? Decider { get; set; }
     public DateTime? DecidedAt { get; set; }

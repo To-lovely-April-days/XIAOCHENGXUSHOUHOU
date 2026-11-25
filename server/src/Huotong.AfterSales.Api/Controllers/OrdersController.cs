@@ -114,6 +114,12 @@ public class OrdersController : ApiControllerBase
     public async Task<ApiResponse<OrderDetail>> RequestAssistant(int id, [FromBody] AssistantRequestRequest? req) =>
         Ok(await _orders.RequestAssistant(id, req ?? new(), Me));
 
+    /// <summary>v2.0 申请升级服务方式（远程 → 上门 / 返厂；上门 → 返厂），需主管同意</summary>
+    [HttpPost("{id:int}/escalate-requests")]
+    [Authorize(Roles = "Engineer")]
+    public async Task<ApiResponse<OrderDetail>> RequestEscalate(int id, [FromBody] EscalateRequest? req) =>
+        Ok(await _orders.RequestEscalate(id, req ?? new(), Me));
+
     [HttpPost("{id:int}/requests/{requestId:int}/approve")]
     [Authorize(Roles = "Supervisor")]
     public async Task<ApiResponse<OrderDetail>> ApproveRequest(int id, int requestId) => Ok(await _orders.ApproveRequest(id, requestId, Me));

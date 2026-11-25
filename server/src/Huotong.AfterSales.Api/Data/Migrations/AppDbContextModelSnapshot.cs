@@ -269,6 +269,10 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                     b.Property<int?>("TargetEngineerId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("TargetServiceType")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -578,6 +582,10 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                         .HasMaxLength(260)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PhotoStage")
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("Restricted")
                         .HasColumnType("INTEGER");
 
@@ -635,6 +643,10 @@ namespace Huotong.AfterSales.Api.Data.Migrations
 
                     b.Property<int>("CreatorId")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("CustomerConfirm")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("CustomerName")
                         .IsRequired()
@@ -763,6 +775,10 @@ namespace Huotong.AfterSales.Api.Data.Migrations
 
                     b.Property<string>("Symptom")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TestResult")
+                        .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Urgency")

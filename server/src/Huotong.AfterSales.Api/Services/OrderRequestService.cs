@@ -164,6 +164,87 @@ public partial class OrderService
         return await _view.BuildDetail(id, user);
     }
 
+    // ---------- 升级服务方式（v2.0） ----------
+
+    /// <summary>
+    /// 负责工程师申请升级服务方式（远程 → 上门 / 返厂；上门 → 返厂），待主管同意。
+    /// 必须写明原因和已经排查了什么 —— 同意后接手的人不用再问一遍。
+    /// </summary>
+    public async Task<OrderDetail> RequestEscalate(int id, EscalateRequest r, CurrentUser user)
+    {
+        await using var tx = await WriteLock();
+        var o = await Load(id);
+        if (o.AssigneeId != user.Id) throw BizException.Forbidden("只有负责工程师可以申请升级服务方式");
+        var target = ParseEnum<ServiceType>(r.TargetServiceType, "服务方式") ?? throw BizException.BadRequest("请选择要升级成哪种服务方式");
+        var reason = Req(r.Reason, "升级原因", 200);
+        var findings = Req(r.Findings, "已排查情况", 300);
+        if (!Active.Contains(o.Status))
+            throw BizException.Conflict($"工单当前为「{EnumText.Status(o.Status)}」，不能申请升级服务方式");
+        if (!EscalateRules.Allowed(o.ServiceType, target))
+            throw BizException.BadRequest($"{EnumText.Service(o.ServiceType)}服务不能改为{EscalateRules.TargetName(target)}");
+        if (o.PendingTransferToId != null) throw BizException.Conflict("本单有待确认的转交，请先处理");
+        if (await _db.OrderRequests.AnyAsync(x => x.OrderId == id && x.Type == OrderRequestType.Escalate && x.Status == RequestStatus.Pending))
+            throw BizException.Conflict("已有待审批的升级申请");
+        var me = await _view.LoadEmployee(user.Id);
+        var now = _clock.Now;
+        var note = $"{reason}；已排查：{findings}";
+        _db.OrderRequests.Add(new OrderRequest
+        {
+            OrderId = o.Id, Type = OrderRequestType.Escalate, Status = RequestStatus.Pending, RequesterId = me.Id, CreatedAt = now,
+            TargetServiceType = target, Note = note
+        });
+        AddLog(o, me, $"{me.Name} 申请升级为{EscalateRules.TargetName(target)}（{note}）", o.Status, now, LogKind.Info);
+        await _db.SaveChangesAsync();
+        await tx.CommitAsync();
+        await _notifier.NotifyAsync("升级服务方式申请",
+            $"{me.Name} 申请把 **{o.CustomerName}**（{o.OrderNo}）由{EnumText.Service(o.ServiceType)}升级为{EscalateRules.TargetName(target)}：{note}，请审批。",
+            await SupervisorPhones());
+        await PushSupervisors(o, me, now, "有申请待审批", $"{me.Name}申请升级为{EscalateRules.TargetName(target)}：{reason}");
+        return await _view.BuildDetail(id, user);
+    }
+
+    /// <summary>主管同意升级：改服务方式，工单回到「待启动」，之后按新方式的流程走。原有记录、打卡、工时都保留</summary>
+    private async Task<OrderDetail> ApproveEscalate(WorkOrder o, OrderRequest req, Employee me, DateTime now,
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction tx, CurrentUser user)
+    {
+        var target = req.TargetServiceType ?? throw BizException.BadRequest("申请缺少目标服务方式");
+        if (!Active.Contains(o.Status))
+            throw BizException.Conflict($"工单当前为「{EnumText.Status(o.Status)}」，不能升级服务方式");
+        if (!EscalateRules.Allowed(o.ServiceType, target))
+            throw BizException.Conflict($"工单已是{EnumText.Service(o.ServiceType)}服务，不能改为{EscalateRules.TargetName(target)}");
+        if (o.ServiceType == ServiceType.Onsite)
+        {
+            // 上门转返厂：现场还有人在计时就先别转，否则这段工时收不了尾
+            var running = (await RunningPairs(o.Id, now)).FirstOrDefault();
+            if (running != null)
+            {
+                var name = await _db.Employees.Where(e => e.Id == running.Arrive.EngineerId).Select(e => e.Name).FirstOrDefaultAsync();
+                throw BizException.Conflict($"{name}还在现场计时，请其先离场打卡");
+            }
+        }
+        var from = o.ServiceType;
+        o.ServiceType = target;
+        o.Status = OrderStatus.Accepted;
+        Decide(req, RequestStatus.Approved, me, now, null);
+        AddLog(o, me, $"{me.Name} 同意升级：{EnumText.Service(from)} → {EscalateRules.TargetName(target)}，工单回到待启动", o.Status, now, LogKind.Info);
+        await AutoCancelRequests(o, now);
+        await _db.SaveChangesAsync();
+        await tx.CommitAsync();
+        var phones = new List<string>();
+        if (req.Requester != null) phones.Add(req.Requester.Phone);
+        if (o.Creator != null && o.Creator.Id != req.RequesterId) phones.Add(o.Creator.Phone);
+        await _notifier.NotifyAsync("服务方式已升级",
+            $"**{o.CustomerName}**（{o.OrderNo}）已由{EnumText.Service(from)}升级为{EscalateRules.TargetName(target)}。" +
+            (o.PriceSet ? "原定价格保留，请确认是否需要调整。" : ""), phones);
+        await Push(o, me, now, b =>
+        {
+            b.Add("升级申请已同意", $"{me.Name}已同意，工单改为{EscalateRules.TargetName(target)}", req.Requester);
+            if (o.Creator != null && o.Creator.Id != req.RequesterId && o.Creator.Role != Role.Supervisor)
+                b.Add("服务方式已升级", $"已改为{EscalateRules.TargetName(target)}，请确认价格是否需要调整", o.Creator);
+        });
+        return await _view.BuildDetail(o.Id, user);
+    }
+
     // ---------- 审批 ----------
 
     /// <summary>
@@ -213,6 +294,8 @@ public partial class OrderService
             return await _view.BuildDetail(id, user);
         }
 
+        if (req.Type == OrderRequestType.Escalate) return await ApproveEscalate(o, req, me, now, tx, user);
+
         // AddAssistant
         if (!Doing.Contains(o.Status))
             throw BizException.Conflict($"工单当前为「{EnumText.Status(o.Status)}」，不能调整协助人");
@@ -248,6 +331,13 @@ public partial class OrderService
         return await _view.BuildDetail(id, user);
     }
 
+    private static string RequestName(OrderRequestType t) => t switch
+    {
+        OrderRequestType.Hold => "暂停申请",
+        OrderRequestType.Escalate => "升级服务方式申请",
+        _ => "协助人申请"
+    };
+
     private static void Decide(OrderRequest req, RequestStatus status, Employee? decider, DateTime now, string? reply)
     {
         req.Status = status;
@@ -270,14 +360,16 @@ public partial class OrderService
         var suffix = reply == null ? "" : $"（{reply}）";
         if (req.Type == OrderRequestType.Hold)
             AddLog(o, me, $"{me.Name} 驳回暂停申请{suffix}", o.Status, now, LogKind.Hold);
+        else if (req.Type == OrderRequestType.Escalate)
+            AddLog(o, me, $"{me.Name} 驳回升级为{EscalateRules.TargetName(req.TargetServiceType)}的申请{suffix}", o.Status, now, LogKind.Info);
         else
             AddLog(o, me, $"{me.Name} 驳回添加协助人 {req.TargetEngineer?.Name}{suffix}", o.Status, now, LogKind.Assist);
         await _db.SaveChangesAsync();
         if (req.Requester != null)
             await _notifier.NotifyAsync("申请被驳回",
-                $"**{o.CustomerName}**（{o.OrderNo}）的{(req.Type == OrderRequestType.Hold ? "暂停申请" : "协助人申请")}被驳回" + (reply == null ? "" : $"：{reply}"),
+                $"**{o.CustomerName}**（{o.OrderNo}）的{RequestName(req.Type)}被驳回" + (reply == null ? "" : $"：{reply}"),
                 new[] { req.Requester.Phone });
-        await Push(o, me, now, req.Type == OrderRequestType.Hold ? "暂停申请被驳回" : "协助申请被驳回",
+        await Push(o, me, now, req.Type == OrderRequestType.Hold ? "暂停申请被驳回" : req.Type == OrderRequestType.Escalate ? "升级申请被驳回" : "协助申请被驳回",
             reply == null ? $"{me.Name}驳回了你的申请" : $"驳回原因：{reply}", req.Requester);
         return await _view.BuildDetail(id, user);
     }
@@ -294,6 +386,8 @@ public partial class OrderService
         Decide(req, RequestStatus.Cancelled, null, now, null);
         if (req.Type == OrderRequestType.Hold)
             AddLog(o, me, $"{me.Name} 撤回暂停申请", o.Status, now, LogKind.Hold);
+        else if (req.Type == OrderRequestType.Escalate)
+            AddLog(o, me, $"{me.Name} 撤回升级服务方式的申请", o.Status, now, LogKind.Info);
         else
             AddLog(o, me, $"{me.Name} 撤回协助人申请（{req.TargetEngineer?.Name}）", o.Status, now, LogKind.Assist);
         await _db.SaveChangesAsync();

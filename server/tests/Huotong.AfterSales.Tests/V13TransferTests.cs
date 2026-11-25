@@ -328,7 +328,7 @@ public sealed class V13TransferTests : V13TestBase
         });
         Assert.Equal(2, RequestsOf(id).Count);
         // 新负责人拥有负责人的全部动作
-        Assert.Equal(new[] { "appoint", "checkin", "requestHold", "requestAssistant", "transfer" }, d.Actions);
+        Assert.Equal(new[] { "appoint", "checkin", "requestHold", "requestAssistant", "requestEscalate", "transfer" }, d.Actions);
         Assert.Equal(new[] { (ParticipantRole.Lead, "刘工", (string?)null), (ParticipantRole.Former, "王工", "已转交") },
             d.Participants.Select(p => (p.Role, p.User.Name, p.ExitText)));
         Assert.Equal(Clock.Now, d.Participants[1].ExitedAt);
@@ -461,7 +461,7 @@ public sealed class V13TransferTests : V13TestBase
         Assert.Equal(LogKind.Assist, d.Logs[^1].Kind);
         Assert.Equal("王工", d.Assignee!.Name);
         Assert.Null(d.PendingTransfer);
-        Assert.Equal(new[] { "appoint", "complete", "requestHold", "requestAssistant", "transfer" }, d.Actions);
+        Assert.Equal(new[] { "appoint", "complete", "requestHold", "requestAssistant", "requestEscalate", "transfer" }, d.Actions);
         var t = Assert.Single(d.Transfers);
         Assert.Equal(("已拒绝", "王工 转交给 刘工，刘工 已拒绝：这周都在外地，排不开", "这周都在外地，排不开"), (t.StatusText, t.Text, t.Reply));
         Assert.Empty(ExitsOf(id));
@@ -975,7 +975,7 @@ public sealed class V13TransferTests : V13TestBase
         Tick();
         d = await Orders.Assign(id, new AssignRequest { EngineerId = Wang.Id }, Sup);
         Assert.Equal(new[] { Chen.Id }, ExitsOf(id).Select(e => e.EngineerId));
-        Assert.Equal(new[] { "appoint", "checkin", "requestHold", "requestAssistant", "transfer" }, (await Orders.Detail(id, Wang)).Actions);
+        Assert.Equal(new[] { "appoint", "checkin", "requestHold", "requestAssistant", "requestEscalate", "transfer" }, (await Orders.Detail(id, Wang)).Actions);
         AssertInvariants();
 
         // 同意协助人申请：目标是已退出的人 → 退出记录删除
@@ -1036,7 +1036,7 @@ public sealed class V13TransferTests : V13TestBase
         Assert.Equal("甲工", d.Assignee!.Name);
         Assert.Equal(ParticipantRole.Lead, d.MyRole);
         Assert.Null(d.ReadOnlyText);
-        Assert.Equal(new[] { "appoint", "start", "requestHold", "requestAssistant", "transfer" }, d.Actions);
+        Assert.Equal(new[] { "appoint", "start", "requestHold", "requestAssistant", "requestEscalate", "transfer" }, d.Actions);
         var x = Assert.Single(ExitsOf(id));
         Assert.Equal((b.Id, ExitVia.Transfer), (x.EngineerId, x.Via));
         Assert.Equal(new[] { (ParticipantRole.Lead, "甲工"), (ParticipantRole.Former, "乙工") }, d.Participants.Select(p => (p.Role, p.User.Name)));
@@ -1057,9 +1057,9 @@ public sealed class V13TransferTests : V13TestBase
                 IsFormer: former, HasPendingTransfer: pending, PendingTransferToMe: toMe));
         const Role E = Role.Engineer;
         // 负责人、无待确认转交
-        Assert.Equal(new[] { "appoint", "checkin", "requestHold", "requestAssistant", "transfer" }, Act(E, 2, OrderStatus.Accepted, 2));
-        Assert.Equal(new[] { "appoint", "start", "requestHold", "requestAssistant", "transfer" }, Act(E, 2, OrderStatus.Accepted, 2, ServiceType.Remote));
-        Assert.Equal(new[] { "appoint", "checkin", "complete", "requestHold", "requestAssistant", "transfer" }, Act(E, 2, OrderStatus.InProgress, 2));
+        Assert.Equal(new[] { "appoint", "checkin", "requestHold", "requestAssistant", "requestEscalate", "transfer" }, Act(E, 2, OrderStatus.Accepted, 2));
+        Assert.Equal(new[] { "appoint", "start", "requestHold", "requestAssistant", "requestEscalate", "transfer" }, Act(E, 2, OrderStatus.Accepted, 2, ServiceType.Remote));
+        Assert.Equal(new[] { "appoint", "checkin", "complete", "requestHold", "requestAssistant", "requestEscalate", "transfer" }, Act(E, 2, OrderStatus.InProgress, 2));
         Assert.Equal(new[] { "transfer" }, Act(E, 2, OrderStatus.OnHold, 2));
         Assert.Empty(Act(E, 2, OrderStatus.Submitted, 2));
         Assert.Empty(Act(E, 2, OrderStatus.Closed, 2));

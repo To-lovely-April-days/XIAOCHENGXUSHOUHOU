@@ -50,7 +50,8 @@ public static class OrderStateMachine
     public record ActionContext(Role Role, int UserId, OrderStatus Status, int? AssigneeId, ServiceType ServiceType,
         bool HasMissingPunch, bool IsAssistant = false, bool PriceSet = true, bool HasPendingHoldRequest = false,
         bool FactoryCanRecord = false, bool FactoryShippedBack = false,
-        bool IsFormer = false, bool HasPendingTransfer = false, bool PendingTransferToMe = false);
+        bool IsFormer = false, bool HasPendingTransfer = false, bool PendingTransferToMe = false,
+        bool HasPendingEscalate = false);
 
     /// <summary>可以发起 / 存在待确认转交的状态：待启动、处理中、暂停搁置</summary>
     public static bool CanTransfer(OrderStatus s) => s is OrderStatus.Accepted or OrderStatus.InProgress or OrderStatus.OnHold;
@@ -83,6 +84,9 @@ public static class OrderStateMachine
                     && !c.HasPendingTransfer) a.Add("complete");
                 if (lead && active && !c.HasPendingHoldRequest) a.Add("requestHold");
                 if (lead && active) a.Add("requestAssistant");
+                // v2.0 远程 / 上门搞不定：申请升级服务方式（需主管同意）；返厂已是最重的方式
+                if (lead && active && c.ServiceType != ServiceType.Factory && !c.HasPendingEscalate && !c.HasPendingTransfer)
+                    a.Add("requestEscalate");
                 if (lead && CanTransfer(status) && !c.HasPendingTransfer) a.Add("transfer");
                 if (lead && c.HasPendingTransfer) a.Add("cancelTransfer");
                 if (c.PendingTransferToMe) { a.Add("acceptTransfer"); a.Add("rejectTransfer"); }

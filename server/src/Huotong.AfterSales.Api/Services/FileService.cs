@@ -136,6 +136,7 @@ public class FileService
         dto.Size = f.Size;
         dto.Kind = KindOf(f);
         dto.Ext = PathExt(f).TrimStart('.');
+        dto.Stage = f.PhotoStage;
         return dto;
     }
 

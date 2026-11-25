@@ -92,6 +92,28 @@ public class CompleteRequest
     public RunStatus? RunStatus { get; set; }
     public List<int>? ProcessPhotoIds { get; set; }
     public List<int>? SignaturePhotoIds { get; set; }
+    /// <summary>
+    /// v2.0 完工表版本：2 = 按服务方式区分资料（新版客户端都传 2）；不传 / 1 = 旧规则（旧版客户端升级前照常能提交）。
+    /// </summary>
+    public int? FormVersion { get; set; }
+    /// <summary>v2.0 上门：维修前照片（设备原始状态）、维修后照片；存成完工照片并记下前 / 后</summary>
+    public List<int>? BeforePhotoIds { get; set; }
+    public List<int>? AfterPhotoIds { get; set; }
+    /// <summary>v2.0 上门 = 现场维修登记表（签字版），返厂 = 返厂维修登记表；提交时挂成对应类别的附件。之前已经传过的也算</summary>
+    public List<int>? RepairFormIds { get; set; }
+    /// <summary>v2.0 远程：客户确认方式</summary>
+    public string? CustomerConfirm { get; set; }
+    /// <summary>v2.0 返厂：寄回前测试结果</summary>
+    public string? TestResult { get; set; }
+}
+
+/// <summary>v2.0 申请升级服务方式（远程 → 上门 / 返厂；上门 → 返厂），需主管同意</summary>
+public class EscalateRequest
+{
+    public string? TargetServiceType { get; set; }
+    public string? Reason { get; set; }
+    /// <summary>已经排查 / 处理了什么</summary>
+    public string? Findings { get; set; }
 }
 
 public class AssignRequest

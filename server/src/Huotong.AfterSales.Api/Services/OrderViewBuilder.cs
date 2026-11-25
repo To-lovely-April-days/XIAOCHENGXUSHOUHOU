@@ -265,15 +265,19 @@ public class OrderViewBuilder
         Note = r.Note,
         Text = RequestText(r),
         Engineer = r.TargetEngineer == null ? null : Brief(r.TargetEngineer),
+        TargetServiceType = r.TargetServiceType,
         Decider = r.Decider == null ? null : Brief(r.Decider), DecidedAt = r.DecidedAt, Reply = r.Reply,
         CanDecide = user.Role == Role.Supervisor && r.Status == RequestStatus.Pending,
         CanCancel = r.RequesterId == user.Id && r.Status == RequestStatus.Pending
     };
 
     /// <summary>申请的一句话描述：暂停 = holdText；协助人 = 「添加协助人 王工[：说明]」</summary>
-    public static string RequestText(OrderRequest r) => r.Type == OrderRequestType.Hold
-        ? EnumText.HoldText(r.HoldReasonType, r.Note)
-        : $"添加协助人 {r.TargetEngineer?.Name}" + (string.IsNullOrEmpty(r.Note) ? "" : $"：{r.Note}");
+    public static string RequestText(OrderRequest r) => r.Type switch
+    {
+        OrderRequestType.Hold => EnumText.HoldText(r.HoldReasonType, r.Note),
+        OrderRequestType.Escalate => $"升级为{EscalateRules.TargetName(r.TargetServiceType)}" + (string.IsNullOrEmpty(r.Note) ? "" : $"：{r.Note}"),
+        _ => $"添加协助人 {r.TargetEngineer?.Name}" + (string.IsNullOrEmpty(r.Note) ? "" : $"：{r.Note}")
+    };
 
     /// <summary>价格建议是否待处理：主管尚未在此建议之后定价</summary>
     public static bool SuggestionPending(DateTime? priceSetAt, DateTime createdAt) => priceSetAt == null || priceSetAt < createdAt;
@@ -325,7 +329,8 @@ public class OrderViewBuilder
         d.Completion = o.RunStatus == null ? null : new CompletionDto
         {
             FaultCause = o.FaultCause ?? "", Solution = o.Solution ?? "", PartsReplaced = o.PartsReplaced ?? "",
-            RunStatus = o.RunStatus.Value, SubmittedAt = o.SubmittedAt
+            RunStatus = o.RunStatus.Value, SubmittedAt = o.SubmittedAt,
+            CustomerConfirm = o.CustomerConfirm, TestResult = o.TestResult
         };
 
         // 价格：工程师一律不返回
@@ -407,7 +412,8 @@ public class OrderViewBuilder
             requests.Any(r => r.Type == OrderRequestType.Hold && r.Status == RequestStatus.Pending),
             d.Factory?.Nodes.Any(n => n.CanRecord) ?? false, recorded.Contains(FactoryNode.ShippedBack),
             IsFormer: isFormer, HasPendingTransfer: o.PendingTransferToId != null,
-            PendingTransferToMe: isEngineer && o.PendingTransferToId == user.Id));
+            PendingTransferToMe: isEngineer && o.PendingTransferToId == user.Id,
+            HasPendingEscalate: requests.Any(r => r.Type == OrderRequestType.Escalate && r.Status == RequestStatus.Pending)));
 
         if (user.Role == Role.Supervisor && o.Status == OrderStatus.Submitted)
         {

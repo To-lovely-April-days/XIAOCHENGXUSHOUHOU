@@ -49,17 +49,21 @@ public partial class OrderService
         string? courier = null, trackingNo = null;
         if (FactoryRules.NeedsCourier(node))
         {
+            // v2.0 寄回客户：拍一张快递单照片就行（下面的照片必传），快递公司 / 单号改为选填；客户寄出没有照片，仍要填文字
+            var textRequired = node != FactoryNode.ShippedBack;
             courier = (r.Courier ?? "").Trim();
-            if (courier.Length == 0) throw BizException.BadRequest("请填写快递公司");
+            if (courier.Length == 0 && textRequired) throw BizException.BadRequest("请填写快递公司");
             if (courier.Length > 50) throw BizException.BadRequest("快递公司不能超过 50 个字");
             trackingNo = new string((r.TrackingNo ?? "").Where(c => !char.IsWhiteSpace(c)).ToArray());
-            if (trackingNo.Length == 0) throw BizException.BadRequest("请填写快递单号");
+            if (trackingNo.Length == 0 && textRequired) throw BizException.BadRequest("请填写快递单号");
             if (trackingNo.Length > 50) throw BizException.BadRequest("快递单号不能超过 50 个字");
+            if (courier.Length == 0) courier = null;
+            if (trackingNo.Length == 0) trackingNo = null;
         }
         var category = FactoryRules.PhotoCategory(node);
         var photoIds = category == null ? new List<int>() : (r.PhotoIds ?? new()).Distinct().ToList();
         if (node == FactoryNode.FactoryReceived && photoIds.Count < 1) throw BizException.BadRequest("请至少上传 1 张收货照片（外观/配件）");
-        if (node == FactoryNode.ShippedBack && photoIds.Count < 1) throw BizException.BadRequest("请至少上传 1 张寄回照片");
+        if (node == FactoryNode.ShippedBack && photoIds.Count < 1) throw BizException.BadRequest("请上传寄回的快递单照片");
         if (photoIds.Count > 9) throw BizException.BadRequest("照片最多 9 张");
         var note = string.IsNullOrWhiteSpace(r.Note) ? null : r.Note.Trim();
         if (note != null && note.Length > 500) throw BizException.BadRequest("备注不能超过 500 个字");
@@ -92,7 +96,8 @@ public partial class OrderService
         existing.TrackingNo = trackingNo;
         existing.Note = note;
 
-        var express = $"（{courier} {trackingNo}）";
+        var expressText = string.Join(" ", new[] { courier, trackingNo }.Where(x => !string.IsNullOrEmpty(x)));
+        var express = expressText.Length == 0 ? "（见快递单照片）" : $"（{expressText}）";
         string text;
         switch (node)
         {

@@ -207,9 +207,11 @@ public sealed class V11FactoryTests : V11TestBase
         d = await Orders.RecordFactoryNode(id, Node(Received, null, null, ten.Take(9).ToArray()), Wang);
         Assert.Equal(9, d.Factory!.Nodes[1].Photos.Count);
 
-        await Fails(40000, "请至少上传 1 张寄回照片", () => Orders.RecordFactoryNode(id, Node(Back, "顺丰", "SF2"), Wang));
-        await Fails(40000, "请填写快递公司", () => Orders.RecordFactoryNode(id, Node(Back, null, "SF2", Photo(Wang)), Wang));
-        await Fails(40000, "请填写快递单号", () => Orders.RecordFactoryNode(id, Node(Back, "顺丰", null, Photo(Wang)), Wang));
+        await Fails(40000, "请上传寄回的快递单照片", () => Orders.RecordFactoryNode(id, Node(Back, "顺丰", "SF2"), Wang));
+        // v2.0 寄回客户：只要快递单照片，快递公司 / 单号选填
+        d = await Orders.RecordFactoryNode(id, Node(Back, null, null, Photo(Wang)), Wang);
+        Assert.Equal("王工 寄回客户（见快递单照片）", d.Logs[^1].Text);
+        Assert.Null(d.Factory!.Nodes.Single(n => n.Node == FactoryNode.ShippedBack).TrackingNo);
     }
 
     [Fact]

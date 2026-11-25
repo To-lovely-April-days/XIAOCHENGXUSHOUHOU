@@ -412,6 +412,9 @@ public partial class OrderService
             foreach (var r in pending.Where(r => r.Type == OrderRequestType.Hold)) Cancel(r, holdReply ?? "工单状态已变化");
         if (o.Status is OrderStatus.Submitted or OrderStatus.Closed or OrderStatus.Voided)
             foreach (var r in pending.Where(r => r.Type == OrderRequestType.AddAssistant)) Cancel(r, "工单状态已变化");
+        // v2.0 升级服务方式的申请：工单不在待启动 / 处理中了（暂停、提交完工、闭环、作废）就自动撤销
+        if (!Active.Contains(o.Status))
+            foreach (var r in pending.Where(r => r.Type == OrderRequestType.Escalate)) Cancel(r, "工单状态已变化");
         foreach (var r in pending.Where(r => r.Type == OrderRequestType.AddAssistant && r.TargetEngineerId != null
                      && (r.TargetEngineerId == o.AssigneeId || o.Assistants.Any(a => a.EngineerId == r.TargetEngineerId))))
             Cancel(r, "已是本单参与人");
@@ -507,11 +510,33 @@ public partial class OrderService
                 throw BizException.Conflict($"{name}还在现场计时，请其先离场打卡后再提交完工");
             }
         }
-        var processIds = (r.ProcessPhotoIds ?? new()).Distinct().ToList();
+        // v2.0：新版客户端（formVersion ≥ 2）按服务方式区分资料；旧版沿用旧规则
+        var v2 = (r.FormVersion ?? 1) >= 2;
+        var beforeIds = v2 && o.ServiceType == ServiceType.Onsite ? (r.BeforePhotoIds ?? new()).Distinct().ToList() : new List<int>();
+        var afterIds = v2 && o.ServiceType == ServiceType.Onsite
+            ? (r.AfterPhotoIds ?? new()).Distinct().Where(x => !beforeIds.Contains(x)).ToList() : new List<int>();
+        var processIds = beforeIds.Count + afterIds.Count > 0
+            ? beforeIds.Concat(afterIds).ToList()
+            : (r.ProcessPhotoIds ?? new()).Distinct().ToList();
         var signIds = (r.SignaturePhotoIds ?? new()).Distinct().ToList();
+        // 维修登记表：上门 = 现场维修登记表，返厂 = 返厂维修登记表；之前在附件里传过的也算
+        AttachmentType? formType = o.ServiceType switch
+        {
+            ServiceType.Onsite => AttachmentType.OnsiteRepairForm,
+            ServiceType.Factory => AttachmentType.FactoryRepairForm,
+            _ => null
+        };
+        var formItems = v2 && formType != null
+            ? (r.RepairFormIds ?? new()).Distinct().Select(x => (FileId: x, Restricted: false, Type: formType.Value)).ToList()
+            : new List<(int FileId, bool Restricted, AttachmentType Type)>();
+        var existingForms = formType == null ? 0 : await _db.Files.CountAsync(f => f.OrderId == id
+            && (f.Category == FileCategory.OrderPhoto || f.Category == FileCategory.Attachment) && f.AttachmentType == formType);
         CompletionValidator.Validate(o.Status, o.ServiceType, running,
-            new CompletionInput(r.FaultCause, r.Solution, r.RunStatus, processIds.Count, signIds.Count));
+            new CompletionInput(r.FaultCause, r.Solution, r.RunStatus, processIds.Count, signIds.Count,
+                v2 ? 2 : 1, beforeIds.Count, afterIds.Count, existingForms + formItems.Count, r.CustomerConfirm, r.TestResult));
         if (processIds.Count + signIds.Count > 30) throw BizException.BadRequest("照片数量过多");
+        if (formItems.Count > 0 && await AttachmentCount(id) + formItems.Count > AttachmentRules.Limit)
+            throw BizException.BadRequest($"附件最多 {AttachmentRules.Limit} 个，请先删除不需要的附件");
 
         // processPhotoIds / signaturePhotoIds 为最终全集：本单已挂载但未在本次列表中的处理照片/签字件解绑
         var keep = processIds.Concat(signIds).ToHashSet();
@@ -521,6 +546,14 @@ public partial class OrderService
         foreach (var f in stale.Where(f => !keep.Contains(f.Id))) f.OrderId = null;
         await _files.Attach(processIds, id, FileCategory.ProcessPhoto, user, "处理照片");
         await _files.Attach(signIds, id, FileCategory.Signature, user, "客户签字件");
+        if (v2 && processIds.Count > 0)
+        {
+            // 记下每张完工照片是维修前还是维修后（只有上门分前后，其他服务方式清空）
+            var photos = await _db.Files.Where(f => processIds.Contains(f.Id)).ToListAsync();
+            foreach (var f in photos)
+                f.PhotoStage = beforeIds.Contains(f.Id) ? "Before" : afterIds.Contains(f.Id) ? "After" : null;
+        }
+        if (formItems.Count > 0) Mount(await LoadNewAttachments(formItems, user), formItems, id, o.ServiceType);
         var me = await _view.LoadEmployee(user.Id);
         var to = OrderStateMachine.Apply(o.Status, OrderAction.Complete);
         o.Status = to;
@@ -528,6 +561,11 @@ public partial class OrderService
         o.Solution = Req(r.Solution, "解决措施", 1000);
         o.PartsReplaced = Opt(r.PartsReplaced, "更换备件", 500) ?? "";
         o.RunStatus = r.RunStatus;
+        if (v2)
+        {
+            o.CustomerConfirm = o.ServiceType == ServiceType.Remote ? r.CustomerConfirm!.Trim() : null;
+            o.TestResult = o.ServiceType == ServiceType.Factory ? Req(r.TestResult, "测试结果", 500) : null;
+        }
         o.SubmittedAt = now;
         AddLog(o, me, $"{me.Name} 提交完工 → {EnumText.Status(to)}", to, now);
         await AutoCancelRequests(o, now);

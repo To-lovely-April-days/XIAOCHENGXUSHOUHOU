@@ -70,7 +70,7 @@ public enum FileKind { Image, Video, Document }
 public enum HoldReasonType { WaitCustomer, WaitParts, WaitThirdParty, Other }
 
 /// <summary>工程师发起、需主管审批的申请类型</summary>
-public enum OrderRequestType { Hold, AddAssistant }
+public enum OrderRequestType { Hold, AddAssistant, Escalate }
 
 public enum RequestStatus { Pending, Approved, Rejected, Cancelled }
 

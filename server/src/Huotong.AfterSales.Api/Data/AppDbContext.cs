@@ -40,6 +40,14 @@ public class AppDbContext : DbContext
             e.Ignore(x => x.Surname);
         });
 
+        b.Entity<WorkOrder>(e =>
+        {
+            e.Property(x => x.CustomerConfirm).HasMaxLength(20);
+            e.Property(x => x.TestResult).HasMaxLength(500);
+        });
+        b.Entity<StoredFile>(e => e.Property(x => x.PhotoStage).HasMaxLength(10));
+        b.Entity<OrderRequest>(e => e.Property(x => x.TargetServiceType).HasConversion<string>().HasMaxLength(20));
+
         b.Entity<Registration>(e =>
         {
             e.Property(x => x.Name).HasMaxLength(50);

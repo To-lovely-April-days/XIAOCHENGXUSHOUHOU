@@ -37,6 +37,8 @@ public class FileDto
     public FileKind Kind { get; set; }
     /// <summary>存储扩展名，小写不带点</summary>
     public string Ext { get; set; } = "";
+    /// <summary>v2.0 完工照片的阶段：Before | After | null</summary>
+    public string? Stage { get; set; }
 }
 
 /// <summary>工单附件（v1.2）：建单照片 + 新附件</summary>
@@ -206,6 +208,9 @@ public class CompletionDto
     public string PartsReplaced { get; set; } = "";
     public RunStatus RunStatus { get; set; }
     public DateTime? SubmittedAt { get; set; }
+    /// <summary>v2.0 远程：客户确认方式；返厂：寄回前测试结果。没有时为 null</summary>
+    public string? CustomerConfirm { get; set; }
+    public string? TestResult { get; set; }
 }
 
 public class OrderFilesDto
@@ -261,6 +266,8 @@ public class RequestDto
     public string? Note { get; set; }
     public string Text { get; set; } = "";
     public UserBrief? Engineer { get; set; }
+    /// <summary>v2.0 升级服务方式申请的目标</summary>
+    public ServiceType? TargetServiceType { get; set; }
     public UserBrief? Decider { get; set; }
     public DateTime? DecidedAt { get; set; }
     public string? Reply { get; set; }
