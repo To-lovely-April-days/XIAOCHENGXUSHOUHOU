@@ -77,3 +77,6 @@ page { background: var(--bg); }
 .media-sub { padding: 20rpx 0 14rpx; font-size: 26rpx; line-height: 36rpx; font-weight: 600; color: var(--text-2); }
 
 .submit { height: 100rpx; border-radius: 24rpx; font-size: 32rpx; }
+
+/* v2.0 选填标记 */
+.lbl-opt { color: var(--text-3); font-weight: 400; }

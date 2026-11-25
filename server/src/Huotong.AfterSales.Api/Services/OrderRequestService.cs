@@ -187,6 +187,18 @@ public partial class OrderService
             throw BizException.Conflict("已有待审批的升级申请");
         var me = await _view.LoadEmployee(user.Id);
         var now = _clock.Now;
+        // 要上门就得有地址和坐标（打卡要算距离）；远程单建单时可能没填，这里补上
+        if (target == ServiceType.Onsite && (string.IsNullOrWhiteSpace(o.Address) || o.Latitude == null || o.Longitude == null))
+        {
+            if (string.IsNullOrWhiteSpace(r.Address) || r.Latitude == null || r.Longitude == null)
+                throw BizException.BadRequest("转为上门服务请在地图上选择客户地址");
+            if (r.Latitude is < -90 or > 90 || r.Longitude is < -180 or > 180) throw BizException.BadRequest("经纬度不正确");
+            o.Address = Req(r.Address, "客户地址", 200);
+            (o.City, o.Region) = AddressParser.Parse(o.Address);
+            o.Latitude = r.Latitude;
+            o.Longitude = r.Longitude;
+            AddLog(o, me, $"{me.Name} 补充客户地址：{o.Address}", o.Status, now, LogKind.Info);
+        }
         var note = $"{reason}；已排查：{findings}";
         _db.OrderRequests.Add(new OrderRequest
         {

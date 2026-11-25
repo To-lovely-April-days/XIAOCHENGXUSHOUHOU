@@ -160,7 +160,7 @@ export default {
       const phone = trim(f.contactPhone).replace(/\s+/g, '');
       if (!phone) e.contactPhone = '请填写联系电话';
       else if (!PHONE_RE.test(phone)) e.contactPhone = '联系电话格式不正确（7–20 位数字或横杠）';
-      req('address', '请填写客户地址');
+      if (this.onsite) req('address', '请填写客户地址'); // v2.0：远程、返厂可以不填地址
       const lat = trim(f.latitude);
       const lng = trim(f.longitude);
       if (lat !== '' || lng !== '' || this.onsite) {
@@ -260,7 +260,7 @@ export default {
         <input class="input" :class="{ invalid: errors.contactPhone }" v-model="f.contactPhone" maxlength="40" inputmode="tel"
                placeholder="手机或座机，如 0512-12345678" @input="clearErr('contactPhone')">
         <span v-if="errors.contactPhone" class="field-error">{{ errors.contactPhone }}</span></label>
-      <label class="field span-2"><span class="field-label">客户地址<span class="req">*</span></span>
+      <label class="field span-2"><span class="field-label">客户地址<span v-if="onsite" class="req">*</span><span v-else class="text-faint">（选填）</span></span>
         <input class="input" :class="{ invalid: errors.address }" v-model="f.address" maxlength="200"
                placeholder="省市区 + 详细地址，如 江苏省苏州市工业园区星湖街 xx 号" @input="clearErr('address')">
         <span v-if="errors.address" class="field-error">{{ errors.address }}</span></label>

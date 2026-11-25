@@ -114,6 +114,10 @@ public class EscalateRequest
     public string? Reason { get; set; }
     /// <summary>已经排查 / 处理了什么</summary>
     public string? Findings { get; set; }
+    /// <summary>升级为上门、而工单还没有客户地址 / 坐标时必填（远程、返厂建单可以不填地址）；会直接补到工单上</summary>
+    public string? Address { get; set; }
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
 }
 
 public class AssignRequest

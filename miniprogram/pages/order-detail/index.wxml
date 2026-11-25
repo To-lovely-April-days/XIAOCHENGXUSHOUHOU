@@ -477,6 +477,13 @@
       <view wx:for="{{escalateSheet.targets}}" wx:key="value" class="chip od-reason {{escalateSheet.target === item.value ? 'active' : ''}}"
             data-value="{{item.value}}" bindtap="onEscalateTarget" aria-role="radio" aria-checked="{{escalateSheet.target === item.value}}">{{item.label}}</view>
     </view>
+    <block wx:if="{{escalateSheet.target === 'Onsite' && escalateSheet.noAddress}}">
+      <view class="od-sheet-label">客户地址<text class="od-sheet-opt">（必填，上门打卡要用）</text></view>
+      <view class="od-sheet-input od-esc-addr" hover-class="btn-hover" bindtap="onEscalateAddress" aria-role="button">
+        <text class="flex1 ellipsis {{escalateSheet.address ? '' : 'placeholder'}}">{{escalateSheet.address || '点这里在地图上选择'}}</text>
+        <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+      </view>
+    </block>
     <view class="od-sheet-label">升级原因<text class="od-sheet-opt">（必填）</text></view>
     <input class="od-sheet-input" value="{{escalateSheet.reason}}" data-field="reason" bindinput="onEscalateInput" maxlength="200" cursor-spacing="160"
            placeholder="如：视频指导无法定位故障" placeholder-class="placeholder" />

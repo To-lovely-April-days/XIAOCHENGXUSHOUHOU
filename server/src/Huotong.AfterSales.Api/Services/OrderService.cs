@@ -272,7 +272,8 @@ public partial class OrderService
         var contact = Req(r.ContactName, "联系人", 50);
         var phone = Req(r.ContactPhone, "联系电话", 40).Replace(" ", "");
         if (!PhoneRe.IsMatch(phone)) throw BizException.BadRequest("联系电话格式不正确");
-        var address = Req(r.Address, "客户地址", 200);
+        // v2.0：只有上门要客户地址（要去现场、要算打卡距离）；远程和返厂可以不填
+        var address = r.ServiceType == ServiceType.Onsite ? Req(r.Address, "客户地址", 200) : Opt(r.Address, "客户地址", 200) ?? "";
         if (r.ServiceType == ServiceType.Onsite && (r.Latitude == null || r.Longitude == null))
             throw BizException.BadRequest("现场工单请在地图上选择客户地址");
         if (r.Latitude is < -90 or > 90 || r.Longitude is < -180 or > 180) throw BizException.BadRequest("经纬度不正确");

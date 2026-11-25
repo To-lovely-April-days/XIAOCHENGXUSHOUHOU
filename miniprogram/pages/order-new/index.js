@@ -467,6 +467,8 @@ Page({
         if (f.satSigned !== true && f.satSigned !== false) return { key: r.key, msg: r.msg };
         continue;
       }
+      // v2.0：客户地址只有上门必填，远程和返厂可以不填
+      if (r.key === 'address' && f.serviceType !== 'Onsite') continue;
       if (!trim(values[r.key])) return { key: r.key, msg: r.msg };
       if (r.key === 'contactPhone' && !/^[\d-]{7,20}$/.test(trim(f.contactPhone).replace(/\s/g, ''))) {
         return { key: 'contactPhone', msg: '联系电话格式不正确' };

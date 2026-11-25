@@ -322,8 +322,10 @@ const orders = {
    * @param {'Onsite'|'Factory'} target @param {string} reason 升级原因（必填） @param {string} findings 已排查情况（必填）
    * @returns {Promise<OrderDetail>} requests 里多一条 type='Escalate' 的申请（targetServiceType、text）
    */
-  requestEscalate(id, target, reason, findings, opts) {
-    return post('/api/orders/' + id + '/escalate-requests', { targetServiceType: target, reason: reason, findings: findings }, opts);
+  requestEscalate(id, target, reason, findings, extra, opts) {
+    // extra：转上门而工单还没有地址时带 { address, latitude, longitude }，否则传 null
+    return post('/api/orders/' + id + '/escalate-requests',
+      Object.assign({ targetServiceType: target, reason: reason, findings: findings }, extra || {}), opts);
   },
   requestHold(id, reasonType, note, opts) {
     return post('/api/orders/' + id + '/hold-requests', { reasonType: reasonType, note: note || null }, opts);

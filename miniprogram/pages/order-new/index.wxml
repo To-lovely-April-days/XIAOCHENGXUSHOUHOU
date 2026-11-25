@@ -55,7 +55,7 @@
       <input class="ipt num-font" type="text" value="{{form.contactPhone}}" data-key="contactPhone" bindinput="onInput" placeholder="手机或座机" placeholder-class="placeholder" maxlength="24" />
     </view>
     <view class="cell cell-addr no-line" id="f-address" hover-class="cell-hover" bindtap="onChooseAddress" aria-role="button">
-      <view class="lbl {{errKey === 'address' ? 'err' : ''}}">客户地址 <text class="star">*</text></view>
+      <view class="lbl {{errKey === 'address' ? 'err' : ''}}">客户地址 <text wx:if="{{form.serviceType === 'Onsite'}}" class="star">*</text><text wx:else class="lbl-opt">（选填）</text></view>
       <view class="addr">
         <block wx:if="{{form.address}}">
           <view wx:if="{{loc.name}}" class="addr-name">{{loc.name}}</view>

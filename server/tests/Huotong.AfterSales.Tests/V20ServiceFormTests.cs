@@ -176,4 +176,49 @@ public sealed class V20ServiceFormTests : V12TestBase
         Assert.Equal("王工 撤回升级服务方式的申请", d.Logs[^1].Text);
         Assert.Contains("requestEscalate", d.Actions);
     }
+
+    // ---------- 地址：只有上门必填 ----------
+
+    [Fact]
+    public async Task AddressIsOnlyRequiredForOnsite()
+    {
+        var sales = U("王敏");
+        var onsite = NewOrder("上门没地址");
+        onsite.Address = " ";
+        await Fails(40000, "请填写客户地址", () => Orders.Create(onsite, sales));
+
+        foreach (var st in new[] { ServiceType.Factory, ServiceType.Remote })
+        {
+            var r = NewOrder("不用地址" + st, st);
+            r.Address = null;
+            r.Latitude = null;
+            r.Longitude = null;
+            var d = await Orders.Create(r, sales);
+            Assert.Equal(("", st), (d.Address, d.ServiceType));
+        }
+    }
+
+    [Fact]
+    public async Task EscalatingToOnsiteAsksForAddressWhenOrderHasNone()
+    {
+        var r = NewOrder("远程没地址转上门", ServiceType.Remote);
+        r.Address = null;
+        r.Latitude = null;
+        r.Longitude = null;
+        var id = (await Orders.Create(r, U("王敏"))).Id;
+        await Orders.Claim(id, Wang);
+
+        await Fails(40000, "转为上门服务请在地图上选择客户地址", () => Orders.RequestEscalate(id, Esc("Onsite"), Wang));
+        // 转返厂不需要地址
+        var toFactory = await Orders.RequestEscalate(id, Esc("Factory"), Wang);
+        await Orders.CancelRequest(id, toFactory.Requests.Single(x => x.Type == OrderRequestType.Escalate).Id, Wang);
+
+        var body = Esc("Onsite");
+        body.Address = "苏州市工业园区星湖街 1 号";
+        body.Latitude = 31.30;
+        body.Longitude = 120.72;
+        var d = await Orders.RequestEscalate(id, body, Wang);
+        Assert.Equal(("苏州市工业园区星湖街 1 号", 31.30), (d.Address, d.Latitude));
+        Assert.Contains(d.Logs, l => l.Text == "王工 补充客户地址：苏州市工业园区星湖街 1 号");
+    }
 }

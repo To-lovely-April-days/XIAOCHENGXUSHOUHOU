@@ -8,6 +8,7 @@ const api = require('../../api/index.js');
 const auth = require('../../utils/auth.js');
 const format = require('../../utils/format.js');
 const enums = require('../../utils/enums.js');
+const location = require('../../utils/location.js');
 const attachments = require('../../utils/attachments.js');
 const subscribe = require('../../utils/subscribe.js');
 
@@ -611,7 +612,7 @@ Page(subscribe.bindTaps({
     // v1.9 确认闭环的底部面板：关键信息 + 备注（选填）+ 常用语
     closeSheet: { show: false, sub: '', worker: '', hints: '', note: '' },
     // v2.0 申请升级服务方式：targets = 可选的目标（远程可选上门 / 返厂，上门只能选返厂）
-    escalateSheet: { show: false, from: '', targets: [], target: '', reason: '', findings: '' },
+    escalateSheet: { show: false, from: '', targets: [], target: '', reason: '', findings: '', noAddress: false, address: '', latitude: null, longitude: null },
     closePhrases: ['资料齐全', '客户已签字确认', '已电话回访'],
     priceSheet: { show: false, mode: 'set', title: '', amount: '', note: '', hint: '', suggestText: '', suggestAmount: '' },
     apptShow: false,
@@ -1076,7 +1077,12 @@ Page(subscribe.bindTaps({
             targets: targets,
             target: targets.length === 1 ? targets[0].value : '',
             reason: '',
-            findings: ''
+            findings: '',
+            // 远程单建单时可以不填地址：要转上门就得在这里补上（打卡要算距离）
+            noAddress: !d.address || d.latitude === null || d.latitude === undefined || d.longitude === null || d.longitude === undefined,
+            address: '',
+            latitude: null,
+            longitude: null
           }
         });
         break;
@@ -1435,6 +1441,15 @@ Page(subscribe.bindTaps({
     this.setData({ 'escalateSheet.target': e.currentTarget.dataset.value });
   },
 
+  onEscalateAddress() {
+    location.chooseLocation(null).then((r) => {
+      const name = r.name || '';
+      const addr = r.address || '';
+      const full = !name ? addr : (addr.indexOf(name) >= 0 ? addr : (addr ? addr + ' ' + name : name));
+      this.setData({ 'escalateSheet.address': full, 'escalateSheet.latitude': r.latitude, 'escalateSheet.longitude': r.longitude });
+    }).catch(() => {});
+  },
+
   onEscalateInput(e) {
     this.setData({ ['escalateSheet.' + e.currentTarget.dataset.field]: e.detail.value });
   },
@@ -1447,7 +1462,10 @@ Page(subscribe.bindTaps({
     if (!s.target) return wx.showToast({ title: '请选择要升级成哪种服务方式', icon: 'none' });
     if (!reason) return wx.showToast({ title: '请填写升级原因', icon: 'none' });
     if (!findings) return wx.showToast({ title: '请填写已经排查了什么', icon: 'none' });
-    this.run(api.orders.requestEscalate(this.orderId, s.target, reason, findings, { loading: '提交中' }), '已提交，等主管同意').then((d) => {
+    const needAddress = s.target === 'Onsite' && s.noAddress;
+    if (needAddress && !s.address) return wx.showToast({ title: '转为上门服务请在地图上选择客户地址', icon: 'none' });
+    const extra = needAddress ? { address: s.address, latitude: s.latitude, longitude: s.longitude } : null;
+    this.run(api.orders.requestEscalate(this.orderId, s.target, reason, findings, extra, { loading: '提交中' }), '已提交，等主管同意').then((d) => {
       if (d) this.setData({ 'escalateSheet.show': false });
     });
   },

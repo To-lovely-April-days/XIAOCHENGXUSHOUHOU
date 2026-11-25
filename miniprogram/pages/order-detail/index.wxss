@@ -283,3 +283,6 @@
 .od-close-phrases { margin-top: 16rpx; display: flex; flex-wrap: wrap; gap: 16rpx; }
 .od-close-phrase { margin: 0; }
 .od-close-tip { margin-top: 20rpx; font-size: 24rpx; }
+
+/* v2.0 升级为上门时补客户地址 */
+.od-esc-addr { display: flex; align-items: center; gap: 12rpx; }
