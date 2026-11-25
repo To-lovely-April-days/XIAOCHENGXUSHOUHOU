@@ -81,3 +81,8 @@
 .cp-sign-status { flex-shrink: 0; font-size: 28rpx; font-weight: 600; }
 
 .cp-submit { height: 100rpx; border-radius: 24rpx; font-size: 32rpx; }
+
+/* v2.0 按服务方式区分的资料 */
+.cp-confirm-tip { margin-top: 4rpx; }
+.cp-chips { margin-top: 20rpx; display: flex; flex-wrap: wrap; gap: 16rpx; padding-bottom: 8rpx; }
+.cp-chip { margin: 0; }

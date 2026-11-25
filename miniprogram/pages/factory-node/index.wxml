@@ -30,7 +30,7 @@
     <!-- 快递信息 -->
     <view wx:if="{{needCourier}}" class="fn-card">
       <view class="fn-field">
-        <view class="fn-label">快递公司 <text class="red">*</text></view>
+        <view class="fn-label">快递公司 <text wx:if="{{!courierOptional}}" class="red">*</text><text wx:else class="muted-3">（选填）</text></view>
         <input class="fn-input" value="{{courier}}" data-field="courier" bindinput="onInput"
           maxlength="50" placeholder="如：顺丰" placeholder-class="placeholder" />
         <view class="fn-chips">
@@ -39,7 +39,7 @@
         </view>
       </view>
       <view class="fn-field fn-field-last">
-        <view class="fn-label">快递单号 <text class="red">*</text></view>
+        <view class="fn-label">快递单号 <text wx:if="{{!courierOptional}}" class="red">*</text><text wx:else class="muted-3">（选填）</text></view>
         <view class="row">
           <input class="fn-input flex1 num" value="{{trackingNo}}" data-field="trackingNo" bindinput="onInput"
             maxlength="60" placeholder="输入或扫码" placeholder-class="placeholder" />

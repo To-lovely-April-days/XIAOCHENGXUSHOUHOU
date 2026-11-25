@@ -137,6 +137,7 @@ const HOLD_REASON = {
 
 /** 申请类型（工程师发起、主管审批） */
 const REQUEST_TYPE = {
+  Escalate:     { label: '升级服务方式申请' },
   Hold:         { label: '暂停申请' },
   AddAssistant: { label: '协助人申请' }
 };
@@ -186,6 +187,7 @@ const ACTION = {
   factory:          { label: '返厂流程' },
   requestHold:      { label: '申请暂停' },
   requestAssistant: { label: '申请协助人' },
+  requestEscalate:  { label: '升级服务方式' },
   assistants:       { label: '调整协助人' },
   setPrice:         { label: '定价' },
   suggestPrice:     { label: '价格建议' },

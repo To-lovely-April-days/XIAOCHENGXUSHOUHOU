@@ -27,7 +27,7 @@
     <!-- 文本 -->
     <view class="cp-card">
       <view class="cp-field">
-        <view class="cp-label">现场确认的故障原因 <text class="red">*</text></view>
+        <view class="cp-label">{{mode === 'Onsite' ? '现场确认的故障原因' : '故障原因'}} <text class="red">*</text></view>
         <textarea class="cp-textarea" value="{{faultCause}}" data-field="faultCause" bindinput="onInput"
           auto-height maxlength="500" disable-default-padding placeholder="如：加热棒接线端子氧化，接触不良"
           placeholder-class="placeholder" />
@@ -55,46 +55,45 @@
       </view>
     </view>
 
-    <!-- 照片 -->
-    <view class="cp-card cp-mt">
+    <!-- 远程：客户确认方式 -->
+    <view wx:if="{{mode === 'Remote'}}" class="cp-card cp-mt" role="radiogroup">
+      <view class="cp-label cp-radio-title">客户确认方式 <text class="red">*</text></view>
+      <view class="cp-photo-tip cp-confirm-tip">客户是怎么确认问题已经解决的</view>
+      <view class="cp-chips">
+        <view wx:for="{{confirmOptions}}" wx:key="*this" class="chip cp-chip {{customerConfirm === item ? 'active' : ''}}"
+          data-value="{{item}}" bindtap="onPickConfirm" aria-role="radio" aria-checked="{{customerConfirm === item}}">{{item}}</view>
+      </view>
+    </view>
+
+    <!-- 返厂：寄回前测试结果 -->
+    <view wx:if="{{mode === 'Factory'}}" class="cp-card cp-mt">
+      <view class="cp-field cp-field-last">
+        <view class="cp-label">寄回前测试结果 <text class="red">*</text></view>
+        <textarea class="cp-textarea" value="{{testResult}}" data-field="testResult" bindinput="onInput"
+          auto-height maxlength="500" disable-default-padding placeholder="如：整机功能测试通过，连续运行 2 小时正常"
+          placeholder-class="placeholder" />
+      </view>
+    </view>
+
+    <!-- 照片 / 登记表：按服务方式显示不同的上传区 -->
+    <view wx:for="{{sections}}" wx:for-item="sec" wx:key="list" class="cp-card cp-mt">
       <view class="cp-photo-head">
-        <text class="cp-label">处理照片 <text class="red">*</text></text>
-        <text class="cp-photo-tip">至少 1 张，需包含维修前原状</text>
+        <text class="cp-label">{{sec.title}} <text wx:if="{{sec.required}}" class="red">*</text></text>
+        <text wx:if="{{sec.existing}}" class="cp-photo-tip green">附件里已有 {{sec.existing}} 份，可不再传</text>
+        <text wx:else class="cp-photo-tip">{{sec.tip}}</text>
       </view>
       <view class="cp-grid">
-        <view wx:for="{{photos}}" wx:key="key" class="cp-thumb" data-list="photos" data-key="{{item.key}}" bindtap="onTapPhoto">
+        <view wx:for="{{lists[sec.list]}}" wx:key="key" class="cp-thumb" data-list="{{sec.list}}" data-key="{{item.key}}" bindtap="onTapPhoto">
           <image class="cp-thumb-img" src="{{item.path}}" mode="aspectFill" />
           <view wx:if="{{item.status === 'uploading'}}" class="cp-thumb-mask">上传中</view>
           <view wx:elif="{{item.status === 'fail'}}" class="cp-thumb-mask fail"><view>上传失败</view><view>点击重试</view></view>
-          <view class="cp-thumb-del" data-list="photos" data-key="{{item.key}}" catchtap="onRemovePhoto" aria-role="button" aria-label="删除照片">
+          <view class="cp-thumb-del" data-list="{{sec.list}}" data-key="{{item.key}}" catchtap="onRemovePhoto" aria-role="button" aria-label="删除">
             <ui-icon name="close" color="#FFFFFF" size="10" stroke="2.6" />
           </view>
         </view>
-        <view wx:if="{{photos.length < maxPhotos}}" class="cp-add" hover-class="btn-hover" data-list="photos" bindtap="onAddPhoto"
-          aria-role="button" aria-label="拍照添加处理照片">
+        <view wx:if="{{lists[sec.list].length < maxPhotos}}" class="cp-add" hover-class="btn-hover" data-list="{{sec.list}}" bindtap="onAddPhoto"
+          aria-role="button" aria-label="拍照添加{{sec.title}}">
           <ui-icon name="plus" color="#6E6E73" size="22" stroke="2" />
-        </view>
-      </view>
-
-      <!-- 签字件 -->
-      <view class="cp-sign" hover-class="btn-hover" data-list="signatures" bindtap="onAddPhoto" aria-role="button">
-        <view class="flex1">
-          <view class="cp-sign-title">客户签字件 <text wx:if="{{needSignature}}" class="red">*</text><text wx:else class="cp-sign-opt">选填</text></view>
-          <view class="cp-sign-desc">拍摄客户签字的现场维修记录表</view>
-        </view>
-        <text wx:if="{{signatures.length}}" class="cp-sign-status green">已上传 {{signatures.length}} 张</text>
-        <text wx:elif="{{needSignature}}" class="cp-sign-status amber">未上传</text>
-        <text wx:else class="cp-sign-status muted-3">未上传</text>
-        <ui-icon name="{{signatures.length ? 'plus' : 'right'}}" color="#AEAEB2" size="18" stroke="2" />
-      </view>
-      <view wx:if="{{signatures.length}}" class="cp-grid cp-grid-sign">
-        <view wx:for="{{signatures}}" wx:key="key" class="cp-thumb" data-list="signatures" data-key="{{item.key}}" bindtap="onTapPhoto">
-          <image class="cp-thumb-img" src="{{item.path}}" mode="aspectFill" />
-          <view wx:if="{{item.status === 'uploading'}}" class="cp-thumb-mask">上传中</view>
-          <view wx:elif="{{item.status === 'fail'}}" class="cp-thumb-mask fail"><view>上传失败</view><view>点击重试</view></view>
-          <view class="cp-thumb-del" data-list="signatures" data-key="{{item.key}}" catchtap="onRemovePhoto" aria-role="button" aria-label="删除签字件">
-            <ui-icon name="close" color="#FFFFFF" size="10" stroke="2.6" />
-          </view>
         </view>
       </view>
     </view>

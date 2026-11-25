@@ -55,6 +55,7 @@ export const HOLD_REASON = {
 
 /** 申请类型 / 状态（v1.1） */
 export const REQUEST_TYPE = {
+  Escalate: { label: '升级服务方式申请' },
   Hold: { label: '暂停申请' },
   AddAssistant: { label: '协助人申请' },
 };

@@ -28,9 +28,11 @@ const NODE_UI = {
     okText: '已确认工厂收货'
   },
   ShippedBack: {
-    notice: '记录寄回客户的快递信息。寄回后才能提交完工，建单人会收到提醒。',
-    photoLabel: '寄回照片', photoTip: '至少 1 张，拍打包情况或面单',
-    photoMsg: '请至少上传 1 张寄回照片',
+    notice: '拍一张寄回的快递单照片就行，快递公司和单号可以不填。寄回后才能提交完工，建单人会收到提醒。',
+    photoLabel: '快递单照片', photoTip: '至少 1 张，拍清楚快递单',
+    photoMsg: '请上传寄回的快递单照片',
+    courierOptional: true, // v2.0：快递公司 / 单号选填
+
     notePlaceholder: '选填，如：含电源线 1 根',
     okText: '已记录寄回客户'
   },
@@ -70,6 +72,7 @@ Page({
     recordedText: '',   // 更正时：原记录人与时间
 
     needCourier: false,
+    courierOptional: false, // 寄回客户：快递公司 / 单号选填（有快递单照片就行）
     photoMode: '',      // '' | required | optional
     photoLabel: '',
     photoTip: '',
@@ -96,6 +99,7 @@ Page({
       node: def && ui ? node : '',
       title: def ? def.label : '返厂流程',
       needCourier: !!(def && def.courier),
+      courierOptional: !!(NODE_UI[node] && NODE_UI[node].courierOptional),
       photoMode: (def && def.photo) || '',
       notice: ui ? ui.notice : '',
       photoLabel: ui ? ui.photoLabel : '',
@@ -314,10 +318,10 @@ Page({
     const d = this.data;
     const ui = NODE_UI[d.node] || {};
     if (d.needCourier) {
-      if (!trim(d.courier)) return '请填写快递公司';
+      if (!trim(d.courier) && !ui.courierOptional) return '请填写快递公司';
       if (trim(d.courier).length > 50) return '快递公司不能超过 50 个字';
       const no = trim(d.trackingNo).replace(/\s/g, '');
-      if (!no) return '请填写快递单号';
+      if (!no && !ui.courierOptional) return '请填写快递单号';
       if (no.length > 50) return '快递单号不能超过 50 个字';
     }
     if (d.photoMode) {

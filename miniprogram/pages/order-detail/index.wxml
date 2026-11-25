@@ -462,6 +462,31 @@
   </view>
 </block>
 
+<!-- 申请升级服务方式（v2.0） -->
+<block wx:if="{{escalateSheet.show}}">
+  <view class="mask" bindtap="closeEscalateSheet" catchtouchmove="noop"></view>
+  <view class="sheet od-appt" catchtouchmove="noop" aria-role="dialog" aria-label="升级服务方式">
+    <view class="sheet-handle"></view>
+    <view class="row-between od-appt-head">
+      <text class="od-appt-title">升级服务方式</text>
+      <text class="muted od-appt-cancel" bindtap="closeEscalateSheet">取消</text>
+    </view>
+    <view class="od-appt-sub muted">现在是{{escalateSheet.from}}服务。提交后由主管审批，同意后工单回到「待启动」，按新的方式继续，已有记录和工时都保留。</view>
+    <view class="od-sheet-label">升级为</view>
+    <view class="od-reasons" aria-role="radiogroup">
+      <view wx:for="{{escalateSheet.targets}}" wx:key="value" class="chip od-reason {{escalateSheet.target === item.value ? 'active' : ''}}"
+            data-value="{{item.value}}" bindtap="onEscalateTarget" aria-role="radio" aria-checked="{{escalateSheet.target === item.value}}">{{item.label}}</view>
+    </view>
+    <view class="od-sheet-label">升级原因<text class="od-sheet-opt">（必填）</text></view>
+    <input class="od-sheet-input" value="{{escalateSheet.reason}}" data-field="reason" bindinput="onEscalateInput" maxlength="200" cursor-spacing="160"
+           placeholder="如：视频指导无法定位故障" placeholder-class="placeholder" />
+    <view class="od-sheet-label">已经排查了什么<text class="od-sheet-opt">（必填）</text></view>
+    <textarea class="od-close-note" value="{{escalateSheet.findings}}" data-field="findings" bindinput="onEscalateInput" maxlength="300" cursor-spacing="180"
+              placeholder="写清楚做过哪些检查和操作，接手的人不用再问一遍" placeholder-class="placeholder" show-confirm-bar="{{false}}" />
+    <view class="btn-primary od-appt-btn {{busy ? 'btn-disabled' : ''}}" hover-class="btn-hover" bindtap="saveEscalate">提交申请</view>
+  </view>
+</block>
+
 <!-- 确认闭环（v1.9）：关键信息 + 备注 + 常用语 -->
 <block wx:if="{{closeSheet.show}}">
   <view class="mask" bindtap="closeCloseSheet" catchtouchmove="noop"></view>

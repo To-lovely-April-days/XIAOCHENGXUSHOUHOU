@@ -19,7 +19,7 @@ const VIEWER_TABS = [{ key: 'progress', label: '进度' }, { key: 'info', label:
 // 底部按钮顺序：越靠后越主要（最后一个可用按钮为主按钮）。
 // setPrice / suggestPrice / assistants / requestAssistant 是页面内链接，不进底部栏；
 // acceptTransfer / rejectTransfer / cancelTransfer 只在「转交待确认」卡片里。transfer 最不优先，按钮多时进「更多」。
-const ENGINEER_ORDER = ['transfer', 'requestHold', 'appoint', 'checkin', 'start', 'claim', 'factory', 'complete'];
+const ENGINEER_ORDER = ['transfer', 'requestEscalate', 'requestHold', 'appoint', 'checkin', 'start', 'claim', 'factory', 'complete'];
 const SUPERVISOR_ORDER = ['void', 'hold', 'reject', 'reassign', 'resume', 'assign', 'factory', 'close'];
 const SALES_ORDER = ['factory'];
 const MAX_BUTTONS = 3; // 超过时把顺序靠前的多余项收进「更多」
@@ -331,8 +331,11 @@ function buildFiles(d, isEngineerView) {
   const f = d.files || {};
   const rows = [
     { key: 'punchPhotos', title: '打卡照片', desc: '每次到场、离场各 1 张，带水印', list: f.punchPhotos, hide: d.serviceType !== 'Onsite' && !(f.punchPhotos || []).length },
-    { key: 'processPhotos', title: '处理照片', desc: '完工时上传，需包含维修前原状', list: f.processPhotos },
-    { key: 'signatures', title: '客户签字件', desc: '现场维修记录表，签字后拍照', list: f.signatures, warn: d.serviceType === 'Onsite' },
+    { key: 'processPhotos', title: d.serviceType === 'Remote' ? '沟通截图' : '处理照片',
+      desc: d.serviceType === 'Onsite' ? '完工时上传，维修前、维修后各至少 1 张' : d.serviceType === 'Remote' ? '完工时上传，选填' : '完工时上传',
+      list: f.processPhotos },
+    // v2.0：上门的签字改为「现场维修登记表（签字版）」，在附件里；旧单已有的签字件照常显示
+    { key: 'signatures', title: '客户签字件', desc: '现场维修记录表，签字后拍照', list: f.signatures, hide: !(f.signatures || []).length },
     { key: 'factoryPhotos', title: '返厂照片', desc: '工厂收货、寄回客户、客户签收时上传', list: f.factoryPhotos, hide: d.serviceType !== 'Factory' }
   ];
   return rows.filter((r) => !r.hide).map((r) => {
@@ -607,6 +610,8 @@ Page(subscribe.bindTaps({
     holdSheet: { show: false, mode: 'hold', title: '', reasonType: '', note: '' },
     // v1.9 确认闭环的底部面板：关键信息 + 备注（选填）+ 常用语
     closeSheet: { show: false, sub: '', worker: '', hints: '', note: '' },
+    // v2.0 申请升级服务方式：targets = 可选的目标（远程可选上门 / 返厂，上门只能选返厂）
+    escalateSheet: { show: false, from: '', targets: [], target: '', reason: '', findings: '' },
     closePhrases: ['资料齐全', '客户已签字确认', '已电话回访'],
     priceSheet: { show: false, mode: 'set', title: '', amount: '', note: '', hint: '', suggestText: '', suggestAmount: '' },
     apptShow: false,
@@ -854,6 +859,9 @@ Page(subscribe.bindTaps({
       { label: '解决措施', value: c.solution },
       { label: '更换备件', value: c.partsReplaced || '无' },
       { label: '运行状况', value: run ? run.label : c.runStatus, color: run ? run.fg : '' },
+      // v2.0：远程 = 客户确认方式；返厂 = 寄回前测试结果（没有就不显示）
+      { label: '客户确认', value: c.customerConfirm, hide: !c.customerConfirm },
+      { label: '测试结果', value: c.testResult, hide: !c.testResult },
       { label: '提交时间', value: c.submittedAt ? format.formatDateTimeShort(c.submittedAt) : '' }
     ];
     return rows.filter((r) => r.value).map((r, i) => Object.assign({ key: 'c' + i, color: '' }, r));
@@ -1057,6 +1065,22 @@ Page(subscribe.bindTaps({
       case 'requestHold':
         this.openHoldSheet('request');
         break;
+      case 'requestEscalate': {
+        const targets = d.serviceType === 'Remote'
+          ? [{ value: 'Onsite', label: '上门服务' }, { value: 'Factory', label: '返厂维修' }]
+          : [{ value: 'Factory', label: '返厂维修' }];
+        this.setData({
+          escalateSheet: {
+            show: true,
+            from: enums.label(enums.SERVICE_TYPE, d.serviceType),
+            targets: targets,
+            target: targets.length === 1 ? targets[0].value : '',
+            reason: '',
+            findings: ''
+          }
+        });
+        break;
+      }
       case 'reject':
         this.askReason('退回处理中', '请输入退回原因', '退回').then((r) => {
           this.run(api.orders.reject(id, r, { loading: '提交中' }), '已退回处理中');
@@ -1327,7 +1351,9 @@ Page(subscribe.bindTaps({
   onApproveRequest(e) {
     const r = this.findRequest(e);
     if (!r || this.data.busy) return;
-    this.confirm('同意' + r.title, r.text + (r.type === 'Hold' ? '\n同意后工单进入「暂停搁置」。' : '\n同意后对方成为本单协助人。'), '同意').then(() => {
+    this.confirm('同意' + r.title, r.text + (r.type === 'Hold' ? '\n同意后工单进入「暂停搁置」。'
+      : r.type === 'Escalate' ? '\n同意后工单改为新的服务方式并回到「待启动」，原有记录和工时保留。'
+        : '\n同意后对方成为本单协助人。'), '同意').then(() => {
       this.run(api.orders.approveRequest(this.orderId, r.id, { loading: '提交中' }), '已同意');
     });
   },
@@ -1397,6 +1423,33 @@ Page(subscribe.bindTaps({
       }
     }
     this.setData({ priceSheet: sheet });
+  },
+
+  /* ---------------- 申请升级服务方式（v2.0） ---------------- */
+  closeEscalateSheet() {
+    if (this.data.busy) return;
+    this.setData({ 'escalateSheet.show': false });
+  },
+
+  onEscalateTarget(e) {
+    this.setData({ 'escalateSheet.target': e.currentTarget.dataset.value });
+  },
+
+  onEscalateInput(e) {
+    this.setData({ ['escalateSheet.' + e.currentTarget.dataset.field]: e.detail.value });
+  },
+
+  saveEscalate() {
+    if (this.data.busy) return;
+    const s = this.data.escalateSheet;
+    const reason = String(s.reason || '').trim();
+    const findings = String(s.findings || '').trim();
+    if (!s.target) return wx.showToast({ title: '请选择要升级成哪种服务方式', icon: 'none' });
+    if (!reason) return wx.showToast({ title: '请填写升级原因', icon: 'none' });
+    if (!findings) return wx.showToast({ title: '请填写已经排查了什么', icon: 'none' });
+    this.run(api.orders.requestEscalate(this.orderId, s.target, reason, findings, { loading: '提交中' }), '已提交，等主管同意').then((d) => {
+      if (d) this.setData({ 'escalateSheet.show': false });
+    });
   },
 
   /* ---------------- 确认闭环面板（v1.9） ---------------- */

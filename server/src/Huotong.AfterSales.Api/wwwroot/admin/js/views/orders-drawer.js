@@ -509,6 +509,7 @@ export default {
       try {
         if (approve) {
           const effect = isHold ? '同意后工单进入「暂停搁置」，暂停原因取申请内容。'
+            : r.type === 'Escalate' ? '同意后工单改为新的服务方式并回到「待启动」，原有记录、打卡和工时都保留。已定的价格不会变，请留意是否需要调整。'
             : `同意后 ${(r.engineer && r.engineer.name) || '该工程师'} 成为本单协助人。`;
           if (!(await confirm('同意' + req.title, line + '\n' + effect, { okText: '同意' }))) return;
           this.busy = 'req' + r.id;

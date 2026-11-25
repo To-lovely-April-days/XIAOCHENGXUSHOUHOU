@@ -316,6 +316,15 @@ const orders = {
    * @param {string} [note]
    * @returns {Promise<OrderDetail>}
    */
+  /**
+   * POST /api/orders/{id}/escalate-requests（v2.0）负责工程师申请升级服务方式，需主管同意。
+   * 远程 → 上门 / 返厂；上门 → 返厂。同意后工单改服务方式并回到「待启动」，原有记录、打卡、工时保留。
+   * @param {'Onsite'|'Factory'} target @param {string} reason 升级原因（必填） @param {string} findings 已排查情况（必填）
+   * @returns {Promise<OrderDetail>} requests 里多一条 type='Escalate' 的申请（targetServiceType、text）
+   */
+  requestEscalate(id, target, reason, findings, opts) {
+    return post('/api/orders/' + id + '/escalate-requests', { targetServiceType: target, reason: reason, findings: findings }, opts);
+  },
   requestHold(id, reasonType, note, opts) {
     return post('/api/orders/' + id + '/hold-requests', { reasonType: reasonType, note: note || null }, opts);
   },

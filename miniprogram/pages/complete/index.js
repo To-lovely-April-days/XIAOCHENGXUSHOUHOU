@@ -1,4 +1,9 @@
-// 完工提交（原型 08）
+// 完工提交（原型 08）。
+// v2.0：按服务方式区分要交的资料（formVersion: 2）
+//   上门 Onsite ：维修前照片、维修后照片、现场维修登记表（客户签字版）—— 三样必传
+//   远程 Remote ：沟通截图 / 录屏画面选填；必须选「客户确认方式」
+//   返厂 Factory：维修照片、寄回前测试结果、返厂维修登记表 —— 三样必传
+// 维修登记表之前已在「附件资料」里传过的也算。
 const auth = require('../../utils/auth.js');
 const api = require('../../api/index.js');
 const enums = require('../../utils/enums.js');
@@ -6,6 +11,24 @@ const subscribe = require('../../utils/subscribe.js');
 
 const HOME = '/pages/home/index';
 const MAX_PHOTOS = 9;
+const CONFIRM_OPTIONS = ['电话确认', '微信确认', '邮件确认', '其他'];
+
+/** 各服务方式要显示的上传区；list = data.lists 里的键 */
+const SECTIONS = {
+  Onsite: [
+    { list: 'before', title: '维修前照片', tip: '动手前先拍设备原始状态', required: true },
+    { list: 'after', title: '维修后照片', tip: '处理完成后的状态', required: true },
+    { list: 'forms', title: '现场维修登记表（客户签字版）', tip: '拍下客户签字的登记表', required: true, form: 'OnsiteRepairForm' }
+  ],
+  Remote: [
+    { list: 'photos', title: '沟通截图', tip: '选填，聊天记录、报错画面、录屏截图', required: false }
+  ],
+  Factory: [
+    { list: 'photos', title: '维修照片', tip: '至少 1 张', required: true },
+    { list: 'forms', title: '返厂维修登记表', tip: '拍下填好的登记表', required: true, form: 'FactoryRepairForm' }
+  ]
+};
+const emptyLists = () => ({ before: [], after: [], photos: [], forms: [] });
 
 let seq = 0;
 function fileItem(path, fileId) {
@@ -29,8 +52,12 @@ Page(subscribe.bindTaps({
     partsReplaced: '',
     runStatus: '',
     runOptions: enums.RUN_STATUS_OPTIONS,
-    photos: [], // 处理照片 {key,path,fileId,status}
-    signatures: [], // 客户签字件
+    mode: 'Onsite',      // 服务方式：Onsite | Remote | Factory
+    sections: [],        // 当前服务方式的上传区（见 SECTIONS），含 existing = 之前已在附件里传过的登记表数
+    lists: emptyLists(), // 各上传区的文件 {key,path,fileId,status}
+    confirmOptions: CONFIRM_OPTIONS,
+    customerConfirm: '', // 远程：客户确认方式
+    testResult: '',      // 返厂：寄回前测试结果
     maxPhotos: MAX_PHOTOS,
     submitting: false
   },
@@ -74,10 +101,19 @@ Page(subscribe.bindTaps({
         else if (o.serviceType === 'Factory' && o.myRole === 'Lead' && !shippedBack) blockText = '返厂工单请先记录「寄回客户」再提交完工';
         else blockText = '你不是该工单的负责工程师，无法提交完工';
       }
+      const mode = SECTIONS[o.serviceType] ? o.serviceType : 'Onsite';
+      const atts = o.attachments || [];
+      const sections = SECTIONS[mode].map((sec) => {
+        // 维修登记表之前已经在附件里传过：这里就不强制再传
+        const existing = sec.form ? atts.filter((a) => a.attachmentType === sec.form).length : 0;
+        return Object.assign({}, sec, { existing: existing, required: sec.required && !existing });
+      });
       this.setData({
         loading: false,
         loadError: '',
         order: o,
+        mode: mode,
+        sections: sections,
         needSignature: needSignature,
         canSubmit: canSubmit,
         blockText: blockText,
@@ -98,14 +134,24 @@ Page(subscribe.bindTaps({
     const c = o.completion;
     if (!c) return;
     const files = o.files || {};
-    const toItems = (list) => (list || []).map((f) => fileItem(f.url, f.id));
+    const toItems = (list) => (list || []).map((f) => fileItem(f.url, f.id)).slice(0, MAX_PHOTOS);
+    const all = files.processPhotos || [];
+    const lists = emptyLists();
+    if (o.serviceType === 'Onsite') {
+      // 没标前后的旧照片归到「维修前」，让工程师自己再补「维修后」
+      lists.after = toItems(all.filter((f) => f.stage === 'After'));
+      lists.before = toItems(all.filter((f) => f.stage !== 'After'));
+    } else {
+      lists.photos = toItems(all);
+    }
     this.setData({
       faultCause: c.faultCause || '',
       solution: c.solution || '',
       partsReplaced: c.partsReplaced || '',
       runStatus: c.runStatus || '',
-      photos: toItems(files.processPhotos).slice(0, MAX_PHOTOS),
-      signatures: toItems(files.signatures).slice(0, MAX_PHOTOS)
+      customerConfirm: c.customerConfirm || '',
+      testResult: c.testResult || '',
+      lists: lists
     });
   },
 
@@ -117,6 +163,11 @@ Page(subscribe.bindTaps({
   onInput(e) {
     const field = e.currentTarget.dataset.field;
     this.setData({ [field]: e.detail.value });
+    this.markDirty();
+  },
+
+  onPickConfirm(e) {
+    this.setData({ customerConfirm: e.currentTarget.dataset.value });
     this.markDirty();
   },
 
@@ -138,9 +189,9 @@ Page(subscribe.bindTaps({
 
   /* ---------- 照片 ---------- */
   onAddPhoto(e) {
-    const listKey = e.currentTarget.dataset.list; // photos | signatures
-    const category = listKey === 'signatures' ? 'Signature' : 'ProcessPhoto';
-    const remain = MAX_PHOTOS - this.data[listKey].length;
+    const listKey = e.currentTarget.dataset.list; // before | after | photos | forms
+    const category = this.categoryOf(listKey);
+    const remain = MAX_PHOTOS - this.data.lists[listKey].length;
     if (remain <= 0) {
       wx.showToast({ title: '最多 ' + MAX_PHOTOS + ' 张', icon: 'none' });
       return;
@@ -154,7 +205,7 @@ Page(subscribe.bindTaps({
       success: (res) => {
         const items = (res.tempFiles || []).map((f) => fileItem(f.tempFilePath));
         if (!items.length) return;
-        this.setData({ [listKey]: this.data[listKey].concat(items) });
+        this.setData({ ['lists.' + listKey]: this.data.lists[listKey].concat(items) });
         this.markDirty();
         items.forEach((it) => this.uploadItem(listKey, it.key, category));
       },
@@ -176,6 +227,11 @@ Page(subscribe.bindTaps({
     });
   },
 
+  /** 登记表存成工单附件（提交时归到对应类别），其余都是完工照片 */
+  categoryOf(listKey) {
+    return listKey === 'forms' ? 'Attachment' : 'ProcessPhoto';
+  },
+
   uploadItem(listKey, key, category) {
     const item = this.findItem(listKey, key);
     if (!item) return;
@@ -188,14 +244,14 @@ Page(subscribe.bindTaps({
   },
 
   findItem(listKey, key) {
-    return this.data[listKey].filter((x) => x.key === key)[0] || null;
+    return this.data.lists[listKey].filter((x) => x.key === key)[0] || null;
   },
 
   updateItem(listKey, key, patch) {
-    const idx = this.data[listKey].findIndex((x) => x.key === key);
+    const idx = this.data.lists[listKey].findIndex((x) => x.key === key);
     if (idx < 0) return; // 已被删除
     const upd = {};
-    Object.keys(patch).forEach((k) => { upd[listKey + '[' + idx + '].' + k] = patch[k]; });
+    Object.keys(patch).forEach((k) => { upd['lists.' + listKey + '[' + idx + '].' + k] = patch[k]; });
     this.setData(upd);
   },
 
@@ -205,32 +261,35 @@ Page(subscribe.bindTaps({
     const item = this.findItem(listKey, key);
     if (!item) return;
     if (item.status === 'fail') {
-      this.uploadItem(listKey, key, listKey === 'signatures' ? 'Signature' : 'ProcessPhoto');
+      this.uploadItem(listKey, key, this.categoryOf(listKey));
       return;
     }
     wx.previewImage({
       current: item.path,
-      urls: this.data[listKey].map((x) => x.path)
+      urls: this.data.lists[listKey].map((x) => x.path)
     });
   },
 
   onRemovePhoto(e) {
     const listKey = e.currentTarget.dataset.list;
     const key = e.currentTarget.dataset.key;
-    this.setData({ [listKey]: this.data[listKey].filter((x) => x.key !== key) });
+    this.setData({ ['lists.' + listKey]: this.data.lists[listKey].filter((x) => x.key !== key) });
   },
 
   /* ---------- 提交 ---------- */
   validate() {
     const d = this.data;
-    if (!d.faultCause.trim()) return '请填写现场确认的故障原因';
+    if (!d.faultCause.trim()) return d.mode === 'Onsite' ? '请填写现场确认的故障原因' : '请填写故障原因';
     if (!d.solution.trim()) return '请填写解决措施';
     if (!d.runStatus) return '请选择设备运行状况';
-    const all = d.photos.concat(d.signatures);
+    if (d.mode === 'Remote' && !d.customerConfirm) return '请选择客户确认方式';
+    if (d.mode === 'Factory' && !d.testResult.trim()) return '请填写寄回前的测试结果';
+    const shown = d.sections.map((sec) => d.lists[sec.list]);
+    const all = shown.reduce((a, b) => a.concat(b), []);
     if (all.some((x) => x.status === 'uploading')) return '照片上传中，请稍候';
     if (all.some((x) => x.status === 'fail')) return '有照片上传失败，请点击重试或删除';
-    if (!d.photos.length) return '请至少上传 1 张处理照片（需包含维修前原状）';
-    if (d.needSignature && !d.signatures.length) return '请拍摄客户签字的现场维修记录表';
+    const missing = d.sections.filter((sec) => sec.required && !d.lists[sec.list].length)[0];
+    if (missing) return '请上传' + missing.title;
     return '';
   },
 
@@ -262,8 +321,13 @@ Page(subscribe.bindTaps({
       solution: d.solution.trim(),
       partsReplaced: d.partsReplaced.trim(),
       runStatus: d.runStatus,
-      processPhotoIds: d.photos.map((x) => x.fileId),
-      signaturePhotoIds: d.signatures.map((x) => x.fileId)
+      formVersion: 2,
+      processPhotoIds: d.lists.photos.map((x) => x.fileId),
+      beforePhotoIds: d.lists.before.map((x) => x.fileId),
+      afterPhotoIds: d.lists.after.map((x) => x.fileId),
+      repairFormIds: d.sections.some((sec) => sec.list === 'forms') ? d.lists.forms.map((x) => x.fileId) : [],
+      customerConfirm: d.mode === 'Remote' ? d.customerConfirm : '',
+      testResult: d.mode === 'Factory' ? d.testResult.trim() : ''
     };
     this.setData({ submitting: true });
     api.orders.complete(d.id, body, { silent: true, loading: '提交中' }).then(() => {
