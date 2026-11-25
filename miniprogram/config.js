@@ -4,5 +4,5 @@
  */
 module.exports = {
   baseUrl: 'https://shouhou.sh-htlab.com',
-  version: '1.8.0'
+  version: '1.8.1'
 };

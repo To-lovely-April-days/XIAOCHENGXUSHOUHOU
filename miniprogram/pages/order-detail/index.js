@@ -605,6 +605,9 @@ Page(subscribe.bindTaps({
     holdReasons: enums.HOLD_REASON_OPTIONS,
     holdPlaceholder: HOLD_NOTE_PLACEHOLDER,
     holdSheet: { show: false, mode: 'hold', title: '', reasonType: '', note: '' },
+    // v1.9 确认闭环的底部面板：关键信息 + 备注（选填）+ 常用语
+    closeSheet: { show: false, sub: '', worker: '', hints: '', note: '' },
+    closePhrases: ['资料齐全', '客户已签字确认', '已电话回访'],
     priceSheet: { show: false, mode: 'set', title: '', amount: '', note: '', hint: '', suggestText: '', suggestAmount: '' },
     apptShow: false,
     apptDate: '',
@@ -1073,12 +1076,16 @@ Page(subscribe.bindTaps({
           break;
         }
         const hints = d.closeHints || [];
-        // 有提示（如缺资料）时先让主管看一眼提示，再填备注；备注选填，会写进进度里
-        const ask = () => this.askReason('确认闭环', '备注（选填），闭环后不可再修改', '确认闭环', true).then((note) => {
-          this.run(api.orders.close(id, note, { loading: '提交中' }), '已闭环');
+        // v1.9 底部面板：先看一眼价格 / 工时 / 处理人和提示，备注选填，会写进进度里
+        this.setData({
+          closeSheet: {
+            show: true,
+            sub: [d.customerName, d.orderNo].filter(Boolean).join(' · '),
+            worker: (d.assignee && d.assignee.name) || '—',
+            hints: hints.join('；'),
+            note: ''
+          }
         });
-        if (hints.length) this.confirm('确认闭环', '提示：' + hints.join('；') + '\n仍要闭环吗？', '继续').then(ask);
-        else ask();
         break;
       }
       default:
@@ -1390,6 +1397,35 @@ Page(subscribe.bindTaps({
       }
     }
     this.setData({ priceSheet: sheet });
+  },
+
+  /* ---------------- 确认闭环面板（v1.9） ---------------- */
+  closeCloseSheet() {
+    if (this.data.busy) return;
+    this.setData({ 'closeSheet.show': false });
+  },
+
+  onCloseNote(e) {
+    this.setData({ 'closeSheet.note': e.detail.value });
+  },
+
+  /** 点常用语：接到备注后面（已有内容时用逗号隔开；同一句不重复加） */
+  onClosePhrase(e) {
+    const text = e.currentTarget.dataset.text || '';
+    const cur = String(this.data.closeSheet.note || '').trim();
+    if (!text || cur.indexOf(text) >= 0) return;
+    const next = (cur ? cur + '，' + text : text).slice(0, 200);
+    this.setData({ 'closeSheet.note': next });
+  },
+
+  saveClose() {
+    if (this.data.busy) return;
+    const id = this.data.order && this.data.order.id;
+    if (!id) return;
+    const note = String(this.data.closeSheet.note || '').trim();
+    this.run(api.orders.close(id, note, { loading: '提交中' }), '已闭环').then((d) => {
+      if (d) this.setData({ 'closeSheet.show': false });
+    });
   },
 
   closePriceSheet() {

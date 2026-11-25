@@ -462,6 +462,43 @@
   </view>
 </block>
 
+<!-- 确认闭环（v1.9）：关键信息 + 备注 + 常用语 -->
+<block wx:if="{{closeSheet.show}}">
+  <view class="mask" bindtap="closeCloseSheet" catchtouchmove="noop"></view>
+  <view class="sheet od-appt" catchtouchmove="noop" aria-role="dialog" aria-label="确认闭环">
+    <view class="sheet-handle"></view>
+    <view class="row-between od-appt-head">
+      <text class="od-appt-title">确认闭环</text>
+      <text class="muted od-appt-cancel" bindtap="closeCloseSheet">取消</text>
+    </view>
+    <view class="od-appt-sub muted">{{closeSheet.sub}}</view>
+    <view class="od-close-facts">
+      <view class="od-close-fact">
+        <view class="od-close-fact-label">服务价格</view>
+        <view class="od-close-fact-value {{priceClass}}">{{priceText || '—'}}</view>
+      </view>
+      <view class="od-close-fact">
+        <view class="od-close-fact-label">现场工时</view>
+        <view class="od-close-fact-value">{{order.serviceType === 'Onsite' ? hoursText : '—'}}</view>
+      </view>
+      <view class="od-close-fact">
+        <view class="od-close-fact-label">处理人</view>
+        <view class="od-close-fact-value ellipsis">{{closeSheet.worker}}</view>
+      </view>
+    </view>
+    <view wx:if="{{closeSheet.hints}}" class="od-close-hints">提示：{{closeSheet.hints}}</view>
+    <view class="od-sheet-label">备注<text class="od-sheet-opt">（选填）</text></view>
+    <textarea class="od-close-note" value="{{closeSheet.note}}" bindinput="onCloseNote" maxlength="200" cursor-spacing="180"
+              placeholder="写点验收意见，会显示在工单进度里" placeholder-class="placeholder" show-confirm-bar="{{false}}" />
+    <view class="od-close-phrases">
+      <view wx:for="{{closePhrases}}" wx:key="*this" class="chip od-close-phrase" hover-class="btn-hover"
+            data-text="{{item}}" bindtap="onClosePhrase" aria-role="button">{{item}}</view>
+    </view>
+    <view class="od-close-tip muted">闭环后不可再修改，建单人会收到通知。</view>
+    <view class="btn-primary od-appt-btn {{busy ? 'btn-disabled' : ''}}" hover-class="btn-hover" bindtap="saveClose">确认闭环</view>
+  </view>
+</block>
+
 <!-- 添加附件（v1.2）。只在非滚动区域拦截 touchmove，已选列表 scroll-view 不拦截 -->
 <block wx:if="{{attachSheet.show}}">
   <view class="mask" bindtap="closeAttachSheet" catchtouchmove="noop"></view>

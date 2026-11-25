@@ -272,3 +272,14 @@
 .od-sat-value.placeholder { color: var(--text-3); }
 .od-sat-clear { flex-shrink: 0; padding: 16rpx 0 16rpx 8rpx; font-size: 26rpx; font-weight: 600; color: var(--text-2); text-decoration: underline; }
 .od-sat-legacy { margin-top: 12rpx; font-size: 24rpx; line-height: 36rpx; color: var(--text-2); }
+
+/* v1.9 确认闭环面板 */
+.od-close-facts { margin-top: 24rpx; display: flex; gap: 16rpx; }
+.od-close-fact { flex: 1; min-width: 0; padding: 20rpx 24rpx; border-radius: 24rpx; background: var(--bg); }
+.od-close-fact-label { font-size: 24rpx; color: var(--text-2); }
+.od-close-fact-value { margin-top: 4rpx; font-size: 30rpx; font-weight: 700; color: var(--text); }
+.od-close-hints { margin-top: 20rpx; padding: 18rpx 24rpx; border-radius: 20rpx; background: #FFF7E8; font-size: 26rpx; line-height: 38rpx; color: #8A5A07; }
+.od-close-note { margin-top: 16rpx; width: 100%; height: 168rpx; box-sizing: border-box; padding: 22rpx 28rpx; border-radius: 20rpx; background: var(--bg); font-size: 30rpx; line-height: 44rpx; color: var(--text); }
+.od-close-phrases { margin-top: 16rpx; display: flex; flex-wrap: wrap; gap: 16rpx; }
+.od-close-phrase { margin: 0; }
+.od-close-tip { margin-top: 20rpx; font-size: 24rpx; }
