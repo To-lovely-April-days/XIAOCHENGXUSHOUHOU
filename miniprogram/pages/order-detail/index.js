@@ -585,6 +585,55 @@ function needPriceToClose(d) {
   return !!d && d.status === 'Submitted' && d.priceSet === false && String(d.closeBlockedReason || '').indexOf('价格') >= 0;
 }
 
+/**
+ * v2.2 收费确认卡片。没发起过、当前用户也不用判断时不显示（返回 null）。
+ * 工程师看不到金额（服务端不返回），只看到收不收费和走到哪一步。
+ */
+function buildCharge(d, isEngineerView) {
+  const c = d.charge;
+  if (!c) return null;
+  if (c.status === 'None' && !c.canDecide) return null;
+  const tone = c.status === 'Confirmed' ? 'green' : c.status === 'Free' ? 'gray' : c.status === 'None' ? 'gray' : 'amber';
+  const steps = (c.steps || []).map((s, i) => ({
+    key: i,
+    title: s.title,
+    state: s.done ? 'done' : s.current ? 'cur' : '',
+    sub: s.done
+      ? [s.who, s.time ? format.formatDateTimeShort(s.time) : '', s.note].filter(Boolean).join(' · ')
+      : s.current ? '等待 ' + (s.who || '') + ' 处理' : ''
+  }));
+  const facts = [];
+  if (!isEngineerView && c.amount !== null && c.amount !== undefined) facts.push({ label: '收费金额', value: format.formatPrice(c.amount, false, true) });
+  if (c.paidText) facts.push({ label: '付款情况', value: c.paidText, green: c.paid === true });
+  if (c.sales && c.status !== 'Free') facts.push({ label: '报价人', value: c.sales.name });
+  const action = c.canDecide ? (c.status === 'Free' ? '改为收费' : '去判断')
+    : c.canQuote ? '去报价' : c.canReview ? '去审核' : c.canConfirm ? '去确认' : '';
+  return {
+    status: c.status,
+    statusText: c.status === 'None' ? '待判断' : c.status === 'Confirmed' && isEngineerView ? '已确认，可以继续' : c.statusText,
+    tone: tone,
+    intro: c.status === 'None' ? '认领后先判断这张单要不要收费。要收费的交给销售报价，审核通过后再回到你手上。' : '',
+    reason: c.reason && c.status !== 'None' ? c.reason : '',
+    quoteNote: c.quoteNote || '',
+    directorNote: c.directorNote || '',
+    returnNote: c.returnNote || '',
+    steps: steps,
+    facts: facts,
+    action: action,
+    actionMinor: c.canDecide && c.status === 'Free',
+    blockedHint: isEngineerView && c.pending ? '确认之前暂时不能到场打卡、开始处理和提交完工。' : '',
+    // 面板里用
+    customer: d.customerName + ' · ' + d.orderNo,
+    amountText: c.amount !== null && c.amount !== undefined ? format.formatPrice(c.amount, false, true) : '',
+    paidText: c.paidText || '',
+    salesName: (c.sales && c.sales.name) || '',
+    directorName: (c.director && c.director.name) || '',
+    requesterName: (c.requester && c.requester.name) || '',
+    assigneeName: (d.assignee && d.assignee.name) || '',
+    fixedSalesName: (c.fixedSales && c.fixedSales.name) || ''
+  };
+}
+
 Page(subscribe.bindTaps({
   data: {
     loading: true,
@@ -634,6 +683,9 @@ Page(subscribe.bindTaps({
     canWriteWorkLog: false,
     myTodayWorkLog: '',
     workSheet: { show: false, text: '' },
+    // v2.2 收费确认：卡片 + 底部面板（mode: decide 工程师判断 / quote 销售报价 / review 销售总监审核 / confirm 售后主管确认）
+    chargeCard: null,
+    chargeSheet: { show: false, mode: '', charge: true, reason: '', salesList: [], salesIdx: -1, amount: '', note: '', paid: '' },
     canAddAttachment: false,
     attachHint: attachments.HINT,
     attachSheet: emptyAttachSheet(),
@@ -742,6 +794,7 @@ Page(subscribe.bindTaps({
       requestRejected: reqs.rejected,
       transferCard: transfer.card,
       transferRejected: transfer.rejected,
+      chargeCard: buildCharge(d, isEngineerView),
       deviceCard: buildDeviceCard(d),
       holdBar: buildHoldBar(d),
       canAssistants: actions.indexOf('assistants') >= 0,
@@ -1067,7 +1120,10 @@ Page(subscribe.bindTaps({
     const d = this.detail || {};
     switch (key) {
       case 'claim':
-        this.run(api.orders.claim(id, { loading: '认领中' }), '认领成功', true);
+        // v2.2 认领之后接着判断要不要收费（可以点「稍后再说」）
+        this.run(api.orders.claim(id, { loading: '认领中' }), '认领成功', true).then((r) => {
+          if (r && r.charge && r.charge.canDecide && r.charge.status === 'None') setTimeout(() => this.openChargeSheet(), 600);
+        });
         break;
       case 'appoint':
         this.openAppt();
@@ -1076,11 +1132,19 @@ Page(subscribe.bindTaps({
         wx.navigateTo({ url: '/pages/checkin/index?orderId=' + id });
         break;
       case 'start':
+        if (this.chargeBlocked()) break;
         this.confirm('开始处理', '确认开始处理此工单？状态将变为「处理中」。', '开始').then(() => {
           this.run(api.orders.start(id, { loading: '提交中' }), '已开始处理', true);
         });
         break;
       case 'complete':
+        if (this.chargeBlocked()) break;
+        // 还没判断过要不要收费：先判断，再提交完工
+        if (d.charge && d.charge.status === 'None' && d.charge.canDecide) {
+          wx.showToast({ title: '请先判断这张单要不要收费', icon: 'none' });
+          setTimeout(() => this.openChargeSheet(), 500);
+          break;
+        }
         wx.navigateTo({ url: '/pages/complete/index?id=' + id });
         break;
       case 'factory': {
@@ -1469,6 +1533,118 @@ Page(subscribe.bindTaps({
       }
     }
     this.setData({ priceSheet: sheet });
+  },
+
+  /* ---------------- 收费确认（v2.2） ---------------- */
+
+  /** 收费确认没走完：不能开始处理 / 提交完工（服务端同样会拦） */
+  chargeBlocked() {
+    const c = (this.detail || {}).charge;
+    if (!c || !c.pending) return false;
+    wx.showToast({ title: '收费确认还没走完（' + c.statusText + '）', icon: 'none' });
+    return true;
+  },
+
+  /** 卡片上的按钮：按当前用户能做的那一步打开面板 */
+  openChargeSheet() {
+    const c = (this.detail || {}).charge;
+    if (!c || this.data.busy) return;
+    const mode = c.canDecide ? 'decide' : c.canQuote ? 'quote' : c.canReview ? 'review' : c.canConfirm ? 'confirm' : '';
+    if (!mode) return;
+    this.setData({
+      chargeSheet: {
+        show: true, mode: mode, charge: true, reason: '', salesList: this.data.chargeSheet.salesList || [], salesIdx: -1,
+        amount: mode === 'quote' && c.amount ? String(c.amount) : '', note: '', paid: ''
+      }
+    });
+    // 不是销售提的单：拉一次销售名单给工程师选
+    if (mode === 'decide' && !c.fixedSales && !(this.data.chargeSheet.salesList || []).length) {
+      api.sales.list({ silent: true }).then((list) => {
+        this.setData({ 'chargeSheet.salesList': (list || []).map((u) => ({ id: u.id, name: u.name })) });
+      }).catch(() => {});
+    }
+  },
+
+  closeChargeSheet() {
+    if (this.data.busy) return;
+    this.setData({ 'chargeSheet.show': false });
+  },
+
+  onChargeChoice(e) {
+    this.setData({ 'chargeSheet.charge': e.currentTarget.dataset.value === 'yes' });
+  },
+
+  onChargePaid(e) {
+    this.setData({ 'chargeSheet.paid': e.currentTarget.dataset.value });
+  },
+
+  onChargeSales(e) {
+    this.setData({ 'chargeSheet.salesIdx': Number(e.detail.value) });
+  },
+
+  onChargeInput(e) {
+    this.setData({ ['chargeSheet.' + e.currentTarget.dataset.field]: e.detail.value });
+  },
+
+  /** 面板右边的主按钮 */
+  saveCharge() {
+    if (this.data.busy) return;
+    const s = this.data.chargeSheet;
+    const c = (this.detail || {}).charge || {};
+    const id = this.orderId;
+    const note = String(s.note || '').trim();
+    const tip = (t) => wx.showToast({ title: t, icon: 'none' });
+    let p;
+    let ok;
+    if (s.mode === 'decide') {
+      const reason = String(s.reason || '').trim();
+      if (!s.charge) {
+        p = api.orders.decideCharge(id, false, reason, null, { loading: '提交中' });
+        ok = '已记为不收费';
+      } else {
+        const picked = s.salesList[s.salesIdx];
+        if (!c.fixedSales && !picked) return tip('请选择交给哪位销售');
+        if (!reason) return tip('请填写收费原因');
+        p = api.orders.decideCharge(id, true, reason, c.fixedSales ? null : picked.id, { loading: '提交中' });
+        ok = '已交给销售报价';
+      }
+    } else if (s.mode === 'quote') {
+      const amount = Number(String(s.amount || '').replace(/,/g, ''));
+      if (!s.amount || isNaN(amount) || amount <= 0) return tip('请填写收费金额');
+      p = api.orders.quoteCharge(id, amount, note, false, { loading: '提交中' });
+      ok = '已提交审核';
+    } else if (s.mode === 'review') {
+      if (!s.paid) return tip('请选择客户是否已付款');
+      p = api.orders.reviewCharge(id, true, s.paid === 'yes', note, { loading: '提交中' });
+      ok = '已转售后主管';
+    } else {
+      p = api.orders.confirmCharge(id, true, note, { loading: '提交中' });
+      ok = '已确认';
+    }
+    this.run(p, ok).then((d) => {
+      if (d) this.setData({ 'chargeSheet.show': false });
+    });
+  },
+
+  /** 面板左边的次按钮：报价 = 不收费；审核 / 确认 = 退回（要写原因） */
+  backCharge() {
+    if (this.data.busy) return;
+    const s = this.data.chargeSheet;
+    const id = this.orderId;
+    const note = String(s.note || '').trim();
+    if (s.mode === 'decide') return this.closeChargeSheet();
+    const done = (d) => { if (d) this.setData({ 'chargeSheet.show': false }); };
+    if (s.mode === 'quote') {
+      // 先问一句再提交（点了取消什么都不发生）
+      return this.confirm('不收费', '确认这张单不收费？工程师会收到提醒并继续处理。', '不收费').then(() => {
+        this.run(api.orders.quoteCharge(id, null, note, true, { loading: '提交中' }), '已记为不收费').then(done);
+      });
+    }
+    if (!note) return wx.showToast({ title: '退回请写明原因', icon: 'none' });
+    const p = s.mode === 'review'
+      ? api.orders.reviewCharge(id, false, null, note, { loading: '提交中' })
+      : api.orders.confirmCharge(id, false, note, { loading: '提交中' });
+    this.run(p, '已退回').then(done);
   },
 
   /* ---------------- 每日工作内容（v2.1） ---------------- */

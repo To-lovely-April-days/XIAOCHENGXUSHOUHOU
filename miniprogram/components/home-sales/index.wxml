@@ -17,6 +17,22 @@
   </scroll-view>
 </view>
 
+<!-- v2.2 等我处理的收费确认 -->
+<block wx:if="{{chargeTodos.length}}">
+  <view class="sec-head">
+    <text class="sec-title">等我处理的收费 <text class="ct-count">{{chargeTodos.length}}</text></text>
+  </view>
+  <view class="list-card">
+    <view wx:for="{{chargeTodos}}" wx:key="orderId" class="ct-item" hover-class="row-hover" data-id="{{item.orderId}}" bindtap="toDetail" aria-role="button">
+      <view class="flex1">
+        <view class="ct-name ellipsis">{{item.customerName}}<text wx:if="{{item.urgent}}" class="ct-urgent">紧急</text></view>
+        <view class="ct-sub">{{item.text}}</view>
+      </view>
+      <view class="ct-btn">{{item.btn}}</view>
+    </view>
+  </view>
+</block>
+
 <!-- 我提交的工单 -->
 <view class="sec-head">
   <text class="sec-title">我提交的工单</text>

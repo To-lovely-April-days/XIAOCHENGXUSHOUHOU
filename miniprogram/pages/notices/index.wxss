@@ -1,0 +1,14 @@
+/* pages/notices 提醒设置（v2.2） */
+page { background: #F6F6F4; }
+.nt-page { padding: 24rpx 32rpx calc(48rpx + env(safe-area-inset-bottom)); }
+.nt-card { background: #FFFFFF; border-radius: 32rpx; box-shadow: var(--shadow); padding: 0 32rpx; }
+.nt-row { display: flex; align-items: center; gap: 20rpx; min-height: 128rpx; padding: 20rpx 0; box-sizing: border-box; border-bottom: 2rpx solid #F0F0EE; }
+.nt-row:last-child { border-bottom: none; }
+.nt-hover { opacity: 0.6; }
+.nt-name { font-size: 32rpx; font-weight: 600; color: #1D1D1F; }
+.nt-desc { margin-top: 4rpx; font-size: 24rpx; line-height: 36rpx; color: #6E6E73; }
+.nt-state { flex-shrink: 0; font-size: 28rpx; color: #9A5B00; font-weight: 600; }
+.nt-state.on { color: #2F7A4B; }
+.nt-head { margin: 40rpx 8rpx 16rpx; font-size: 26rpx; font-weight: 600; color: #6E6E73; }
+.nt-tip { padding: 48rpx 0; text-align: center; font-size: 28rpx; color: #6E6E73; }
+.nt-note { margin: 24rpx 8rpx 0; font-size: 24rpx; line-height: 38rpx; color: #8E8E93; }

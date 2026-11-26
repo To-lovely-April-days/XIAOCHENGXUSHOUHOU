@@ -140,6 +140,36 @@
     </view>
     <view wx:if="{{requestRejected}}" class="od-req-rejected">{{requestRejected}}</view>
 
+    <!-- v2.2 收费确认：走到哪一步、等谁处理；轮到当前用户时有按钮 -->
+    <view wx:if="{{chargeCard}}" class="od-charge">
+      <view class="row-between">
+        <text class="od-charge-title">收费确认</text>
+        <text class="od-charge-pill {{chargeCard.tone}}">{{chargeCard.statusText}}</text>
+      </view>
+      <view wx:if="{{chargeCard.intro}}" class="od-charge-intro">{{chargeCard.intro}}</view>
+      <view wx:if="{{chargeCard.returnNote}}" class="od-charge-return">{{chargeCard.returnNote}}</view>
+      <view wx:if="{{chargeCard.facts.length}}" class="od-charge-facts">
+        <view wx:for="{{chargeCard.facts}}" wx:key="label" class="od-charge-fact">
+          <view class="od-charge-fact-label">{{item.label}}</view>
+          <view class="od-charge-fact-value {{item.green ? 'green' : ''}}">{{item.value}}</view>
+        </view>
+      </view>
+      <view wx:if="{{chargeCard.quoteNote}}" class="od-charge-note">报价说明：{{chargeCard.quoteNote}}</view>
+      <view wx:if="{{chargeCard.directorNote}}" class="od-charge-note">审核意见：{{chargeCard.directorNote}}</view>
+      <view wx:if="{{chargeCard.steps.length}}" class="od-charge-steps">
+        <view wx:for="{{chargeCard.steps}}" wx:key="key" class="od-charge-step">
+          <view class="od-charge-dot {{item.state}}"></view>
+          <view class="flex1">
+            <view class="od-charge-step-title">{{item.title}}</view>
+            <view wx:if="{{item.sub}}" class="od-charge-step-sub {{item.state === 'cur' ? 'wait' : ''}}">{{item.sub}}</view>
+          </view>
+        </view>
+      </view>
+      <view wx:if="{{chargeCard.blockedHint}}" class="od-charge-hint">{{chargeCard.blockedHint}}</view>
+      <view wx:if="{{chargeCard.action}}" class="od-charge-btn {{chargeCard.actionMinor ? 'minor' : ''}} {{busy ? 'disabled' : ''}}"
+            hover-class="btn-hover" bindtap="openChargeSheet" aria-role="button">{{chargeCard.action}}</view>
+    </view>
+
     <!-- tabs -->
     <view class="segmented od-tabs" aria-role="tablist">
       <view wx:for="{{tabs}}" wx:key="key" class="segmented-item {{tab === item.key ? 'active' : ''}}" data-key="{{item.key}}" bindtap="onTab" aria-role="tab" aria-selected="{{tab === item.key}}">{{item.label}}</view>
@@ -505,6 +535,113 @@
     <textarea class="od-close-note od-work-input" value="{{workSheet.text}}" bindinput="onWorkInput" maxlength="1000" cursor-spacing="180"
               placeholder="如：更换加热管，测试升温正常；明天复查密封" placeholder-class="placeholder" show-confirm-bar="{{false}}" />
     <view class="btn-primary od-appt-btn {{busy ? 'btn-disabled' : ''}}" hover-class="btn-hover" bindtap="saveWork">保存</view>
+  </view>
+</block>
+
+<!-- 收费确认（v2.2）：四步共用一个底部面板 -->
+<block wx:if="{{chargeSheet.show}}">
+  <view class="mask" bindtap="closeChargeSheet" catchtouchmove="noop"></view>
+  <view class="sheet od-appt" catchtouchmove="noop" aria-role="dialog" aria-label="收费确认">
+    <view class="sheet-handle"></view>
+
+    <!-- 1 工程师判断 -->
+    <block wx:if="{{chargeSheet.mode === 'decide'}}">
+      <view class="row-between od-appt-head">
+        <text class="od-appt-title">这张单要不要收费</text>
+        <text class="muted od-appt-cancel" bindtap="closeChargeSheet">稍后再说</text>
+      </view>
+      <view class="od-appt-sub muted">认领后先判断是否收费。要收费的，交给销售报价，审核通过后再回到你手上。</view>
+      <view class="od-reasons" aria-role="radiogroup">
+        <view class="chip od-reason {{!chargeSheet.charge ? 'active' : ''}}" data-value="no" bindtap="onChargeChoice" aria-role="radio" aria-checked="{{!chargeSheet.charge}}">不收费（保内 / 免费）</view>
+        <view class="chip od-reason {{chargeSheet.charge ? 'active' : ''}}" data-value="yes" bindtap="onChargeChoice" aria-role="radio" aria-checked="{{chargeSheet.charge}}">需要收费</view>
+      </view>
+      <block wx:if="{{chargeSheet.charge}}">
+        <view class="od-sheet-label">交给哪位销售</view>
+        <view wx:if="{{chargeCard.fixedSalesName}}" class="od-sheet-input od-esc-addr">
+          <text class="flex1">{{chargeCard.fixedSalesName}}<text class="od-sheet-opt">（这张单是 TA 提的）</text></text>
+        </view>
+        <picker wx:else mode="selector" range="{{chargeSheet.salesList}}" range-key="name" value="{{chargeSheet.salesIdx}}" bindchange="onChargeSales">
+          <view class="od-sheet-input od-esc-addr" hover-class="btn-hover" aria-role="button">
+            <text class="flex1 {{chargeSheet.salesIdx >= 0 ? '' : 'placeholder'}}">{{chargeSheet.salesIdx >= 0 ? chargeSheet.salesList[chargeSheet.salesIdx].name : '请选择销售'}}</text>
+            <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+          </view>
+        </picker>
+      </block>
+      <view class="od-sheet-label">{{chargeSheet.charge ? '收费原因' : '说明'}}<text class="od-sheet-opt">（{{chargeSheet.charge ? '必填' : '选填'}}）</text></view>
+      <textarea class="od-close-note" value="{{chargeSheet.reason}}" data-field="reason" bindinput="onChargeInput" maxlength="200" cursor-spacing="180"
+                placeholder="{{chargeSheet.charge ? '如：设备已过保，需更换加热管和温控模块' : '如：保修期内'}}" placeholder-class="placeholder" show-confirm-bar="{{false}}" />
+      <view class="od-charge-two">
+        <view class="od-charge-back" hover-class="btn-hover" bindtap="backCharge" aria-role="button">取消</view>
+        <view class="od-charge-go {{busy ? 'disabled' : ''}}" hover-class="btn-hover" bindtap="saveCharge" aria-role="button">{{chargeSheet.charge ? '交给销售报价' : '确定不收费'}}</view>
+      </view>
+    </block>
+
+    <!-- 2 销售报价 -->
+    <block wx:elif="{{chargeSheet.mode === 'quote'}}">
+      <view class="row-between od-appt-head">
+        <text class="od-appt-title">填写收费金额</text>
+        <text class="muted od-appt-cancel" bindtap="closeChargeSheet">取消</text>
+      </view>
+      <view class="od-appt-sub muted">{{chargeCard.customer}}</view>
+      <view class="od-charge-quote">{{chargeCard.requesterName}}：{{chargeCard.reason}}</view>
+      <view wx:if="{{chargeCard.returnNote}}" class="od-charge-return">{{chargeCard.returnNote}}</view>
+      <view class="od-sheet-label">收费金额<text class="od-sheet-opt">（必填）</text></view>
+      <view class="od-sheet-input od-esc-addr">
+        <text class="muted">¥</text>
+        <input class="flex1 od-charge-amount num-font" type="digit" value="{{chargeSheet.amount}}" data-field="amount" bindinput="onChargeInput" maxlength="12" cursor-spacing="200"
+               placeholder="0" placeholder-class="placeholder" />
+      </view>
+      <view class="od-sheet-label">报价说明<text class="od-sheet-opt">（选填）</text></view>
+      <input class="od-sheet-input" value="{{chargeSheet.note}}" data-field="note" bindinput="onChargeInput" maxlength="200" cursor-spacing="160"
+             placeholder="如：配件 2,400 + 人工 800" placeholder-class="placeholder" />
+      <view class="od-charge-two">
+        <view class="od-charge-back" hover-class="btn-hover" bindtap="backCharge" aria-role="button">不收费</view>
+        <view class="od-charge-go {{busy ? 'disabled' : ''}}" hover-class="btn-hover" bindtap="saveCharge" aria-role="button">提交销售总监审核</view>
+      </view>
+    </block>
+
+    <!-- 3 销售总监审核 / 4 售后主管确认 -->
+    <block wx:else>
+      <view class="row-between od-appt-head">
+        <text class="od-appt-title">{{chargeSheet.mode === 'review' ? '审核收费' : '确认收费'}}</text>
+        <text class="muted od-appt-cancel" bindtap="closeChargeSheet">取消</text>
+      </view>
+      <view class="od-appt-sub muted">{{chargeCard.customer}}</view>
+      <view class="od-charge-facts">
+        <view class="od-charge-fact">
+          <view class="od-charge-fact-label">收费金额</view>
+          <view class="od-charge-fact-value">{{chargeCard.amountText}}</view>
+        </view>
+        <view wx:if="{{chargeSheet.mode === 'confirm' && chargeCard.paidText}}" class="od-charge-fact">
+          <view class="od-charge-fact-label">付款情况</view>
+          <view class="od-charge-fact-value">{{chargeCard.paidText}}</view>
+        </view>
+        <view class="od-charge-fact">
+          <view class="od-charge-fact-label">{{chargeSheet.mode === 'review' ? '报价人' : '处理人'}}</view>
+          <view class="od-charge-fact-value">{{chargeSheet.mode === 'review' ? chargeCard.salesName : chargeCard.assigneeName}}</view>
+        </view>
+      </view>
+      <view class="od-charge-note">
+        <view wx:if="{{chargeCard.quoteNote}}">说明：{{chargeCard.quoteNote}}</view>
+        <view>原因：{{chargeCard.reason}}</view>
+        <view wx:if="{{chargeSheet.mode === 'confirm' && chargeCard.directorName}}">销售 {{chargeCard.salesName}} 报价 · 销售总监 {{chargeCard.directorName}} 已同意</view>
+      </view>
+      <block wx:if="{{chargeSheet.mode === 'review'}}">
+        <view class="od-sheet-label">客户是否已付款<text class="od-sheet-opt">（必选）</text></view>
+        <view class="od-reasons" aria-role="radiogroup">
+          <view class="chip od-reason {{chargeSheet.paid === 'yes' ? 'active' : ''}}" data-value="yes" bindtap="onChargePaid" aria-role="radio" aria-checked="{{chargeSheet.paid === 'yes'}}">已付款</view>
+          <view class="chip od-reason {{chargeSheet.paid === 'no' ? 'active' : ''}}" data-value="no" bindtap="onChargePaid" aria-role="radio" aria-checked="{{chargeSheet.paid === 'no'}}">未付款，先服务</view>
+        </view>
+      </block>
+      <view class="od-sheet-label">{{chargeSheet.mode === 'review' ? '审核意见' : '备注'}}<text class="od-sheet-opt">（选填；退回时必填）</text></view>
+      <input class="od-sheet-input" value="{{chargeSheet.note}}" data-field="note" bindinput="onChargeInput" maxlength="200" cursor-spacing="160"
+             placeholder="{{chargeSheet.mode === 'review' ? '如：同意按报价执行' : '如：备件已到库，可以安排'}}" placeholder-class="placeholder" />
+      <view wx:if="{{chargeSheet.mode === 'confirm'}}" class="od-charge-hint">确认后，这张单自动回到 {{chargeCard.assigneeName}} 手上继续处理，服务价格记为 {{chargeCard.amountText}}。</view>
+      <view class="od-charge-two">
+        <view class="od-charge-back" hover-class="btn-hover" bindtap="backCharge" aria-role="button">{{chargeSheet.mode === 'review' ? '退回销售' : '退回'}}</view>
+        <view class="od-charge-go {{busy ? 'disabled' : ''}}" hover-class="btn-hover" bindtap="saveCharge" aria-role="button">{{chargeSheet.mode === 'review' ? '同意，转售后主管' : '确认'}}</view>
+      </view>
+    </block>
   </view>
 </block>
 

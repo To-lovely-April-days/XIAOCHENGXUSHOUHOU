@@ -305,3 +305,37 @@
 .od-form-btn { height: 76rpx; padding: 0 36rpx; border-radius: 20rpx; background: var(--bg); color: var(--text); font-size: 28rpx; font-weight: 600; display: flex; align-items: center; justify-content: center; }
 .od-form-btn.primary { background: var(--text); color: #FFFFFF; }
 .od-att-group-tip { flex-shrink: 0; font-size: 24rpx; color: var(--text-3); }
+
+/* v2.2 收费确认 */
+.od-charge { margin-top: 24rpx; border-radius: 24rpx; padding: 28rpx; background: var(--card); box-shadow: var(--shadow); }
+.od-charge-title { font-size: 30rpx; font-weight: 700; }
+.od-charge-pill { flex-shrink: 0; height: 44rpx; padding: 0 20rpx; border-radius: 22rpx; display: inline-flex; align-items: center; font-size: 24rpx; font-weight: 600; background: var(--soft); color: var(--text-body); }
+.od-charge-pill.amber { background: #FFF7E8; color: #8A5A07; }
+.od-charge-pill.green { background: #E8F3EC; color: #2F7A4B; }
+.od-charge-intro { margin-top: 12rpx; font-size: 26rpx; line-height: 40rpx; color: var(--text-body); }
+.od-charge-return { margin-top: 16rpx; padding: 16rpx 20rpx; border-radius: 16rpx; background: #FBF3E4; color: #8A5A07; font-size: 26rpx; line-height: 40rpx; word-break: break-all; }
+.od-charge-facts { margin-top: 20rpx; display: flex; gap: 16rpx; }
+.od-charge-fact { flex: 1; min-width: 0; padding: 18rpx 20rpx; border-radius: 20rpx; background: var(--bg); }
+.od-charge-fact-label { font-size: 24rpx; color: var(--text-2); }
+.od-charge-fact-value { margin-top: 4rpx; font-size: 30rpx; font-weight: 700; word-break: break-all; }
+.od-charge-fact-value.green { color: #2F7A4B; }
+.od-charge-note { margin-top: 16rpx; font-size: 26rpx; line-height: 40rpx; color: var(--text-body); word-break: break-all; }
+.od-charge-quote { margin-top: 12rpx; font-size: 28rpx; line-height: 42rpx; color: var(--text); word-break: break-all; }
+.od-charge-steps { margin-top: 24rpx; }
+.od-charge-step { display: flex; gap: 20rpx; padding-bottom: 20rpx; }
+.od-charge-step:last-child { padding-bottom: 0; }
+.od-charge-dot { flex-shrink: 0; width: 28rpx; height: 28rpx; margin-top: 6rpx; border-radius: 50%; box-sizing: border-box; border: 4rpx solid #C7C7C5; background: #FFFFFF; }
+.od-charge-dot.done { border-color: #2F7A4B; background: #2F7A4B; }
+.od-charge-dot.cur { border-color: var(--red); background: var(--red); }
+.od-charge-step-title { font-size: 28rpx; font-weight: 600; }
+.od-charge-step-sub { margin-top: 2rpx; font-size: 24rpx; line-height: 36rpx; color: var(--text-2); word-break: break-all; }
+.od-charge-step-sub.wait { color: var(--red); font-weight: 600; }
+.od-charge-hint { margin-top: 20rpx; font-size: 24rpx; line-height: 36rpx; color: var(--text-2); }
+.od-charge-btn { margin-top: 24rpx; height: 88rpx; border-radius: 20rpx; display: flex; align-items: center; justify-content: center; background: var(--text); color: #FFFFFF; font-size: 30rpx; font-weight: 600; }
+.od-charge-btn.minor { height: 72rpx; background: var(--soft); color: var(--text); font-size: 28rpx; }
+.od-charge-btn.disabled { background: var(--disabled); }
+.od-charge-two { margin-top: 40rpx; display: flex; gap: 20rpx; }
+.od-charge-back { flex: 1; height: 96rpx; border-radius: 24rpx; display: flex; align-items: center; justify-content: center; background: var(--soft); color: var(--text); font-size: 32rpx; font-weight: 600; }
+.od-charge-go { flex: 2; height: 96rpx; border-radius: 24rpx; display: flex; align-items: center; justify-content: center; background: var(--text); color: #FFFFFF; font-size: 32rpx; font-weight: 600; }
+.od-charge-go.disabled { background: var(--disabled); }
+.od-charge-amount { text-align: right; font-size: 40rpx; font-weight: 700; height: 92rpx; }

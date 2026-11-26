@@ -83,7 +83,8 @@ Component(subscribe.bindTaps({
     filters: FILTERS.map((f) => Object.assign({ count: 0 }, f)),
     items: [],
     listLoading: false,
-    customers: []
+    customers: [],
+    chargeTodos: [] // v2.2 等我处理的收费确认（销售：报价；销售总监：审核）
   },
 
   methods: {
@@ -92,6 +93,11 @@ Component(subscribe.bindTaps({
       if (first) this.setData({ status: 'loading', errorText: '' });
       api.orders.recentCustomers({ silent: true }).then((list) => {
         this.setData({ customers: (list || []).map((c, i) => Object.assign({ idx: i }, c)) });
+      }).catch(() => {});
+      api.orders.chargeTodos({ silent: true }).then((list) => {
+        this.setData({
+          chargeTodos: (list || []).map((t) => Object.assign({}, t, { btn: t.step === 'Quote' ? '报价' : t.step === 'Review' ? '审核' : '确认' }))
+        });
       }).catch(() => {});
       return this.loadList().catch((err) => {
         const msg = (err && err.message) || '加载失败，请稍后重试';

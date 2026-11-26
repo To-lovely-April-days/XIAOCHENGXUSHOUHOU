@@ -119,6 +119,17 @@ const me = {
     return get('/api/me/subscribe', null, opts);
   },
   /**
+   * GET /api/me/notices（v2.2）提醒设置：我用得上的几类微信提醒，各自开着还是关着
+   * @returns {Promise<{enabled:boolean,items:Array<{key:string,name:string,desc:string,on:boolean}>}>}
+   */
+  notices(opts) {
+    return get('/api/me/notices', null, opts);
+  },
+  /** PUT /api/me/notices（v2.2）打开 / 关掉一类提醒，返回最新的整份设置 */
+  setNotice(key, on, opts) {
+    return put('/api/me/notices', { key: key, on: on }, opts);
+  },
+  /**
    * PUT /api/me/password 修改自己的密码
    * @param {string} oldPassword 原密码（账号还没设过密码时可空）
    * @param {string} newPassword 至少 8 位，同时含字母和数字
@@ -333,6 +344,36 @@ const orders = {
    */
   saveWorkLog(id, content, opts) {
     return post('/api/orders/' + id + '/work-logs', { content: content }, opts);
+  },
+  /**
+   * v2.2 收费确认：工程师判断 → 销售报价 → 销售总监审核 → 售后主管确认。四个接口都返回 OrderDetail，
+   * 其中 charge:{status:'None'|'Quoting'|'DirectorReview'|'SupervisorConfirm'|'Confirmed'|'Free',statusText,pending,reason,
+   *   amount,quoteNote,paid,paidText,directorNote,supervisorNote,returnNote,requester,sales,director,
+   *   steps:[{title,done,current,who,time,note}],fixedSales,canDecide,canQuote,canReview,canConfirm}
+   * 工程师拿不到 amount / quoteNote / directorNote。
+   */
+  /** POST /api/orders/{id}/charge/decide 负责工程师：charge=false 不收费；true 要收费（reason 必填，不是销售提的单还要 salesId） */
+  decideCharge(id, charge, reason, salesId, opts) {
+    return post('/api/orders/' + id + '/charge/decide', { charge: charge, reason: reason || null, salesId: salesId || null }, opts);
+  },
+  /** POST /api/orders/{id}/charge/quote 销售报价；free=true 改成不收费 */
+  quoteCharge(id, amount, note, free, opts) {
+    return post('/api/orders/' + id + '/charge/quote', { amount: amount, note: note || null, free: !!free }, opts);
+  },
+  /** POST /api/orders/{id}/charge/review 销售总监：approve=true 要带 paid；false = 退回销售（note 必填） */
+  reviewCharge(id, approve, paid, note, opts) {
+    return post('/api/orders/' + id + '/charge/review', { approve: approve, paid: paid, note: note || null }, opts);
+  },
+  /** POST /api/orders/{id}/charge/confirm 售后主管：approve=false = 退回（note 必填） */
+  confirmCharge(id, approve, note, opts) {
+    return post('/api/orders/' + id + '/charge/confirm', { approve: approve, note: note || null }, opts);
+  },
+  /**
+   * GET /api/orders/charge-todos 等我处理的收费确认（工程师恒为空）
+   * @returns {Promise<Array<{orderId:number,orderNo:string,customerName:string,urgent:boolean,step:'Quote'|'Review'|'Confirm',text:string}>>}
+   */
+  chargeTodos(opts) {
+    return get('/api/orders/charge-todos', null, opts);
   },
   requestHold(id, reasonType, note, opts) {
     return post('/api/orders/' + id + '/hold-requests', { reasonType: reasonType, note: note || null }, opts);
@@ -585,6 +626,13 @@ const engineers = {
   }
 };
 
+/** GET /api/sales（v2.2）在职销售名单：工程师发起收费确认时选人 @returns {Promise<UserBrief[]>} */
+const sales = {
+  list(opts) {
+    return get('/api/sales', null, opts);
+  }
+};
+
 /* ---------------- 8. 主管后台 ---------------- */
 const admin = {
   /**
@@ -685,5 +733,6 @@ module.exports = {
   hours,
   home,
   engineers,
+  sales,
   admin
 };

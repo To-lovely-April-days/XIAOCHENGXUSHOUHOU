@@ -62,6 +62,7 @@ function buildTodo(t, i) {
     // v1.1：审批 / 定价都在工单详情里完成
     HoldRequest: { btn: '审批', act: 'detail', tone: 'amber', suffix: '暂停申请', primary: true },
     AssistantRequest: { btn: '审批', act: 'detail', tone: 'amber', suffix: '协助人申请', primary: true },
+    ChargeConfirm: { btn: '确认', act: 'detail', tone: 'amber', suffix: '收费确认', primary: true },
     PriceSuggestion: { btn: '定价', act: 'detail', tone: 'amber', suffix: '价格建议' },
     Unassigned: { btn: '指派', act: 'assign', tone: 'amber' },
     Submitted: { btn: '查看', act: 'detail', tone: 'gray', suffix: '待验收' },

@@ -186,6 +186,11 @@ Page({
     this.load();
   },
 
+  /** v2.2 提醒设置：微信授权 + 选择要打开哪些提醒 */
+  goNotices() {
+    wx.navigateTo({ url: '/pages/notices/index' });
+  },
+
   goApprovals() {
     wx.navigateTo({ url: '/pages/approvals/index' });
   },

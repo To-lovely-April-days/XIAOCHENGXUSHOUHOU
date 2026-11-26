@@ -1,5 +1,5 @@
 // 完工提交（原型 08）。
-// v2.0：按服务方式区分要交的资料（formVersion: 2）
+// v2.0：按服务方式区分要交的资料（formVersion: 2）；v2.2 起传 3：提交前必须判断过要不要收费
 //   上门 Onsite ：维修前照片、维修后照片、现场维修登记表（客户签字版）—— 三样必传
 //   远程 Remote ：沟通截图 / 录屏画面选填；必须选「客户确认方式」
 //   返厂 Factory：维修照片、寄回前测试结果、返厂维修登记表 —— 三样必传
@@ -327,7 +327,7 @@ Page(subscribe.bindTaps({
       solution: d.solution.trim(),
       partsReplaced: d.partsReplaced.trim(),
       runStatus: d.runStatus,
-      formVersion: 2,
+      formVersion: 3,
       processPhotoIds: d.lists.photos.map((x) => x.fileId),
       beforePhotoIds: d.lists.before.map((x) => x.fileId),
       afterPhotoIds: d.lists.after.map((x) => x.fileId),

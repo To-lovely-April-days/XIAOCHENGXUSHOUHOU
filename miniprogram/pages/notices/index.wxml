@@ -1,0 +1,29 @@
+<view class="nt-page">
+  <!-- 微信授权：不授权的话下面开着也收不到 -->
+  <view class="nt-card">
+    <view class="nt-row" hover-class="nt-hover" bindtap="onAuth" aria-role="button">
+      <view class="flex1">
+        <view class="nt-name">微信通知授权</view>
+        <view class="nt-desc">{{authDesc}}</view>
+      </view>
+      <text class="nt-state {{authOn ? 'on' : ''}}">{{authText}}</text>
+      <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+    </view>
+  </view>
+
+  <view class="nt-head">要打开哪些提醒</view>
+  <view wx:if="{{loading}}" class="nt-tip">加载中…</view>
+  <view wx:elif="{{error}}" class="nt-tip" bindtap="load">{{error}}，点击重试</view>
+  <view wx:else class="nt-card">
+    <view wx:for="{{items}}" wx:key="key" class="nt-row">
+      <view class="flex1">
+        <view class="nt-name">{{item.name}}</view>
+        <view class="nt-desc">{{item.desc}}</view>
+      </view>
+      <switch checked="{{item.on}}" color="#1D1D1F" data-key="{{item.key}}" bindchange="onToggle" aria-label="{{item.name}}" />
+    </view>
+  </view>
+
+  <view class="nt-note">关掉的那一类不会再发到你的微信，工单里的记录和首页待办不受影响。</view>
+  <view class="nt-note">微信规定：提醒要先授权才能发。授权时勾选「总是保持以上选择」，以后就不用再点了。</view>
+</view>

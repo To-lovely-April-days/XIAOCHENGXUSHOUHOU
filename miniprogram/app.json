@@ -7,6 +7,7 @@
     "pages/login/index",
     "pages/password/index",
     "pages/approvals/index",
+    "pages/notices/index",
     "pages/privacy/index",
     "pages/my-orders/index",
     "pages/order-detail/index",
