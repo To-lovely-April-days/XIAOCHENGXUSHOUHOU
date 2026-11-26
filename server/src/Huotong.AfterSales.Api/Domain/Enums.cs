@@ -49,6 +49,13 @@ public enum OrderStatus { Pending, Accepted, InProgress, OnHold, Submitted, Clos
 
 public enum OrderSource { SalesReferral, CustomerDirect, Inspection, ReturnLogistics }
 
+/// <summary>
+/// v2.4 工单种类（落库）。Repair = 维修工单（原有的）；Install = 安装调试工单：客户现场安装调试，不收费，
+/// 售后自己建单、建完直接由本人负责（主管建单时指定一位工程师），不进接单大厅，工程师不能转交。
+/// 声明顺序必须是 Repair 在最前（CLR 默认值 = 旧数据）。
+/// </summary>
+public enum OrderKind { Repair, Install }
+
 public enum ProblemType { Fault, Complaint, Return, Consult }
 
 public enum Urgency { Urgent, Normal, Consult }
@@ -97,7 +104,7 @@ public enum LogKind { Status, Price, Hold, Assist, Factory, Attachment, Attachme
 /// v1.9：维修登记表拆成「现场」和「返厂」两类。RepairForm 只为兼容旧客户端保留：
 /// 收到它时按工单的服务方式落到 OnsiteRepairForm / FactoryRepairForm，库里不再新存这个值。
 /// </summary>
-public enum AttachmentType { Other, Sat, RepairForm, OnsiteRepairForm, FactoryRepairForm }
+public enum AttachmentType { Other, Sat, RepairForm, OnsiteRepairForm, FactoryRepairForm, DeliveryNote, AcceptanceReport }
 
 /// <summary>转交状态（v1.3，落库）</summary>
 public enum TransferStatus { Pending, Accepted, Rejected, Cancelled, Expired }
@@ -211,12 +218,16 @@ public static class EnumText
     };
 
     /// <summary>附件类别的完整标题（分组标题、上传时的选项）；全系统唯一，两个前端的 enums.js 逐字一致</summary>
+    public static string Kind(OrderKind k) => k == OrderKind.Install ? "安装调试" : "维修";
+
     public static string AttachmentLabel(AttachmentType t) => t switch
     {
         AttachmentType.Sat => "SAT 验收单（签字版）",
         AttachmentType.RepairForm => "现场维修登记表/返厂维修登记表（签字版）",
         AttachmentType.OnsiteRepairForm => "现场维修登记表（签字版）",
         AttachmentType.FactoryRepairForm => "返厂维修登记表（签字版）",
+        AttachmentType.DeliveryNote => "送货单",
+        AttachmentType.AcceptanceReport => "验收报告（客户签字版）",
         AttachmentType.Other => "设备照片、沟通记录及其他附件",
         _ => t.ToString()
     };
@@ -228,6 +239,8 @@ public static class EnumText
         AttachmentType.RepairForm => "维修登记表",
         AttachmentType.OnsiteRepairForm => "现场维修登记表",
         AttachmentType.FactoryRepairForm => "返厂维修登记表",
+        AttachmentType.DeliveryNote => "送货单",
+        AttachmentType.AcceptanceReport => "验收报告",
         AttachmentType.Other => "其他附件",
         _ => t.ToString()
     };

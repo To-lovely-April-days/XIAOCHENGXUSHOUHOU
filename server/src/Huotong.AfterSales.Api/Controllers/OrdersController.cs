@@ -19,21 +19,23 @@ public class OrdersController : ApiControllerBase
 
     [HttpGet("mine")]
     [Authorize(Roles = "Engineer")]
-    public async Task<ApiResponse<ListResult<OrderListItem>>> Mine([FromQuery] string? group) => Ok(await _orders.Mine(Me, group));
+    public async Task<ApiResponse<ListResult<OrderListItem>>> Mine([FromQuery] string? group, [FromQuery] string? kind = null) =>
+        Ok(await _orders.Mine(Me, group, kind));
 
     [HttpGet("created")]
-    public async Task<ApiResponse<ListResult<OrderListItem>>> Created([FromQuery] string? group) => Ok(await _orders.Created(Me, group));
+    public async Task<ApiResponse<ListResult<OrderListItem>>> Created([FromQuery] string? group, [FromQuery] string? kind = null) =>
+        Ok(await _orders.Created(Me, group, kind));
 
     [HttpGet]
     [Authorize(Roles = "Sales,Supervisor")]
     public async Task<ApiResponse<PagedOrders>> Query([FromQuery] string? status, [FromQuery] string? keyword, [FromQuery] string? issue,
         [FromQuery] int? assigneeId, [FromQuery] string? serviceType, [FromQuery] string? from, [FromQuery] string? to,
-        [FromQuery] string? priceSet = null, [FromQuery] bool? pendingRequest = null,
+        [FromQuery] string? priceSet = null, [FromQuery] bool? pendingRequest = null, [FromQuery] string? kind = null,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20) =>
         Ok(await _orders.Query(new OrderQuery
         {
             Status = status, Keyword = keyword, Issue = issue, AssigneeId = assigneeId, ServiceType = serviceType,
-            From = from, To = to, PriceSet = priceSet, PendingRequest = pendingRequest, Page = page, PageSize = pageSize
+            From = from, To = to, PriceSet = priceSet, PendingRequest = pendingRequest, Kind = kind, Page = page, PageSize = pageSize
         }, Me));
 
     [HttpGet("recent-customers")]

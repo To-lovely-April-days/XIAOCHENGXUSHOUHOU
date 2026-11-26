@@ -20,6 +20,8 @@ public class OrderQuery
     public string? To { get; set; }
     /// <summary>true / false：按是否已定价过滤</summary>
     public string? PriceSet { get; set; }
+    /// <summary>v2.4 Repair / Install：按工单种类过滤；不传 = 全部</summary>
+    public string? Kind { get; set; }
     /// <summary>true：只返回有待审批申请的工单</summary>
     public bool? PendingRequest { get; set; }
     public int Page { get; set; } = 1;
@@ -94,12 +96,25 @@ public partial class OrderService
     /// 我的工单：本人是负责人 / 协助人 / 已退出（v1.3）的工单，不含已作废、待认领。
     /// doing / check / closed 只含本人是负责人或协助人的；former = 本人已退出的（按退出时间倒序）；all = 前三组 + former（排在最后）。
     /// </summary>
-    public async Task<ListResult<OrderListItem>> Mine(CurrentUser user, string? group)
+    /// <summary>v2.4 按种类分页签：先数出两种各有多少（kinds），再按 kind 过滤</summary>
+    private static List<WorkOrder> ByKind(List<WorkOrder> all, string? kind, out Dictionary<string, int> kinds)
+    {
+        kinds = new Dictionary<string, int>
+        {
+            ["repair"] = all.Count(o => o.Kind == OrderKind.Repair),
+            ["install"] = all.Count(o => o.Kind == OrderKind.Install),
+        };
+        var k = ParseEnum<OrderKind>(kind, "工单种类");
+        return k == null ? all : all.Where(o => o.Kind == k).ToList();
+    }
+
+    public async Task<ListResult<OrderListItem>> Mine(CurrentUser user, string? group, string? kind = null)
     {
         var all = await _view.Orders()
             .Where(o => (o.AssigneeId == user.Id || o.Assistants.Any(a => a.EngineerId == user.Id) || o.Exits.Any(x => x.EngineerId == user.Id))
                         && o.Status != OrderStatus.Voided && o.Status != OrderStatus.Pending)
             .ToListAsync();
+        all = ByKind(all, kind, out var kinds);
         // 不变量 I2 保证一张单不会同时落在两堆里；万一同时有，按负责人 / 协助人对待
         var orders = all.Where(o => OrderViewBuilder.RoleIn(o, user.Id) != null).ToList();
         var former = all.Where(o => OrderViewBuilder.RoleIn(o, user.Id) == null)
@@ -112,6 +127,7 @@ public partial class OrderService
             ["closed"] = orders.Count(o => o.Status == OrderStatus.Closed),
             ["former"] = former.Count,
             ["all"] = orders.Count + former.Count,
+            ["repair"] = kinds["repair"], ["install"] = kinds["install"],
         };
         static IEnumerable<WorkOrder> Sorted(IEnumerable<WorkOrder> xs) =>
             xs.OrderBy(o => MinePriority(o.Status)).ThenByDescending(SortTime).ThenByDescending(o => o.Id);
@@ -127,15 +143,17 @@ public partial class OrderService
         return new ListResult<OrderListItem> { Items = await _view.BuildList(q, user), Counts = counts };
     }
 
-    public async Task<ListResult<OrderListItem>> Created(CurrentUser user, string? group)
+    public async Task<ListResult<OrderListItem>> Created(CurrentUser user, string? group, string? kind = null)
     {
         // v1.7 销售主管：看所有销售 / 销售主管建的工单；普通销售只看自己建的
         var orders = await _view.Orders()
             .Where(o => (o.CreatorId == user.Id || (user.SalesManager && o.Creator!.Role == Role.Sales)) && o.Status != OrderStatus.Voided)
             .OrderByDescending(o => o.CreatedAt).ThenByDescending(o => o.Id)
             .ToListAsync();
+        orders = ByKind(orders, kind, out var kinds);
         var counts = new Dictionary<string, int>
         {
+            ["repair"] = kinds["repair"], ["install"] = kinds["install"],
             ["all"] = orders.Count,
             ["wait"] = orders.Count(o => o.Status == OrderStatus.Pending),
             ["doing"] = orders.Count(o => Doing.Contains(o.Status)),
@@ -196,7 +214,12 @@ public partial class OrderService
         var page = Math.Max(1, p.Page);
         var size = Math.Clamp(p.PageSize, 1, 200);
 
-        var baseQ = ApplyKeyword(_db.Orders.AsQueryable(), p.Keyword);
+        var kind = ParseEnum<OrderKind>(p.Kind, "工单种类");
+        var keywordQ = ApplyKeyword(_db.Orders.AsQueryable(), p.Keyword);
+        // 两个页签上的数量：只受 keyword 影响，不含已作废
+        var kindCounts = await keywordQ.Where(o => o.Status != OrderStatus.Voided).GroupBy(o => o.Kind)
+            .Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
+        var baseQ = kind == null ? keywordQ : keywordQ.Where(o => o.Kind == kind);
         // counts 只受 keyword 影响
         var statusCounts = await baseQ.GroupBy(o => o.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
         var counts = new Dictionary<string, int>
@@ -206,7 +229,11 @@ public partial class OrderService
         foreach (var s in new[] { OrderStatus.Pending, OrderStatus.Accepted, OrderStatus.InProgress, OrderStatus.OnHold, OrderStatus.Submitted, OrderStatus.Closed })
             counts[s.ToString()] = statusCounts.FirstOrDefault(x => x.Key == s)?.Count ?? 0;
 
+        counts["repair"] = kindCounts.FirstOrDefault(x => x.Key == OrderKind.Repair)?.Count ?? 0;
+        counts["install"] = kindCounts.FirstOrDefault(x => x.Key == OrderKind.Install)?.Count ?? 0;
+
         var q = ApplyKeyword(_view.Orders(), p.Keyword);
+        if (kind != null) q = q.Where(o => o.Kind == kind);
         q = status == null ? q.Where(o => o.Status != OrderStatus.Voided) : q.Where(o => o.Status == status);
         if (p.AssigneeId != null) q = q.Where(o => o.AssigneeId == p.AssigneeId);
         if (serviceType != null) q = q.Where(o => o.ServiceType == serviceType);
@@ -264,6 +291,18 @@ public partial class OrderService
 
     public async Task<OrderDetail> Create(CreateOrderRequest r, CurrentUser user)
     {
+        // v2.4 安装调试工单：售后（工程师 / 主管）建单，固定上门、不收费；来源、问题类型、紧急程度不用选
+        var kind = ParseEnum<OrderKind>(r.Kind, "工单种类") ?? OrderKind.Repair;
+        var install = kind == OrderKind.Install;
+        if (install)
+        {
+            if (user.Role == Role.Sales) throw BizException.Forbidden("安装调试工单由售后建单");
+            if (user.Role == Role.Supervisor && r.AssigneeId == null) throw BizException.BadRequest("请指定负责工程师");
+            r.ServiceType = ServiceType.Onsite;
+            r.Source ??= OrderSource.CustomerDirect;
+            r.ProblemType ??= ProblemType.Consult;
+            r.Urgency ??= Urgency.Normal;
+        }
         if (r.Source == null) throw BizException.BadRequest("请选择工单来源");
         if (r.ProblemType == null) throw BizException.BadRequest("请选择问题类型");
         if (r.Urgency == null) throw BizException.BadRequest("请选择紧急程度");
@@ -283,14 +322,15 @@ public partial class OrderService
         DeviceRules.Validate(devices);
         if (r.SatSigned == null) throw BizException.BadRequest("请选择是否已完成 SAT");
         var sat = DeviceRules.ParseSatDate(r.SatDate, r.SatSigned.Value);
-        var faultTime = Req(r.FaultTime, "发生时间", 50);
-        var symptom = Req(r.Symptom, "故障现象/报错", 1000);
-        var tried = Req(r.CustomerTried, "客户已尝试的操作", 500);
-        var env = Req(r.SiteEnvironment, "现场环境条件", 500);
+        // 安装调试没有故障信息：故障现象一栏放安装说明（列表、提醒里显示用）
+        var faultTime = install ? "" : Req(r.FaultTime, "发生时间", 50);
+        var symptom = install ? Opt(r.InstallNote, "安装说明", 1000) ?? "客户现场安装调试" : Req(r.Symptom, "故障现象/报错", 1000);
+        var tried = install ? "" : Req(r.CustomerTried, "客户已尝试的操作", 500);
+        var env = install ? "" : Req(r.SiteEnvironment, "现场环境条件", 500);
         // v1.2：attachments（新）与 photoFileIds（v1.1 客户端）并存；同一 fileId 两处都有时按 attachments 处理
         foreach (var it in NormalizeAttachments(r.Attachments) ?? new())
         {
-            var formDenied = AttachmentRules.FormDenied(it.Type, r.ServiceType!.Value);
+            var formDenied = AttachmentRules.FormDenied(it.Type, r.ServiceType!.Value, kind);
             if (formDenied != null) throw formDenied;
         }
         var attItems = NormalizeAttachments(r.Attachments) ?? throw BizException.BadRequest("附件不存在，请重新上传");
@@ -303,10 +343,17 @@ public partial class OrderService
         var me = await _view.LoadEmployee(user.Id);
         var now = _clock.Now;
         var (city, region) = AddressParser.Parse(address);
+        // 安装调试：工程师建的归本人；主管建的归指定的工程师。建完直接「待启动」，不进接单大厅
+        Employee? lead = null;
+        if (install)
+            lead = user.Role == Role.Engineer ? me
+                : await _db.Employees.FirstOrDefaultAsync(e => e.Id == r.AssigneeId && e.Role == Role.Engineer && e.Enabled)
+                  ?? throw BizException.BadRequest("所选工程师不存在或已停用");
 
         var order = new WorkOrder
         {
-            Status = OrderStatus.Pending, Source = r.Source.Value, ProblemType = r.ProblemType.Value, Urgency = r.Urgency.Value,
+            Kind = kind, AssigneeId = lead?.Id, ClaimedAt = lead == null ? null : now,
+            Status = install ? OrderStatus.Accepted : OrderStatus.Pending, Source = r.Source.Value, ProblemType = r.ProblemType.Value, Urgency = r.Urgency.Value,
             ServiceType = r.ServiceType.Value, CustomerName = customer, ContactName = contact, ContactPhone = phone,
             Address = address, City = city, Region = region, Latitude = r.Latitude, Longitude = r.Longitude,
             // DeviceModel / DeviceSn 是兼容列（旧客户端读）：第一台设备的 title / 编号；展示与搜索一律用 DeviceText 与设备表
@@ -315,7 +362,8 @@ public partial class OrderService
             FaultTime = faultTime, Symptom = symptom, CustomerTried = tried, SiteEnvironment = env,
             CustomerRequest = Opt(r.CustomerRequest, "客户诉求与限制", 500),
             // v1.1：建单不定价（忽略请求里的 price），由主管在详情中定价
-            Price = 0, PriceSet = false,
+            // v2.4：安装调试不收费，建单时就记为 0 元
+            Price = 0, PriceSet = install, PriceSetAt = install ? now : null,
             CreatorId = me.Id, CreatedAt = now,
         };
 
@@ -336,7 +384,10 @@ public partial class OrderService
                 await _files.Attach(photoIds, order.Id, FileCategory.OrderPhoto, user, "现场照片");
                 // 建单时的附件不另写状态记录（已有「建单」记录）
                 Mount(await LoadNewAttachments(attItems, user), attItems, order.Id, order.ServiceType);
-                AddLog(order, me, order.Urgency == Urgency.Urgent ? $"{me.Name} 建单 · 紧急" : $"{me.Name} 建单", OrderStatus.Pending, now);
+                if (install)
+                    AddLog(order, me, $"{me.Name} 建单（安装调试），由 {(lead!.Id == me.Id ? "本人" : lead.Name)} 负责 → {EnumText.Status(order.Status)}", order.Status, now);
+                else
+                    AddLog(order, me, order.Urgency == Urgency.Urgent ? $"{me.Name} 建单 · 紧急" : $"{me.Name} 建单", OrderStatus.Pending, now);
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
                 break;
@@ -350,6 +401,17 @@ public partial class OrderService
             }
         }
 
+        if (install)
+        {
+            // 主管替工程师建的：提醒这位工程师
+            if (lead!.Id != me.Id)
+            {
+                await _notifier.NotifyAsync("工单指派提醒",
+                    $"{me.Name} 新建安装调试工单 **{order.CustomerName}**（{order.OrderNo}），由 {lead.Name} 负责。", new[] { lead.Phone });
+                await Push(order, me, now, "新工单指派给你", $"{me.Name}新建安装调试工单，由你负责", lead);
+            }
+            return await _view.BuildDetail(order.Id, user);
+        }
         if (order.Urgency == Urgency.Urgent)
         {
             await _notifier.NotifyAsync("紧急工单待认领",
@@ -506,7 +568,8 @@ public partial class OrderService
             throw BizException.Conflict("返厂工单请先记录「寄回客户」再提交完工");
         // v2.2 收费确认没走完不能提交完工；新版客户端（formVersion ≥ 3）还要求先判断过要不要收费
         await EnsureChargeNotPending(id);
-        if ((r.FormVersion ?? 1) >= 3 && !await _db.OrderCharges.AnyAsync(c => c.OrderId == id))
+        var install = o.Kind == OrderKind.Install;
+        if ((r.FormVersion ?? 1) >= 3 && !install && !await _db.OrderCharges.AnyAsync(c => c.OrderId == id))
             throw BizException.BadRequest(ChargeRules.DecideFirst);
         var now = _clock.Now;
         // 现场计时：先判本人（CompletionValidator 抛「请先离场打卡」），再判其他人（协助人或已退出的人，取到场最早的一位）
@@ -522,7 +585,7 @@ public partial class OrderService
             }
         }
         // v2.0：新版客户端（formVersion ≥ 2）按服务方式区分资料；旧版沿用旧规则
-        var v2 = (r.FormVersion ?? 1) >= 2;
+        var v2 = install || (r.FormVersion ?? 1) >= 2;
         var beforeIds = v2 && o.ServiceType == ServiceType.Onsite ? (r.BeforePhotoIds ?? new()).Distinct().ToList() : new List<int>();
         var afterIds = v2 && o.ServiceType == ServiceType.Onsite
             ? (r.AfterPhotoIds ?? new()).Distinct().Where(x => !beforeIds.Contains(x)).ToList() : new List<int>();
@@ -531,20 +594,31 @@ public partial class OrderService
             : (r.ProcessPhotoIds ?? new()).Distinct().ToList();
         var signIds = (r.SignaturePhotoIds ?? new()).Distinct().ToList();
         // 维修登记表：上门 = 现场维修登记表，返厂 = 返厂维修登记表；之前在附件里传过的也算
-        AttachmentType? formType = o.ServiceType switch
+        AttachmentType? formType = install ? AttachmentType.AcceptanceReport : o.ServiceType switch
         {
             ServiceType.Onsite => AttachmentType.OnsiteRepairForm,
             ServiceType.Factory => AttachmentType.FactoryRepairForm,
             _ => null
         };
         var formItems = v2 && formType != null
-            ? (r.RepairFormIds ?? new()).Distinct().Select(x => (FileId: x, Restricted: false, Type: formType.Value)).ToList()
+            ? ((install ? r.AcceptanceIds : r.RepairFormIds) ?? new()).Distinct().Select(x => (FileId: x, Restricted: false, Type: formType.Value)).ToList()
             : new List<(int FileId, bool Restricted, AttachmentType Type)>();
         var existingForms = formType == null ? 0 : await _db.Files.CountAsync(f => f.OrderId == id
             && (f.Category == FileCategory.OrderPhoto || f.Category == FileCategory.Attachment) && f.AttachmentType == formType);
-        CompletionValidator.Validate(o.Status, o.ServiceType, running,
-            new CompletionInput(r.FaultCause, r.Solution, r.RunStatus, processIds.Count, signIds.Count,
-                v2 ? 2 : 1, beforeIds.Count, afterIds.Count, existingForms + formItems.Count, r.CustomerConfirm, r.TestResult));
+        if (install)
+        {
+            // v2.4 安装调试：安装调试情况 + 运行状况 + 现场照片 + 验收报告（客户签字版）
+            if (o.Status != OrderStatus.InProgress) throw BizException.Conflict("只有处理中的工单可以提交完工");
+            if (running) throw BizException.Conflict("请先离场打卡");
+            if (string.IsNullOrWhiteSpace(r.InstallSummary)) throw BizException.BadRequest("请填写安装调试情况");
+            if (r.RunStatus == null) throw BizException.BadRequest("请选择设备运行状况");
+            if (processIds.Count < 1) throw BizException.BadRequest("请至少上传 1 张现场照片");
+            if (existingForms + formItems.Count < 1) throw BizException.BadRequest("请上传验收报告（客户签字版）");
+        }
+        else
+            CompletionValidator.Validate(o.Status, o.ServiceType, running,
+                new CompletionInput(r.FaultCause, r.Solution, r.RunStatus, processIds.Count, signIds.Count,
+                    v2 ? 2 : 1, beforeIds.Count, afterIds.Count, existingForms + formItems.Count, r.CustomerConfirm, r.TestResult));
         if (processIds.Count + signIds.Count > 30) throw BizException.BadRequest("照片数量过多");
         // v2.1：负责人在这张单上至少写过一条工作内容（上门的在离场打卡时已经写了；也可以在这里一起交）
         var workContent = v2 ? WorkLogRules.Clean(r.WorkContent) : null;
@@ -573,8 +647,9 @@ public partial class OrderService
         var me = await _view.LoadEmployee(user.Id);
         var to = OrderStateMachine.Apply(o.Status, OrderAction.Complete);
         o.Status = to;
-        o.FaultCause = Req(r.FaultCause, "故障原因", 1000);
-        o.Solution = Req(r.Solution, "解决措施", 1000);
+        o.FaultCause = install ? "" : Req(r.FaultCause, "故障原因", 1000);
+        o.Solution = install ? Req(r.InstallSummary, "安装调试情况", 1000) : Req(r.Solution, "解决措施", 1000);
+        o.OpenIssues = install ? Opt(r.OpenIssues, "遗留问题", 500) : null;
         o.PartsReplaced = Opt(r.PartsReplaced, "更换备件", 500) ?? "";
         o.RunStatus = r.RunStatus;
         if (v2)

@@ -401,7 +401,7 @@ public sealed class V13DeviceTests : V13TestBase
 
         using var wb = new XLWorkbook(new MemoryStream(await Admin.ExportOrders(null, null, null)));
         var ws = wb.Worksheet(1);
-        Assert.Equal(30, ws.Row(1).LastCellUsed()!.Address.ColumnNumber);
+        Assert.Equal(31, ws.Row(1).LastCellUsed()!.Address.ColumnNumber);
         Assert.Equal(new[] { "项目编号", "工单号", "客户全称", "设备型号", "设备编号", "产品阶段" }, Enumerable.Range(1, 6).Select(c => ws.Cell(1, c).GetString()));
         Assert.Equal("寄回单号", ws.Cell(1, 27).GetString());
         Assert.Equal(new[] { "设备台数", "SAT 完成时间", "发货时间" }, Enumerable.Range(28, 3).Select(c => ws.Cell(1, c).GetString()));
@@ -450,7 +450,7 @@ public sealed class V13DeviceTests : V13TestBase
         conn.Open();
         using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseSqlite(conn).Options);
         db.GetService<IMigrator>().Migrate("V12_Attachments");
-        Assert.Equal(new[] { "V13_DevicesTransfers", "V15_Registrations", "V17_PositionAdmin", "V18_CanApprove", "V19_SplitRepairForm", "V20_ServiceForms", "V21_WorkLogs", "V22_ChargeNotices" }, db.Database.GetPendingMigrations().Select(m => m[(m.IndexOf('_') + 1)..]));
+        Assert.Equal(new[] { "V13_DevicesTransfers", "V15_Registrations", "V17_PositionAdmin", "V18_CanApprove", "V19_SplitRepairForm", "V20_ServiceForms", "V21_WorkLogs", "V22_ChargeNotices", "V24_OrderKind" }, db.Database.GetPendingMigrations().Select(m => m[(m.IndexOf('_') + 1)..]));
 
         db.Database.ExecuteSqlRaw("""
             INSERT INTO Employees (Id, Name, Phone, Role, Department, Enabled, TokenVersion, CreatedAt)

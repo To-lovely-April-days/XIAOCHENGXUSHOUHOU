@@ -120,7 +120,9 @@ public class AdminService
             "验收结果(运行状况)", "客户签字(有/无)", "建单人", "建单时间",
             "协助人", "人员工时", "暂停原因", "返厂进度", "寄回单号",
             // v1.3：只在末尾追加（第 17、18 列的数字格式按列号写死，不能在中间插列）
-            "设备台数", "SAT 完成时间", "发货时间"
+            "设备台数", "SAT 完成时间", "发货时间",
+            // v2.4：工单种类（维修 / 安装调试）
+            "工单种类"
         };
         using var wb = new XLWorkbook();
         var ws = wb.AddWorksheet("售后进度台账");
@@ -157,7 +159,8 @@ public class AdminService
                 o.Status == OrderStatus.OnHold ? EnumText.HoldText(o.HoldReasonType, o.HoldReason) : "",
                 isFactory ? EnumText.FactoryText(records.Select(r => r.Node)) : "",
                 isFactory && back != null ? $"{back.Courier} {back.TrackingNo}" : "",
-                devices.Count, o.SatSigned ? o.SatDate : "", o.SatSigned ? "" : o.SatDate
+                devices.Count, o.SatSigned ? o.SatDate : "", o.SatSigned ? "" : o.SatDate,
+                EnumText.Kind(o.Kind)
             };
             WriteRow(ws, row++, values);
         }

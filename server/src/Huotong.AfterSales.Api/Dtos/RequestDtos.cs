@@ -70,6 +70,12 @@ public class CreateOrderRequest
     public List<int>? PhotoFileIds { get; set; }
     /// <summary>v1.2：附件（文件先以 category=Attachment 上传）</summary>
     public List<AttachmentItem>? Attachments { get; set; }
+    /// <summary>v2.4 工单种类：Install = 安装调试；不传 / Repair = 维修工单</summary>
+    public string? Kind { get; set; }
+    /// <summary>v2.4 安装调试：安装说明（选填）</summary>
+    public string? InstallNote { get; set; }
+    /// <summary>v2.4 安装调试：主管建单时必须指定的负责工程师；工程师自己建单时忽略（就是本人）</summary>
+    public int? AssigneeId { get; set; }
 }
 
 public class DeviceItem { public string? Name { get; set; } public string? Sn { get; set; } public string? Model { get; set; } }
@@ -107,6 +113,10 @@ public class CompleteRequest
     public string? TestResult { get; set; }
     /// <summary>v2.1 提交完工时顺带写的今日工作内容（负责人之前一条都没写过时必填）</summary>
     public string? WorkContent { get; set; }
+    /// <summary>v2.4 安装调试：安装调试情况（必填）、遗留问题（选填）、验收报告（客户签字版；之前在附件里传过的也算）</summary>
+    public string? InstallSummary { get; set; }
+    public string? OpenIssues { get; set; }
+    public List<int>? AcceptanceIds { get; set; }
 }
 
 /// <summary>v2.0 申请升级服务方式（远程 → 上门 / 返厂；上门 → 返厂），需主管同意</summary>

@@ -45,7 +45,8 @@ public sealed class V13AttachmentTests : V13TestBase
         Assert.Equal("王敏 上传附件 验收单.pdf", d.Logs.First(l => l.Kind == LogKind.Attachment).Text);
         Assert.DoesNotContain(d.Logs, l => l.Text.Contains("归为"));
         // 展示顺序固定 Sat → RepairForm → Other；枚举声明顺序 Other 在最前（CLR 默认值）
-        Assert.Equal(new[] { AttachmentType.Sat, AttachmentType.OnsiteRepairForm, AttachmentType.FactoryRepairForm, AttachmentType.Other }, AttachmentRules.TypeOrder);
+        Assert.Equal(new[] { AttachmentType.Sat, AttachmentType.OnsiteRepairForm, AttachmentType.FactoryRepairForm,
+            AttachmentType.DeliveryNote, AttachmentType.AcceptanceReport, AttachmentType.Other }, AttachmentRules.TypeOrder);
         Assert.Equal(AttachmentType.Other, default(AttachmentType));
         Assert.Equal(AttachmentType.Other, new StoredFile().AttachmentType);
 
@@ -165,7 +166,7 @@ public sealed class V13AttachmentTests : V13TestBase
         // 第 51 个
         await Fails(40000, "附件最多 50 个，本单已达上限", () => Orders.AddAttachments(id, Att(Fresh(1)), Wm));
         await Fails(40000, "附件最多 50 个，本单已达上限", () => Orders.AddAttachments(id, Att(NewFile(Sup, FileCategory.Attachment)), Sup));
-        Assert.Equal(new[] { 20, 27, 0, 3 }, AttachmentRules.TypeOrder.Select(t => d.Attachments.Count(a => a.AttachmentType == t)));
+        Assert.Equal(new[] { 20, 27, 0, 0, 0, 3 }, AttachmentRules.TypeOrder.Select(t => d.Attachments.Count(a => a.AttachmentType == t)));
         Assert.Equal(50, AttachmentRules.Limit);
         Assert.Equal(50, new OrderDetail().AttachmentLimit);
     }

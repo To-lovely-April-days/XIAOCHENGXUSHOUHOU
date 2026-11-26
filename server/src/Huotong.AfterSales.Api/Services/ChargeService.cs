@@ -86,6 +86,7 @@ public partial class OrderService
         await using var tx = await WriteLock();
         var o = await Load(id);
         EnsureAssignee(o, user);
+        if (o.Kind == OrderKind.Install) throw BizException.Conflict("安装调试工单不收费，不用判断");
         if (r.Charge == null) throw BizException.BadRequest("请选择要不要收费");
         if (!Active.Contains(o.Status))
             throw BizException.Conflict($"工单当前为「{EnumText.Status(o.Status)}」，不能判断收费");

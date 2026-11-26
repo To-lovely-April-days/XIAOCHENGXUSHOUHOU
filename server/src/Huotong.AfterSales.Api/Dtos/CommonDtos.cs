@@ -146,6 +146,9 @@ public class OrderListItem
     public OrderStatus Status { get; set; }
     public Urgency Urgency { get; set; }
     public ServiceType ServiceType { get; set; }
+    /// <summary>v2.4 工单种类：Repair 维修 / Install 安装调试</summary>
+    public OrderKind Kind { get; set; }
+    public string KindText { get; set; } = "";
     public ProblemType ProblemType { get; set; }
     public string CustomerName { get; set; } = "";
     public string City { get; set; } = "";
@@ -211,6 +214,8 @@ public class CompletionDto
     /// <summary>v2.0 远程：客户确认方式；返厂：寄回前测试结果。没有时为 null</summary>
     public string? CustomerConfirm { get; set; }
     public string? TestResult { get; set; }
+    /// <summary>v2.4 安装调试：遗留问题；这类工单的「安装调试情况」放在 solution 里，faultCause 为空</summary>
+    public string? OpenIssues { get; set; }
 }
 
 public class OrderFilesDto

@@ -169,6 +169,8 @@ public class OrderViewBuilder
         dto.Status = o.Status;
         dto.Urgency = o.Urgency;
         dto.ServiceType = o.ServiceType;
+        dto.Kind = o.Kind;
+        dto.KindText = EnumText.Kind(o.Kind);
         dto.ProblemType = o.ProblemType;
         dto.CustomerName = o.CustomerName;
         dto.City = o.City;
@@ -330,7 +332,7 @@ public class OrderViewBuilder
         {
             FaultCause = o.FaultCause ?? "", Solution = o.Solution ?? "", PartsReplaced = o.PartsReplaced ?? "",
             RunStatus = o.RunStatus.Value, SubmittedAt = o.SubmittedAt,
-            CustomerConfirm = o.CustomerConfirm, TestResult = o.TestResult
+            CustomerConfirm = o.CustomerConfirm, TestResult = o.TestResult, OpenIssues = o.OpenIssues
         };
 
         // 价格：工程师一律不返回
@@ -428,7 +430,8 @@ public class OrderViewBuilder
             d.Factory?.Nodes.Any(n => n.CanRecord) ?? false, recorded.Contains(FactoryNode.ShippedBack),
             IsFormer: isFormer, HasPendingTransfer: o.PendingTransferToId != null,
             PendingTransferToMe: isEngineer && o.PendingTransferToId == user.Id,
-            HasPendingEscalate: requests.Any(r => r.Type == OrderRequestType.Escalate && r.Status == RequestStatus.Pending)));
+            HasPendingEscalate: requests.Any(r => r.Type == OrderRequestType.Escalate && r.Status == RequestStatus.Pending),
+            Install: o.Kind == OrderKind.Install));
 
         if (user.Role == Role.Supervisor && o.Status == OrderStatus.Submitted)
         {
@@ -457,7 +460,8 @@ public class OrderViewBuilder
         {
             Status = c?.Status.ToString() ?? "None", StatusText = ChargeRules.StatusText(c?.Status),
             Pending = c != null && ChargeRules.Pending(c.Status) && open,
-            CanDecide = isEngineer && o.AssigneeId == user.Id && active && (c == null || c.Status == ChargeStatus.Free),
+            // v2.4 安装调试工单不收费，不走收费确认
+            CanDecide = isEngineer && o.Kind != OrderKind.Install && o.AssigneeId == user.Id && active && (c == null || c.Status == ChargeStatus.Free),
             FixedSales = o.Creator is { Role: Role.Sales, Enabled: true } ? Brief(o.Creator) : null,
         };
         if (c == null) return d;

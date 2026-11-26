@@ -175,6 +175,7 @@ public partial class OrderService
         await using var tx = await WriteLock();
         var o = await Load(id);
         if (o.AssigneeId != user.Id) throw BizException.Forbidden("只有负责工程师可以申请升级服务方式");
+        if (o.Kind == OrderKind.Install) throw BizException.Conflict("安装调试工单没有升级服务方式");
         var target = ParseEnum<ServiceType>(r.TargetServiceType, "服务方式") ?? throw BizException.BadRequest("请选择要升级成哪种服务方式");
         var reason = Req(r.Reason, "升级原因", 200);
         var findings = Req(r.Findings, "已排查情况", 300);

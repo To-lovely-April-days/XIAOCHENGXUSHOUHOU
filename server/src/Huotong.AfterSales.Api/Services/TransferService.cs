@@ -140,6 +140,7 @@ public partial class OrderService
         await using var tx = await WriteLock();
         var o = await Load(id);
         if (o.AssigneeId != user.Id) throw BizException.Forbidden("只有负责工程师可以转交工单");
+        if (o.Kind == OrderKind.Install) throw BizException.Conflict("安装调试工单不能转交，需要换人请联系主管改派");
         if (!OrderStateMachine.CanTransfer(o.Status))
             throw BizException.Conflict($"工单当前为「{EnumText.Status(o.Status)}」，不能转交");
         if (r.EngineerId == user.Id) throw BizException.BadRequest("不能转交给自己");

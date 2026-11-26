@@ -797,7 +797,7 @@ public sealed class V13TransferTests : V13TestBase
         Assert.Equal((id, ParticipantRole.Former, "已转交"), (item.Id, item.MyRole!.Value, item.MyExitText));
         Assert.Equal(0, item.MyMinutes);
         Assert.Empty((await Orders.Mine(a, "doing")).Items);
-        Assert.Equal(new Dictionary<string, int> { ["doing"] = 0, ["check"] = 0, ["closed"] = 0, ["former"] = 1, ["all"] = 1 }, former.Counts);
+        Assert.Equal(new Dictionary<string, int> { ["doing"] = 0, ["check"] = 0, ["closed"] = 0, ["former"] = 1, ["all"] = 1, ["repair"] = 1, ["install"] = 0 }, former.Counts);
         Assert.Equal(1, doingBefore["doing"]);
         Assert.Equal(id, Assert.Single((await Orders.Mine(a, "all")).Items).Id);
         Assert.Equal(id, Assert.Single((await Orders.Mine(a, null)).Items).Id);
@@ -859,7 +859,7 @@ public sealed class V13TransferTests : V13TestBase
 
         var former = await Orders.Mine(a, "former");
         Assert.Equal(new[] { second, first }, former.Items.Select(i => i.Id)); // 按退出时间倒序
-        Assert.Equal(new Dictionary<string, int> { ["doing"] = 1, ["check"] = 0, ["closed"] = 0, ["former"] = 2, ["all"] = 3 }, former.Counts);
+        Assert.Equal(new Dictionary<string, int> { ["doing"] = 1, ["check"] = 0, ["closed"] = 0, ["former"] = 2, ["all"] = 3, ["repair"] = 3, ["install"] = 0 }, former.Counts);
         Assert.Empty((await Orders.Mine(a, "closed")).Items); // 已退出的不混进 closed
         Assert.Equal(new[] { keep, second, first }, (await Orders.Mine(a, "all")).Items.Select(i => i.Id)); // former 排在最后
         Assert.Equal(1, (await Home.Me(a)).ActiveOrderCount);

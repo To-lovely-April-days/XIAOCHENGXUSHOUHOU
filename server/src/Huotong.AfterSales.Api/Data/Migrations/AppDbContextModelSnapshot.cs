@@ -827,11 +827,20 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
                     b.Property<double?>("Latitude")
                         .HasColumnType("REAL");
 
                     b.Property<double?>("Longitude")
                         .HasColumnType("REAL");
+
+                    b.Property<string>("OpenIssues")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("OrderNo")
                         .IsRequired()
@@ -927,6 +936,8 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                     b.HasIndex("CreatedAt");
 
                     b.HasIndex("CreatorId");
+
+                    b.HasIndex("Kind");
 
                     b.HasIndex("OrderNo")
                         .IsUnique();

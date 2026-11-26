@@ -68,6 +68,8 @@ public class WorkOrder
     public ProblemType ProblemType { get; set; }
     public Urgency Urgency { get; set; }
     public ServiceType ServiceType { get; set; }
+    /// <summary>v2.4 工单种类。不要配置 HasDefaultValue；列默认值 'Repair' 只写在迁移里（旧数据都是维修工单）</summary>
+    public OrderKind Kind { get; set; }
 
     public string CustomerName { get; set; } = "";
     public string ContactName { get; set; } = "";
@@ -135,6 +137,8 @@ public class WorkOrder
     public string? CustomerConfirm { get; set; }
     /// <summary>v2.0 返厂维修：寄回前的整机功能测试结果</summary>
     public string? TestResult { get; set; }
+    /// <summary>v2.4 安装调试：遗留问题（选填）</summary>
+    public string? OpenIssues { get; set; }
 
     public List<Punch> Punches { get; set; } = new();
     public List<StatusLog> Logs { get; set; } = new();

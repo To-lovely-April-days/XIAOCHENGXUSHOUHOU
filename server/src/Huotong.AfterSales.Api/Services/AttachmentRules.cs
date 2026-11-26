@@ -18,7 +18,8 @@ public static class AttachmentRules
 
     /// <summary>展示顺序（与枚举声明顺序不同：Other 是 CLR 默认值，排在声明的最前）</summary>
     public static readonly AttachmentType[] TypeOrder =
-        { AttachmentType.Sat, AttachmentType.OnsiteRepairForm, AttachmentType.FactoryRepairForm, AttachmentType.Other };
+        { AttachmentType.Sat, AttachmentType.OnsiteRepairForm, AttachmentType.FactoryRepairForm,
+          AttachmentType.DeliveryNote, AttachmentType.AcceptanceReport, AttachmentType.Other };
 
     /// <summary>v1.9：旧客户端还会传 RepairForm（不分现场 / 返厂）：返厂工单归返厂维修登记表，其余归现场维修登记表</summary>
     public static AttachmentType Resolve(AttachmentType type, ServiceType service) =>
@@ -50,8 +51,13 @@ public static class AttachmentRules
     /// 旧版客户端传的 RepairForm（不分现场 / 返厂）不在这里拦，仍按 Resolve 归类，升级前照常能用。
     /// 不允许返回原因，允许返回 null。
     /// </summary>
-    public static BizException? FormDenied(AttachmentType type, ServiceType service) => type switch
+    public static BizException? FormDenied(AttachmentType type, ServiceType service, OrderKind kind = OrderKind.Repair) => type switch
     {
+        // v2.4 送货单、验收报告只属于安装调试工单；安装调试工单没有维修登记表
+        AttachmentType.DeliveryNote or AttachmentType.AcceptanceReport when kind != OrderKind.Install =>
+            BizException.BadRequest($"{EnumText.AttachmentShort(type)}只能在安装调试工单里上传"),
+        AttachmentType.OnsiteRepairForm or AttachmentType.FactoryRepairForm when kind == OrderKind.Install =>
+            BizException.BadRequest("安装调试工单不需要维修登记表"),
         AttachmentType.OnsiteRepairForm when service != ServiceType.Onsite =>
             BizException.BadRequest("现场维修登记表只能在上门服务的工单里上传"),
         AttachmentType.FactoryRepairForm when service != ServiceType.Factory =>
