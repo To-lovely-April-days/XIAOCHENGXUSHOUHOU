@@ -45,6 +45,20 @@ public static class AttachmentRules
         return false;
     }
 
+    /// <summary>
+    /// v2.1 维修登记表跟着服务方式走：现场维修登记表只属于上门工单，返厂维修登记表只属于返厂工单，远程没有登记表。
+    /// 旧版客户端传的 RepairForm（不分现场 / 返厂）不在这里拦，仍按 Resolve 归类，升级前照常能用。
+    /// 不允许返回原因，允许返回 null。
+    /// </summary>
+    public static BizException? FormDenied(AttachmentType type, ServiceType service) => type switch
+    {
+        AttachmentType.OnsiteRepairForm when service != ServiceType.Onsite =>
+            BizException.BadRequest("现场维修登记表只能在上门服务的工单里上传"),
+        AttachmentType.FactoryRepairForm when service != ServiceType.Factory =>
+            BizException.BadRequest("返厂维修登记表只能在返厂维修的流程里上传"),
+        _ => null
+    };
+
     public static bool IsAttachment(FileCategory c) => c is FileCategory.OrderPhoto or FileCategory.Attachment;
 
     /// <summary>是否为工单的参与方：建单人 / 负责人 / 协助人（o 须带 Assistants）</summary>

@@ -21,12 +21,14 @@ public sealed class V19FolderTests : V12TestBase
     [Fact]
     public async Task NewTypesAreStoredAndLabelled()
     {
+        // v2.1：登记表跟着服务方式走，现场的传到上门单，返厂的传到返厂单
         var id = await NewPending("类别测试");
+        var factory = await NewPending("类别测试返厂", ServiceType.Factory);
         var a = await UpPdf(Wm, "现场登记表.pdf");
         var b = await UpPdf(Wm, "返厂登记表.pdf");
-        await Orders.AddAttachments(id, AttT("OnsiteRepairForm", a), Wm);
-        var d = await Orders.AddAttachments(id, AttT("FactoryRepairForm", b), Wm);
-        var byId = d.Attachments.ToDictionary(x => x.Id);
+        var d1 = await Orders.AddAttachments(id, AttT("OnsiteRepairForm", a), Wm);
+        var d2 = await Orders.AddAttachments(factory, AttT("FactoryRepairForm", b), Wm);
+        var byId = d1.Attachments.Concat(d2.Attachments).ToDictionary(x => x.Id);
         Assert.Equal((AttachmentType.OnsiteRepairForm, "现场维修登记表（签字版）", "现场维修登记表"),
             (byId[a].AttachmentType, byId[a].AttachmentTypeLabel, byId[a].AttachmentTypeShort));
         Assert.Equal((AttachmentType.FactoryRepairForm, "返厂维修登记表（签字版）", "返厂维修登记表"),

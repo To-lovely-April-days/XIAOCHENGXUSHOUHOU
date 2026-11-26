@@ -10,7 +10,10 @@ public sealed class V20ServiceFormTests : V12TestBase
 {
     private CurrentUser Wang => U("王工");
 
-    private CompleteRequest V2() => new() { FormVersion = 2, FaultCause = "加热管老化", Solution = "更换加热管", RunStatus = RunStatus.Normal };
+    private CompleteRequest V2() => new()
+    {
+        FormVersion = 2, FaultCause = "加热管老化", Solution = "更换加热管", RunStatus = RunStatus.Normal, WorkContent = "更换加热管并测试"
+    };
     private int Pic() => NewFile(Wang, FileCategory.ProcessPhoto);
 
     private async Task<int> OnsiteInProgress(string customer)

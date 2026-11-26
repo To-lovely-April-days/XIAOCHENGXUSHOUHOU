@@ -57,6 +57,11 @@ public class OrdersController : ApiControllerBase
     [Authorize(Roles = "Engineer")]
     public async Task<ApiResponse<OrderDetail>> Start(int id) => Ok(await _orders.Start(id, Me));
 
+    /// <summary>v2.1 写 / 改今天的工作内容（负责人或协助人）</summary>
+    [HttpPost("{id:int}/work-logs")]
+    [Authorize(Roles = "Engineer")]
+    public async Task<ApiResponse<OrderDetail>> SaveWorkLog(int id, [FromBody] WorkLogRequest? req) => Ok(await _orders.SaveWorkLog(id, req ?? new(), Me));
+
     [HttpPost("{id:int}/complete")]
     [Authorize(Roles = "Engineer")]
     public async Task<ApiResponse<OrderDetail>> Complete(int id, [FromBody] CompleteRequest req) => Ok(await _orders.Complete(id, req, Me));

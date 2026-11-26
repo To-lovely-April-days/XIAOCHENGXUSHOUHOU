@@ -221,6 +221,24 @@ public class OrderAssistant
 }
 
 /// <summary>工程师发起、需主管审批的申请：暂停 / 添加协助人</summary>
+/// <summary>
+/// v2.1 每日工作内容：工程师认领后按天写「今天做了什么」。同一张单、同一个人、同一天只有一条（当天可改，过了当天不能改）。
+/// 上门：打离场卡时必须写；远程 / 返厂：提交完工前负责人至少写过一条。
+/// </summary>
+public class WorkLog
+{
+    public int Id { get; set; }
+    public int OrderId { get; set; }
+    public WorkOrder? Order { get; set; }
+    public int EngineerId { get; set; }
+    public Employee? Engineer { get; set; }
+    /// <summary>哪一天（只有日期）</summary>
+    public DateTime Date { get; set; }
+    public string Content { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+}
+
 public class OrderRequest
 {
     public int Id { get; set; }

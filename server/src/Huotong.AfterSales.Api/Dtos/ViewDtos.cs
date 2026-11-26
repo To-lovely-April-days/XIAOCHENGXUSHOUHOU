@@ -51,6 +51,8 @@ public class PunchContextDto
     public DateTime ServerTime { get; set; }
     public string EngineerName { get; set; } = "";
     public ParticipantRole? MyRole { get; set; }
+    /// <summary>v2.1 本人今天在这张单上已经写的工作内容（离场打卡页带出来）；没写为 null</summary>
+    public string? TodayWorkContent { get; set; }
 }
 
 public class PunchResultDto

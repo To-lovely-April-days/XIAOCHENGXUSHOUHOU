@@ -604,6 +604,42 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                     b.ToTable("StoredFiles", (string)null);
                 });
 
+            modelBuilder.Entity("Huotong.AfterSales.Api.Domain.WorkLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EngineerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EngineerId");
+
+                    b.HasIndex("OrderId", "EngineerId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("WorkLogs");
+                });
+
             modelBuilder.Entity("Huotong.AfterSales.Api.Domain.WorkOrder", b =>
                 {
                     b.Property<int>("Id")
@@ -1037,6 +1073,25 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Actor");
+
+                    b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("Huotong.AfterSales.Api.Domain.WorkLog", b =>
+                {
+                    b.HasOne("Huotong.AfterSales.Api.Domain.Employee", "Engineer")
+                        .WithMany()
+                        .HasForeignKey("EngineerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Huotong.AfterSales.Api.Domain.WorkOrder", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Engineer");
 
                     b.Navigation("Order");
                 });

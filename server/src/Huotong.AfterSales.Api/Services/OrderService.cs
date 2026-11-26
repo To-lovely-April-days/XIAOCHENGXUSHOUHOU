@@ -288,6 +288,11 @@ public partial class OrderService
         var tried = Req(r.CustomerTried, "客户已尝试的操作", 500);
         var env = Req(r.SiteEnvironment, "现场环境条件", 500);
         // v1.2：attachments（新）与 photoFileIds（v1.1 客户端）并存；同一 fileId 两处都有时按 attachments 处理
+        foreach (var it in NormalizeAttachments(r.Attachments) ?? new())
+        {
+            var formDenied = AttachmentRules.FormDenied(it.Type, r.ServiceType!.Value);
+            if (formDenied != null) throw formDenied;
+        }
         var attItems = NormalizeAttachments(r.Attachments) ?? throw BizException.BadRequest("附件不存在，请重新上传");
         var attIds = attItems.Select(x => x.FileId).ToHashSet();
         var photoIds = (r.PhotoFileIds ?? new List<int>()).Distinct().Where(x => !attIds.Contains(x)).ToList();
@@ -536,6 +541,10 @@ public partial class OrderService
             new CompletionInput(r.FaultCause, r.Solution, r.RunStatus, processIds.Count, signIds.Count,
                 v2 ? 2 : 1, beforeIds.Count, afterIds.Count, existingForms + formItems.Count, r.CustomerConfirm, r.TestResult));
         if (processIds.Count + signIds.Count > 30) throw BizException.BadRequest("照片数量过多");
+        // v2.1：负责人在这张单上至少写过一条工作内容（上门的在离场打卡时已经写了；也可以在这里一起交）
+        var workContent = v2 ? WorkLogRules.Clean(r.WorkContent) : null;
+        if (v2 && workContent == null && !await _db.WorkLogs.AnyAsync(x => x.OrderId == id && x.EngineerId == user.Id))
+            throw BizException.BadRequest(WorkLogRules.CompleteRequired);
         if (formItems.Count > 0 && await AttachmentCount(id) + formItems.Count > AttachmentRules.Limit)
             throw BizException.BadRequest($"附件最多 {AttachmentRules.Limit} 个，请先删除不需要的附件");
 
@@ -555,6 +564,7 @@ public partial class OrderService
                 f.PhotoStage = beforeIds.Contains(f.Id) ? "Before" : afterIds.Contains(f.Id) ? "After" : null;
         }
         if (formItems.Count > 0) Mount(await LoadNewAttachments(formItems, user), formItems, id, o.ServiceType);
+        if (workContent != null) await WorkLogRules.Upsert(_db, id, user.Id, workContent, now);
         var me = await _view.LoadEmployee(user.Id);
         var to = OrderStateMachine.Apply(o.Status, OrderAction.Complete);
         o.Status = to;
@@ -880,6 +890,22 @@ public partial class OrderService
         // 正文不得出现金额（群里有工程师）
         await _notifier.NotifyAsync("价格建议",
             $"{me.Name} 对 **{o.CustomerName}**（{o.OrderNo}）提交了价格建议，请在工单详情中查看并定价。", await SupervisorPhones());
+        return await _view.BuildDetail(id, user);
+    }
+
+    // ---------- v2.1 每日工作内容 ----------
+
+    /// <summary>写 / 改今天的工作内容：本单的负责人或协助人，工单在待启动 / 处理中 / 暂停搁置</summary>
+    public async Task<OrderDetail> SaveWorkLog(int id, WorkLogRequest r, CurrentUser user)
+    {
+        var content = WorkLogRules.Clean(r.Content) ?? throw BizException.BadRequest("请填写今天的工作内容");
+        var o = await Load(id);
+        if (o.AssigneeId != user.Id && !o.Assistants.Any(a => a.EngineerId == user.Id))
+            throw BizException.Forbidden("只有本单的负责人或协助人可以填写工作内容");
+        if (!Doing.Contains(o.Status))
+            throw BizException.Conflict($"工单当前为「{EnumText.Status(o.Status)}」，不能填写工作内容");
+        await WorkLogRules.Upsert(_db, id, user.Id, content, _clock.Now);
+        await _db.SaveChangesAsync();
         return await _view.BuildDetail(id, user);
     }
 }

@@ -20,6 +20,7 @@ public class AppDbContext : DbContext
     public DbSet<OrderTransfer> OrderTransfers => Set<OrderTransfer>();
     public DbSet<OrderExit> OrderExits => Set<OrderExit>();
     public DbSet<Registration> Registrations => Set<Registration>();
+    public DbSet<WorkLog> WorkLogs => Set<WorkLog>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -47,6 +48,14 @@ public class AppDbContext : DbContext
         });
         b.Entity<StoredFile>(e => e.Property(x => x.PhotoStage).HasMaxLength(10));
         b.Entity<OrderRequest>(e => e.Property(x => x.TargetServiceType).HasConversion<string>().HasMaxLength(20));
+
+        b.Entity<WorkLog>(e =>
+        {
+            e.Property(x => x.Content).HasMaxLength(1000);
+            e.HasIndex(x => new { x.OrderId, x.EngineerId, x.Date }).IsUnique();
+            e.HasOne(x => x.Order).WithMany().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Engineer).WithMany().HasForeignKey(x => x.EngineerId).OnDelete(DeleteBehavior.Restrict);
+        });
 
         b.Entity<Registration>(e =>
         {

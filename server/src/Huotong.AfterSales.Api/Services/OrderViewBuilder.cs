@@ -364,6 +364,20 @@ public class OrderViewBuilder
 
         d.Requests = requests.Select(r => RequestToDto(r, user)).ToList();
 
+        // v2.1 每日工作内容
+        var workLogs = await _db.WorkLogs.AsNoTracking().Include(x => x.Engineer).ThenInclude(e => e!.AvatarFile)
+            .Where(x => x.OrderId == o.Id).OrderByDescending(x => x.Date).ThenBy(x => x.CreatedAt).ThenBy(x => x.Id).ToListAsync();
+        d.WorkLogs = workLogs.Select(x => new WorkLogDto
+        {
+            Id = x.Id, Date = x.Date.ToString("yyyy-MM-dd"), Content = x.Content,
+            Engineer = x.Engineer == null ? new UserBrief() : Brief(x.Engineer),
+            CreatedAt = x.CreatedAt, UpdatedAt = x.UpdatedAt, CanEdit = x.EngineerId == user.Id && x.Date == now.Date
+        }).ToList();
+        d.CanWriteWorkLog = user.Role == Role.Engineer
+            && (o.AssigneeId == user.Id || o.Assistants.Any(a => a.EngineerId == user.Id))
+            && o.Status is OrderStatus.Accepted or OrderStatus.InProgress or OrderStatus.OnHold;
+        d.MyTodayWorkLog = workLogs.FirstOrDefault(x => x.EngineerId == user.Id && x.Date == now.Date)?.Content;
+
         // 已软删除的文件被全局查询过滤器排除
         var files = await _db.Files.Where(f => f.OrderId == id).OrderBy(f => f.CreatedAt).ThenBy(f => f.Id).ToListAsync();
 

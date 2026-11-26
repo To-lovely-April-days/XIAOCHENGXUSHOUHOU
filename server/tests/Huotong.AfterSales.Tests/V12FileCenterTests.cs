@@ -291,7 +291,7 @@ public sealed class V12FileCenterTests : V12TestBase
         conn.Open();
         using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseSqlite(conn).Options);
         db.GetService<IMigrator>().Migrate("V11_PriceHoldAssistFactory");
-        Assert.Equal(new[] { "V12_Attachments", "V13_DevicesTransfers", "V15_Registrations", "V17_PositionAdmin", "V18_CanApprove", "V19_SplitRepairForm", "V20_ServiceForms" }, db.Database.GetPendingMigrations().Select(m => m[(m.IndexOf('_') + 1)..]));
+        Assert.Equal(new[] { "V12_Attachments", "V13_DevicesTransfers", "V15_Registrations", "V17_PositionAdmin", "V18_CanApprove", "V19_SplitRepairForm", "V20_ServiceForms", "V21_WorkLogs" }, db.Database.GetPendingMigrations().Select(m => m[(m.IndexOf('_') + 1)..]));
 
         db.Database.ExecuteSqlRaw("""
             INSERT INTO Employees (Id, Name, Phone, Role, Department, Enabled, TokenVersion, CreatedAt)

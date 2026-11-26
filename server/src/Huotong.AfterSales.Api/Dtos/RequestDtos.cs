@@ -105,6 +105,8 @@ public class CompleteRequest
     public string? CustomerConfirm { get; set; }
     /// <summary>v2.0 返厂：寄回前测试结果</summary>
     public string? TestResult { get; set; }
+    /// <summary>v2.1 提交完工时顺带写的今日工作内容（负责人之前一条都没写过时必填）</summary>
+    public string? WorkContent { get; set; }
 }
 
 /// <summary>v2.0 申请升级服务方式（远程 → 上门 / 返厂；上门 → 返厂），需主管同意</summary>
@@ -163,7 +165,14 @@ public class PunchRequest
     public double? Longitude { get; set; }
     public string? Address { get; set; }
     public int? PhotoFileId { get; set; }
+    /// <summary>v2.1 打卡表版本：2 = 离场时必须有当天的工作内容（新版客户端都传 2）；不传 = 旧规则</summary>
+    public int? FormVersion { get; set; }
+    /// <summary>v2.1 离场打卡时填的「今天的工作内容」；给了就写成 / 更新当天的每日工作</summary>
+    public string? WorkContent { get; set; }
 }
+
+/// <summary>v2.1 写 / 改今天的工作内容</summary>
+public class WorkLogRequest { public string? Content { get; set; } }
 
 public class SupplementRequest
 {

@@ -309,8 +309,28 @@ public class FactoryDto
     public List<FactoryNodeDto> Nodes { get; set; } = new();
 }
 
+/// <summary>v2.1 每日工作内容的一条</summary>
+public class WorkLogDto
+{
+    public int Id { get; set; }
+    /// <summary>yyyy-MM-dd</summary>
+    public string Date { get; set; } = "";
+    public string Content { get; set; } = "";
+    public UserBrief Engineer { get; set; } = new();
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+    /// <summary>是不是当前用户今天写的（可以改）</summary>
+    public bool CanEdit { get; set; }
+}
+
 public class OrderDetail : OrderListItem
 {
+    /// <summary>v2.1 每日工作内容：日期新的在前，同一天按填写时间</summary>
+    public List<WorkLogDto> WorkLogs { get; set; } = new();
+    /// <summary>v2.1 当前用户现在能不能写今日工作（本单的负责人 / 协助人，工单在待启动、处理中、暂停搁置）</summary>
+    public bool CanWriteWorkLog { get; set; }
+    /// <summary>v2.1 当前用户今天已经写的内容；没写为 null</summary>
+    public string? MyTodayWorkLog { get; set; }
     public OrderSource Source { get; set; }
     public string ContactName { get; set; } = "";
     public string ContactPhone { get; set; } = "";

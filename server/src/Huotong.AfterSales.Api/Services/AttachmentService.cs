@@ -83,6 +83,11 @@ public partial class OrderService
         var denied = AttachmentRules.AddDenied(o, user);
         if (denied != null) throw denied;
         if (items.Any(x => x.Restricted) && !AttachmentRules.CanRestrict(user)) throw BizException.Forbidden(AttachmentRules.RestrictDenied);
+        foreach (var it in items)
+        {
+            var formDenied = AttachmentRules.FormDenied(it.Type, o.ServiceType);
+            if (formDenied != null) throw formDenied;
+        }
         var files = await LoadNewAttachments(items, user);
         var left = AttachmentRules.Limit - await AttachmentCount(id);
         if (files.Count > left)
@@ -177,6 +182,8 @@ public partial class OrderService
         var f = await LoadAttachment(id, fileId, user);
         var denied = AttachmentRules.ChangeTypeDenied(f, o, user);
         if (denied != null) throw denied;
+        var typeDenied = AttachmentRules.FormDenied(type, o.ServiceType);
+        if (typeDenied != null) throw typeDenied;
         type = AttachmentRules.Resolve(type, o.ServiceType);
         if (f.AttachmentType == type) return await _view.BuildDetail(id, user);
 

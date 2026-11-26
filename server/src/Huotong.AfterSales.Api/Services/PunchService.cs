@@ -93,7 +93,8 @@ public class PunchService
             OrderId = order.Id, OrderNo = order.OrderNo, CustomerName = order.CustomerName, Address = order.Address,
             Latitude = order.Latitude, Longitude = order.Longitude, NextKind = d.Kind,
             OpenArriveTime = d.OpenArrive?.Time, BlockedReason = blocked, RangeMeters = GeoUtil.RangeMeters,
-            ServerTime = now, EngineerName = me.Name, MyRole = OrderViewBuilder.RoleIn(order, user.Id)
+            ServerTime = now, EngineerName = me.Name, MyRole = OrderViewBuilder.RoleIn(order, user.Id),
+            TodayWorkContent = (await WorkLogRules.Today(_db, order.Id, user.Id, now))?.Content
         };
     }
 
@@ -119,6 +120,13 @@ public class PunchService
         var blocked = await BlockedReason(d);
         if (blocked != null) throw BizException.Conflict(blocked);
         if (d.Kind != r.Kind) throw BizException.Conflict("打卡状态已变化，请刷新");
+
+        // v2.1 离场打卡：今天在这张单上必须有工作内容（各写各的；一天多次进出只有第一次离场必须写）
+        var workContent = d.Kind == PunchKind.Leave ? WorkLogRules.Clean(r.WorkContent) : null;
+        if (d.Kind == PunchKind.Leave && (r.FormVersion ?? 1) >= 2 && workContent == null
+            && await WorkLogRules.Today(_db, order.Id, user.Id, now) == null)
+            throw BizException.BadRequest(WorkLogRules.LeaveRequired);
+        if (workContent != null) await WorkLogRules.Upsert(_db, order.Id, user.Id, workContent, now);
 
         var me = await _view.LoadEmployee(user.Id);
         var photo = (await _files.Attach(new[] { r.PhotoFileId.Value }, order.Id, FileCategory.PunchPhoto, user, "打卡照片")).First();
