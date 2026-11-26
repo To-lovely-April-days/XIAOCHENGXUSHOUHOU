@@ -1,11 +1,17 @@
 <nav-bar title="新建工单" />
 
 <view class="form">
-  <view class="intro">按售后 SOP 的记录要素填写，带 <text class="star">*</text> 为必填。提交后发布到工单大厅。</view>
+  <!-- v2.4 工单种类：维修工单 / 安装调试（销售没有安装调试） -->
+  <view wx:if="{{canInstall}}" class="segmented kind-seg" aria-role="tablist">
+    <view class="segmented-item {{kind === 'Repair' ? 'active' : ''}}" data-kind="Repair" bindtap="onKind" aria-role="tab" aria-selected="{{kind === 'Repair'}}">维修工单</view>
+    <view class="segmented-item {{kind === 'Install' ? 'active' : ''}}" data-kind="Install" bindtap="onKind" aria-role="tab" aria-selected="{{kind === 'Install'}}">安装调试</view>
+  </view>
+  <view wx:if="{{kind === 'Install'}}" class="intro">客户现场安装调试，不收费。带 <text class="star">*</text> 为必填。建好后直接由{{needAssignee ? '你指定的工程师' : '你'}}负责，不进接单大厅。</view>
+  <view wx:else class="intro">按售后 SOP 的记录要素填写，带 <text class="star">*</text> 为必填。提交后发布到工单大厅。</view>
 
   <!-- ========== 类型 ========== -->
-  <view class="grp-title">类型</view>
-  <view class="grp">
+  <view wx:if="{{kind !== 'Install'}}" class="grp-title">类型</view>
+  <view wx:if="{{kind !== 'Install'}}" class="grp">
     <picker range="{{sourceOptions}}" range-key="label" value="{{sourceIndex}}" bindchange="onPickSource">
       <view class="cell" hover-class="cell-hover">
         <view class="lbl flex1">工单来源 <text class="star">*</text></view>
@@ -118,9 +124,27 @@
     </view>
   </view>
 
+  <!-- ========== 安装调试（v2.4）：负责工程师（主管建单时）+ 安装说明 ========== -->
+  <block wx:if="{{kind === 'Install'}}">
+    <view class="grp-title">安装调试</view>
+    <view class="grp">
+      <picker wx:if="{{needAssignee}}" id="f-assignee" mode="selector" range="{{engineers}}" range-key="name" value="{{engineerIdx}}" bindchange="onPickEngineer">
+        <view class="cell" hover-class="cell-hover">
+          <view class="lbl flex1 {{errKey === 'assignee' ? 'err' : ''}}">负责工程师 <text class="star">*</text></view>
+          <text class="val {{engineerIdx >= 0 ? '' : 'placeholder'}}">{{engineerIdx >= 0 ? engineers[engineerIdx].name : '请选择'}}</text>
+          <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
+        </view>
+      </picker>
+      <view class="block no-line">
+        <view class="lbl">安装说明 <text class="lbl-opt">（选填）</text></view>
+        <textarea class="ta" value="{{installNote}}" bindinput="onInstallNote" placeholder="如：2 台设备，客户已备好水电气" placeholder-class="placeholder" maxlength="1000" disable-default-padding auto-height />
+      </view>
+    </view>
+  </block>
+
   <!-- ========== 故障 ========== -->
-  <view class="grp-title">故障</view>
-  <view class="grp">
+  <view wx:if="{{kind !== 'Install'}}" class="grp-title">故障</view>
+  <view wx:if="{{kind !== 'Install'}}" class="grp">
     <view class="cell" id="f-faultTime">
       <view class="lbl flex1 {{errKey === 'faultTime' ? 'err' : ''}}">发生时间 <text class="star">*</text></view>
       <picker mode="date" value="{{faultDate || dayEnd}}" end="{{dayEnd}}" bindchange="onPickFaultDate">
@@ -151,7 +175,7 @@
   <!-- ========== 附件（v1.3：按三类分小节上传；v1.1 起建单不填价格，由主管在工单详情定价） ========== -->
   <view class="grp-title">附件</view>
   <view class="grp grp-pb">
-    <view class="media-title media-title-first {{errKey === 'media' ? 'err' : ''}}" id="f-media">附件（照片 / 视频 / 文件） <text class="hint-inline">选填，三类合计最多 {{maxMedia}} 个</text></view>
+    <view class="media-title media-title-first {{errKey === 'media' ? 'err' : ''}}" id="f-media">附件（照片 / 视频 / 文件） <text class="hint-inline">选填，合计最多 {{maxMedia}} 个</text></view>
     <block wx:for="{{mediaGroups}}" wx:for-item="grp" wx:key="type">
       <view class="media-sub">{{grp.label}}</view>
       <view class="media-grid">

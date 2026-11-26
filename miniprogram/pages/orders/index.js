@@ -165,6 +165,8 @@ Page(subscribe.bindTaps({
     // 全部工单（销售 / 主管，手风琴聚焦清单）
     status: 'Pending',
     curTabLabel: '待认领',
+    kind: 'Repair',          // v2.4 当前页签：Repair 维修工单 / Install 安装调试
+    kindCounts: { repair: 0, install: 0 },
     statusFilters: STATUS_FILTERS.map((f) => Object.assign({ count: 0 }, f)),
     serviceOptions: SERVICE_FILTER_OPTIONS,
     keyword: '',
@@ -339,6 +341,8 @@ Page(subscribe.bindTaps({
       page: page,
       pageSize: pageSize
     };
+    // v2.4 两个页签：维修工单 / 安装调试
+    q.kind = this.data.kind;
     if (this.data.serviceType) q.serviceType = this.data.serviceType;
     if (this.data.unpricedOnly) q.priceSet = 'false';
     if (this.data.pendingReqOnly && this.data.role === 'Supervisor') q.pendingRequest = true;
@@ -376,7 +380,10 @@ Page(subscribe.bindTaps({
         page: Math.max(1, Math.floor(items.length / PAGE_SIZE)),
         hasMore: items.length < total,
         loadingMore: false,
-        statusFilters: STATUS_FILTERS.map((f) => Object.assign({ count: counts[f.countKey] || 0 }, f))
+        kindCounts: { repair: counts.repair || 0, install: counts.install || 0 },
+        // 安装调试单建完就有人负责，没有「待认领」
+        statusFilters: STATUS_FILTERS.filter((f) => this.data.kind !== 'Install' || f.key !== 'Pending')
+          .map((f) => Object.assign({ count: counts[f.countKey] || 0 }, f))
       });
     }).catch((err) => {
       if (seq !== this._seq) return;
@@ -410,6 +417,21 @@ Page(subscribe.bindTaps({
       this.setData({ loadingMore: false });
       wx.showToast({ title: (err && err.message) || '加载失败', icon: 'none' });
     });
+  },
+
+  /** v2.4 切换页签：维修工单 / 安装调试 */
+  onKind(e) {
+    const kind = e.currentTarget.dataset.kind;
+    if (!kind || kind === this.data.kind) return;
+    this._userToggledExpand = false;
+    // 安装调试没有「待认领」：停在那一项时换到「待启动」；切回维修时回到「待认领」
+    const status = kind === 'Install' ? (this.data.status === 'Pending' ? 'Accepted' : this.data.status)
+      : (this.data.status === 'Accepted' ? 'Pending' : this.data.status);
+    this.setData({
+      kind: kind, status: status, curTabLabel: tabLabelOf(status),
+      items: [], expandedId: 0, page: 0, hasMore: false, ready: false, error: ''
+    });
+    this.loadList(false);
   },
 
   onStatusFilter(e) {

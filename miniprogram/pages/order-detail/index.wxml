@@ -15,6 +15,7 @@
       <view class="row od-head-top">
         <status-tag status="{{order.status}}" />
         <urgency-tag urgency="{{order.urgency}}" size="md" />
+        <text wx:if="{{isInstall}}" class="tag tag-sm od-kind">安装调试</text>
         <text class="od-no num-font">{{order.orderNo}}</text>
       </view>
       <view class="od-customer">{{order.customerName}}</view>
@@ -223,18 +224,20 @@
         </view>
       </view>
 
-      <!-- v2.1 维修登记表：只在对应的流程里上传（上门 = 打卡记录，返厂 = 返厂流程；销售 / 主管在「进度」） -->
-      <view wx:if="{{formCard && (tab === 'punch' || tab === 'factory' || tab === 'progress')}}" class="od-card od-form">
-        <view class="row-between">
-          <text class="od-h3">{{formCard.title}}</text>
-          <text class="od-form-state {{formCard.count ? 'green' : 'amber'}}">{{formCard.text}}</text>
+      <!-- v2.1 维修登记表：只在对应的流程里上传（上门 = 打卡记录，返厂 = 返厂流程；销售 / 主管在「进度」）；v2.4 安装调试 = 验收报告 + 送货单 -->
+      <block wx:if="{{tab === 'punch' || tab === 'factory' || tab === 'progress'}}">
+        <view wx:for="{{formCards}}" wx:key="type" class="od-card od-form">
+          <view class="row-between">
+            <text class="od-h3">{{item.title}}</text>
+            <text class="od-form-state {{item.count ? 'green' : (item.optional ? '' : 'amber')}}">{{item.text}}</text>
+          </view>
+          <view class="od-form-tip">{{item.tip}}</view>
+          <view class="row od-form-actions">
+            <view wx:if="{{item.canAdd}}" class="od-form-btn primary" hover-class="btn-hover" data-att-type="{{item.type}}" bindtap="openAttachSheet" aria-role="button">{{item.count ? '继续上传' : '上传'}}</view>
+            <view wx:if="{{item.count}}" class="od-form-btn" hover-class="btn-hover" bindtap="goFiles" aria-role="button">查看</view>
+          </view>
         </view>
-        <view class="od-form-tip">{{formCard.tip}}</view>
-        <view class="row od-form-actions">
-          <view wx:if="{{formCard.canAdd}}" class="od-form-btn primary" hover-class="btn-hover" data-att-type="{{formCard.type}}" bindtap="openAttachSheet" aria-role="button">{{formCard.count ? '继续上传' : '上传'}}</view>
-          <view wx:if="{{formCard.count}}" class="od-form-btn" hover-class="btn-hover" bindtap="goFiles" aria-role="button">查看</view>
-        </view>
-      </view>
+      </block>
 
       <!-- 暂停提示：工程师在「信息」顶部（返厂单默认停在「返厂流程」，那里也显示），销售 / 主管在「进度」顶部 -->
       <view wx:if="{{holdBar && (isEngineerView ? (tab === 'info' || tab === 'factory') : tab === 'progress')}}" class="nb-card od-holdbar">

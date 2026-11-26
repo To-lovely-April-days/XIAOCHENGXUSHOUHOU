@@ -19,7 +19,12 @@ const MAX_DEVICES = 20;
 const PERIODS = ['上午', '下午', '晚上'];
 /** 附件类别的展示顺序：Sat → RepairForm → Other */
 // v2.1：两张维修登记表只能在对应流程里上传，建单时的类别里不出现
-const TYPE_ORDER = Object.keys(enums.ATTACHMENT_TYPE).filter((k) => k !== 'OnsiteRepairForm' && k !== 'FactoryRepairForm');
+// v2.4：维修工单 = SAT 验收单 + 其他；安装调试工单 = 送货单 + 其他（验收报告在工单详情 / 完工页里传）
+const REPAIR_TYPES = ['Sat', 'Other'];
+const INSTALL_TYPES = ['DeliveryNote', 'Other'];
+let TYPE_ORDER = REPAIR_TYPES;
+/** 安装调试工单不填的几项（故障信息） */
+const FAULT_KEYS = ['faultTime', 'symptom', 'customerTried', 'siteEnvironment'];
 const SAT_LABEL_ANY = 'SAT 完成时间 / 发货时间';
 
 /** 校验顺序 = 页面从上到下的顺序 */
@@ -131,6 +136,7 @@ Page({
   },
 
   onLoad() {
+    TYPE_ORDER = REPAIR_TYPES;
     const m = system.getNavMetrics();
     const today = format.today();
     this.setData({ navHeight: m.totalHeight, dayEnd: today });
@@ -153,6 +159,13 @@ Page({
     const role = user && user.role;
     const source = role === 'Engineer' ? 'CustomerDirect' : 'SalesReferral';
     this.setData({
+      // v2.4 安装调试工单：售后（工程师 / 主管）可以建，销售没有这一项
+      canInstall: role === 'Engineer' || role === 'Supervisor',
+      needAssignee: role === 'Supervisor',
+      kind: 'Repair',
+      installNote: '',
+      engineers: [],
+      engineerIdx: -1,
       canRestrict: role === 'Sales' || role === 'Supervisor',
       'form.source': source,
       'form.problemType': 'Fault',
@@ -456,10 +469,42 @@ Page({
     this.clearErr('media');
   },
 
+  /* ---------- 工单种类（v2.4） ---------- */
+
+  onKind(e) {
+    const kind = e.currentTarget.dataset.kind;
+    if (!kind || kind === this.data.kind) return;
+    TYPE_ORDER = kind === 'Install' ? INSTALL_TYPES : REPAIR_TYPES;
+    const patch = { kind: kind, errKey: '', mediaGroups: buildMediaGroups(this.data.media) };
+    if (kind === 'Install') {
+      // 安装调试固定上门
+      patch['form.serviceType'] = 'Onsite';
+      patch.serviceIndex = indexOf(enums.SERVICE_TYPE_OPTIONS, 'Onsite');
+    }
+    this.setData(patch);
+    this.dirty = true;
+    // 主管建安装调试单要指定工程师：第一次切过来时拉名单
+    if (kind === 'Install' && this.data.needAssignee && !this.data.engineers.length) {
+      api.engineers.list({ silent: true }).then((list) => {
+        this.setData({ engineers: (list || []).map((x) => ({ id: x.user.id, name: x.user.name + ' · ' + x.loadText })) });
+      }).catch(() => {});
+    }
+  },
+
+  onPickEngineer(e) {
+    this.setData({ engineerIdx: Number(e.detail.value), errKey: this.data.errKey === 'assignee' ? '' : this.data.errKey });
+  },
+
+  onInstallNote(e) {
+    this.setData({ installNote: e.detail.value });
+    this.dirty = true;
+  },
+
   /* ---------- 提交 ---------- */
 
   validate() {
     const f = this.data.form;
+    const install = this.data.kind === 'Install';
     const values = Object.assign({}, f, { faultTime: this.faultTimeText() });
     for (let i = 0; i < REQUIRED.length; i++) {
       const r = REQUIRED[i];
@@ -470,6 +515,7 @@ Page({
       }
       // v2.0：客户地址只有上门必填，远程和返厂可以不填
       if (r.key === 'address' && f.serviceType !== 'Onsite') continue;
+      if (install && FAULT_KEYS.indexOf(r.key) >= 0) continue;
       if (!trim(values[r.key])) return { key: r.key, msg: r.msg };
       if (r.key === 'contactPhone' && !/^[\d-]{7,20}$/.test(trim(f.contactPhone).replace(/\s/g, ''))) {
         return { key: 'contactPhone', msg: '联系电话格式不正确' };
@@ -478,6 +524,7 @@ Page({
         return { key: 'address', msg: '现场工单需要在地图上选点' };
       }
     }
+    if (install && this.data.needAssignee && this.data.engineerIdx < 0) return { key: 'assignee', msg: '请指定负责工程师' };
     if (this.data.media.some((m) => m.status === 'uploading')) return { key: 'media', msg: '附件还在上传，请稍候' };
     if (this.data.media.some((m) => m.status === 'fail')) return { key: 'media', msg: '有附件上传失败，请点击重试或删除' };
     return null;
@@ -495,7 +542,12 @@ Page({
   buildBody() {
     const f = this.data.form;
     const opt = (v) => (trim(v) ? trim(v) : null);
+    const install = this.data.kind === 'Install';
+    const eng = this.data.engineers[this.data.engineerIdx];
     return {
+      kind: this.data.kind,
+      installNote: install ? opt(this.data.installNote) : null,
+      assigneeId: install && this.data.needAssignee && eng ? eng.id : null,
       source: f.source,
       problemType: f.problemType,
       urgency: f.urgency,
@@ -512,13 +564,13 @@ Page({
         .filter((d) => d.name || d.sn || d.model),
       satSigned: f.satSigned,
       satDate: f.satDate || '',
-      faultTime: this.faultTimeText(),
-      symptom: trim(f.symptom),
-      customerTried: trim(f.customerTried),
-      siteEnvironment: trim(f.siteEnvironment),
-      customerRequest: opt(f.customerRequest),
+      faultTime: install ? '' : this.faultTimeText(),
+      symptom: install ? '' : trim(f.symptom),
+      customerTried: install ? '' : trim(f.customerTried),
+      siteEnvironment: install ? '' : trim(f.siteEnvironment),
+      customerRequest: install ? null : opt(f.customerRequest),
       attachments: this.data.media.filter((m) => m.fileId)
-        .map((m) => ({ fileId: m.fileId, restricted: !!m.restricted, type: m.type || 'Other' }))
+        .map((m) => ({ fileId: m.fileId, restricted: !!m.restricted, type: typeOf(m) }))
     };
   },
 
@@ -535,7 +587,7 @@ Page({
     api.orders.create(this.buildBody(), { loading: '提交中' })
       .then((order) => {
         this.disableAlert();
-        wx.showToast({ title: '已发布到工单大厅', icon: 'none' });
+        wx.showToast({ title: this.data.kind === 'Install' ? '已建单，直接进入待启动' : '已发布到工单大厅', icon: 'none' });
         setTimeout(() => {
           wx.redirectTo({ url: '/pages/order-detail/index?id=' + order.id });
         }, 700);

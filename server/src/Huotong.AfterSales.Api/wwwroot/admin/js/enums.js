@@ -93,6 +93,9 @@ export const ATTACHMENT_TYPE = {
   Sat: { label: 'SAT 验收单（签字版）', short: 'SAT 验收单' },
   OnsiteRepairForm: { label: '现场维修登记表（签字版）', short: '现场维修登记表' },
   FactoryRepairForm: { label: '返厂维修登记表（签字版）', short: '返厂维修登记表' },
+  // v2.4 安装调试工单专用
+  DeliveryNote: { label: '送货单', short: '送货单' },
+  AcceptanceReport: { label: '验收报告（客户签字版）', short: '验收报告' },
   Other: { label: '设备照片、沟通记录及其他附件', short: '其他附件' },
 };
 /** 附件类别下拉选项（短标题）：[{ value, label }] */

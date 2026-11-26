@@ -26,6 +26,11 @@ const SECTIONS = {
   Factory: [
     { list: 'photos', title: '维修照片', tip: '至少 1 张', required: true },
     { list: 'forms', title: '返厂维修登记表', tip: '拍下填好的登记表', required: true, form: 'FactoryRepairForm' }
+  ],
+  // v2.4 安装调试工单（按工单种类走，不看服务方式）
+  Install: [
+    { list: 'photos', title: '现场照片', tip: '安装完成后的设备状态，至少 1 张', required: true },
+    { list: 'forms', title: '验收报告（客户签字版）', tip: '没有验收报告不能提交', required: true, form: 'AcceptanceReport' }
   ]
 };
 const emptyLists = () => ({ before: [], after: [], photos: [], forms: [] });
@@ -48,6 +53,7 @@ Page(subscribe.bindTaps({
     onSite: false, // 现场计时中
 
     faultCause: '',
+    openIssues: '',      // v2.4 安装调试：遗留问题（选填）
     solution: '',
     partsReplaced: '',
     runStatus: '',
@@ -103,7 +109,7 @@ Page(subscribe.bindTaps({
         else if (o.serviceType === 'Factory' && o.myRole === 'Lead' && !shippedBack) blockText = '返厂工单请先记录「寄回客户」再提交完工';
         else blockText = '你不是该工单的负责工程师，无法提交完工';
       }
-      const mode = SECTIONS[o.serviceType] ? o.serviceType : 'Onsite';
+      const mode = o.kind === 'Install' ? 'Install' : (SECTIONS[o.serviceType] ? o.serviceType : 'Onsite');
       const atts = o.attachments || [];
       const sections = SECTIONS[mode].map((sec) => {
         // 维修登记表之前已经在附件里传过：这里就不强制再传
@@ -142,7 +148,7 @@ Page(subscribe.bindTaps({
     const toItems = (list) => (list || []).map((f) => fileItem(f.url, f.id)).slice(0, MAX_PHOTOS);
     const all = files.processPhotos || [];
     const lists = emptyLists();
-    if (o.serviceType === 'Onsite') {
+    if (o.serviceType === 'Onsite' && o.kind !== 'Install') {
       // 没标前后的旧照片归到「维修前」，让工程师自己再补「维修后」
       lists.after = toItems(all.filter((f) => f.stage === 'After'));
       lists.before = toItems(all.filter((f) => f.stage !== 'After'));
@@ -153,6 +159,7 @@ Page(subscribe.bindTaps({
       faultCause: c.faultCause || '',
       solution: c.solution || '',
       partsReplaced: c.partsReplaced || '',
+      openIssues: c.openIssues || '',
       runStatus: c.runStatus || '',
       customerConfirm: c.customerConfirm || '',
       testResult: c.testResult || '',
@@ -284,8 +291,9 @@ Page(subscribe.bindTaps({
   /* ---------- 提交 ---------- */
   validate() {
     const d = this.data;
-    if (!d.faultCause.trim()) return d.mode === 'Onsite' ? '请填写现场确认的故障原因' : '请填写故障原因';
-    if (!d.solution.trim()) return '请填写解决措施';
+    const install = d.mode === 'Install';
+    if (!install && !d.faultCause.trim()) return d.mode === 'Onsite' ? '请填写现场确认的故障原因' : '请填写故障原因';
+    if (!d.solution.trim()) return install ? '请填写安装调试情况' : '请填写解决措施';
     if (!d.runStatus) return '请选择设备运行状况';
     if (d.needWork && !d.workContent.trim()) return '请填写工作内容';
     if (d.mode === 'Remote' && !d.customerConfirm) return '请选择客户确认方式';
@@ -322,7 +330,13 @@ Page(subscribe.bindTaps({
 
   doSubmit() {
     const d = this.data;
+    const install = d.mode === 'Install';
+    const formIds = d.sections.some((sec) => sec.list === 'forms') ? d.lists.forms.map((x) => x.fileId) : [];
     const body = {
+      // v2.4 安装调试：安装调试情况写在 solution 这个输入框里，提交时放进 installSummary
+      installSummary: install ? d.solution.trim() : '',
+      openIssues: install ? (d.openIssues || '').trim() : '',
+      acceptanceIds: install ? formIds : [],
       faultCause: d.faultCause.trim(),
       solution: d.solution.trim(),
       partsReplaced: d.partsReplaced.trim(),
@@ -331,7 +345,7 @@ Page(subscribe.bindTaps({
       processPhotoIds: d.lists.photos.map((x) => x.fileId),
       beforePhotoIds: d.lists.before.map((x) => x.fileId),
       afterPhotoIds: d.lists.after.map((x) => x.fileId),
-      repairFormIds: d.sections.some((sec) => sec.list === 'forms') ? d.lists.forms.map((x) => x.fileId) : [],
+      repairFormIds: install ? [] : formIds,
       customerConfirm: d.mode === 'Remote' ? d.customerConfirm : '',
       testResult: d.mode === 'Factory' ? d.testResult.trim() : '',
       workContent: d.needWork ? d.workContent.trim() : ''

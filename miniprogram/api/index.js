@@ -183,8 +183,9 @@ const orders = {
    * @param {'doing'|'check'|'closed'|'former'|'all'} [group='doing'] former = 本人已退出的工单（v1.3）
    * @returns {Promise<{items:OrderListItem[],counts:{doing:number,check:number,closed:number,former:number,all:number}}>}
    */
-  mine(group, opts) {
-    return get('/api/orders/mine', { group: group || 'doing' }, opts);
+  mine(group, opts, kind) {
+    // v2.4 kind：'Repair' 维修工单 / 'Install' 安装调试；counts 里多 repair / install 两个数（不受 kind 影响）
+    return get('/api/orders/mine', Object.assign({ group: group || 'doing' }, kind ? { kind: kind } : {}), opts);
   },
   /**
    * GET /api/orders/created 本人创建的工单（不含作废）

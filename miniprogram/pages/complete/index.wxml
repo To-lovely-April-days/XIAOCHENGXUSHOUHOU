@@ -25,7 +25,20 @@
     </view>
 
     <!-- 文本 -->
-    <view class="cp-card">
+    <view wx:if="{{mode === 'Install'}}" class="cp-card">
+      <view class="cp-field">
+        <view class="cp-label">安装调试情况 <text class="red">*</text></view>
+        <textarea class="cp-textarea" value="{{solution}}" data-field="solution" bindinput="onInput"
+          auto-height maxlength="1000" disable-default-padding placeholder="如：2 台设备就位、接线、通水通气完成；升温、搅拌、压力测试通过，已培训客户操作人员"
+          placeholder-class="placeholder" />
+      </view>
+      <view class="cp-field cp-field-last">
+        <view class="cp-label">遗留问题</view>
+        <input class="cp-input" value="{{openIssues}}" data-field="openIssues" bindinput="onInput"
+          maxlength="500" placeholder="没有可不填，如：客户冷却水压力偏低" placeholder-class="placeholder" />
+      </view>
+    </view>
+    <view wx:else class="cp-card">
       <view class="cp-field">
         <view class="cp-label">{{mode === 'Onsite' ? '现场确认的故障原因' : '故障原因'}} <text class="red">*</text></view>
         <textarea class="cp-textarea" value="{{faultCause}}" data-field="faultCause" bindinput="onInput"

@@ -106,6 +106,9 @@ export default {
       return this.q.abnormal === '1' ? 'any' : '';
     },
     assigneeId() { return this.q.assigneeId ? Number(this.q.assigneeId) : null; },
+    /** v2.4 工单种类筛选：'' 全部 / Repair 维修 / Install 安装调试 */
+    kind() { return this.q.kind === 'Repair' || this.q.kind === 'Install' ? this.q.kind : ''; },
+    kindLabel() { return this.kind === 'Install' ? '安装调试' : this.kind === 'Repair' ? '维修工单' : '工单种类'; },
     range() { return this.q.range === 'week' || this.q.range === 'month' ? this.q.range : ''; },
     page() { return Math.max(1, parseInt(this.q.page, 10) || 1); },
     dateRange() {
@@ -121,6 +124,7 @@ export default {
         status: this.status || '',
         keyword: (this.q.keyword || '').trim(),
         assigneeId: this.assigneeId || '',
+        kind: this.kind,
         from: this.dateRange.from,
         to: this.dateRange.to,
         pendingRequest: this.quickExtra.pendingRequest,
@@ -190,7 +194,7 @@ export default {
         device: [o.projectNo, o.deviceText, o.symptom].filter(Boolean).join(' · '),
         urgent: o.urgency === 'Urgent',
         issues: o.issues || [],
-        type: label(SERVICE_TYPE, o.serviceType),
+        type: o.kind === 'Install' ? '安装调试' : label(SERVICE_TYPE, o.serviceType),
         factoryText: o.serviceType === 'Factory' ? (o.factoryText || '') : '',
         assistants: o.assistants || [],
         assistTitle: (o.assistants || []).length ? '协助人：' + o.assistants.map(u => u.name).join('、') : '',
@@ -344,6 +348,7 @@ export default {
     },
     toggleMenu(name) { this.menu = this.menu === name ? '' : name; },
     pickAssignee(id) { this.menu = ''; updateQuery({ assigneeId: id || null, page: null }); },
+    pickKind(key) { this.menu = ''; updateQuery({ kind: key || null, page: null }); },
     pickRange(key) { this.menu = ''; updateQuery({ range: key || null, page: null }); },
     toggleIssue() {
       if (this.issueMode) {
@@ -456,6 +461,16 @@ export default {
               <div v-if="engineersError" class="orders-menu-msg text-danger">
                 {{ engineersError }} <button type="button" class="btn-link" @click="loadEngineers">重试</button></div>
               <div v-else-if="!engineers.length" class="orders-menu-msg">暂无工程师</div>
+            </div>
+          </div>
+          <div class="dropdown" ref="kindMenu">
+            <button type="button" class="btn btn-secondary switch-btn" :aria-checked="kind ? 'true' : 'false'"
+                    aria-haspopup="menu" :aria-expanded="menu === 'kind' ? 'true' : 'false'" @click="toggleMenu('kind')" title="按工单种类筛选">
+              {{ kindLabel }}<Icon name="chevronDown" :size="14" /></button>
+            <div v-if="menu === 'kind'" class="menu orders-menu" role="menu">
+              <button v-for="k in [['', '全部种类'], ['Repair', '维修工单'], ['Install', '安装调试']]" :key="k[0] || 'all'" type="button" class="menu-item"
+                      role="menuitemradio" :class="{ active: kind === k[0] }" :aria-checked="kind === k[0] ? 'true' : 'false'"
+                      @click="pickKind(k[0])">{{ k[1] }}</button>
             </div>
           </div>
           <div class="dropdown" ref="rangeMenu">

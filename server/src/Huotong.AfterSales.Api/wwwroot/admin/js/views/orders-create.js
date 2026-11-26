@@ -18,7 +18,7 @@ const MAX_DEVICES = 20;
 const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 /** 附件类别，顺序即展示顺序 */
 // v2.1：两张维修登记表只能在对应流程里上传，建单时不出现
-const ATT_TYPES = Object.keys(ATTACHMENT_TYPE).filter(k => k !== 'OnsiteRepairForm' && k !== 'FactoryRepairForm');
+const ATT_TYPES = Object.keys(ATTACHMENT_TYPE).filter(k => k === 'Sat' || k === 'Other');
 
 let devSeq = 0;
 /** 一台空设备；k 只用于 v-for 的 key，不提交 */

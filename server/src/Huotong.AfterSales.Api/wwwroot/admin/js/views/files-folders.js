@@ -69,6 +69,7 @@ export default {
       // 空着也要显示的分组：SAT 验收单，加上这张工单该有的那一种维修登记表（不知道服务方式时两种都显示）
       const st = this.folderInfo && this.folderInfo.serviceType;
       const expect = (k) => k === 'Sat'
+        // 送货单 / 验收报告是安装调试工单的，有文件才显示
         || (k === 'OnsiteRepairForm' && (!st || st === 'Onsite'))
         || (k === 'FactoryRepairForm' && (!st || st === 'Factory'));
       const out = ATT_KEYS.map(k => ({

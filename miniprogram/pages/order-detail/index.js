@@ -33,7 +33,12 @@ const HOME = '/pages/home/index';
 /** 附件类别的展示顺序：Sat → RepairForm → Other */
 const ATT_TYPES = Object.keys(enums.ATTACHMENT_TYPE);
 /** v2.1 两张维修登记表跟着服务方式走：只能在对应流程里上传，不出现在通用的「添加附件」类别里 */
-const FORM_SERVICE = { OnsiteRepairForm: 'Onsite', FactoryRepairForm: 'Factory' };
+// v2.4：送货单 / 验收报告只属于安装调试工单（安装调试工单没有维修登记表）
+const FORM_SERVICE = { OnsiteRepairForm: 'Onsite', FactoryRepairForm: 'Factory', DeliveryNote: 'Install', AcceptanceReport: 'Install' };
+/** 这张单对应 FORM_SERVICE 里的哪个值：安装调试工单 = Install，维修工单 = 服务方式 */
+function formKey(d) {
+  return d && d.kind === 'Install' ? 'Install' : ((d && d.serviceType) || '');
+}
 const FORM_OF = FORM_SERVICE;
 const GENERAL_ATT_OPTIONS = enums.ATTACHMENT_TYPE_OPTIONS.filter((o) => !FORM_SERVICE[o.value]);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -383,7 +388,7 @@ function buildAttachments(d) {
       };
     });
     return { type: type, label: enums.ATTACHMENT_TYPE[type].label, count: items.length, items: items, isForm: !!FORM_OF[type] };
-  }).filter((g) => !g.isForm || g.count > 0 || FORM_SERVICE[g.type] === d.serviceType);
+  }).filter((g) => !g.isForm || g.count > 0 || FORM_SERVICE[g.type] === formKey(d));
 }
 
 function emptyAttachSheet() {
@@ -392,18 +397,24 @@ function emptyAttachSheet() {
 }
 
 /** v2.1 流程里的登记表卡片：上门 = 现场维修登记表，返厂 = 返厂维修登记表；远程没有 */
-function buildFormCard(d) {
-  const type = d.serviceType === 'Onsite' ? 'OnsiteRepairForm' : d.serviceType === 'Factory' ? 'FactoryRepairForm' : '';
-  if (!type) return null;
-  const items = (d.attachments || []).filter((a) => a.attachmentType === type);
-  return {
-    type: type,
-    title: enums.ATTACHMENT_TYPE[type].label,
-    count: items.length,
-    text: items.length ? '已上传 ' + items.length + ' 份' : '未上传',
-    tip: d.serviceType === 'Onsite' ? '客户签字后拍照上传；提交完工前必须有' : '维修完成后上传；提交完工前必须有',
-    canAdd: !!d.canAddAttachment
-  };
+function buildFormCards(d) {
+  const key = formKey(d);
+  const defs = key === 'Install'
+    ? [{ type: 'AcceptanceReport', tip: '调试完成、客户签字后拍照上传；提交完工前必须有' }, { type: 'DeliveryNote', tip: '选填，随时可以补传' }]
+    : key === 'Onsite' ? [{ type: 'OnsiteRepairForm', tip: '客户签字后拍照上传；提交完工前必须有' }]
+      : key === 'Factory' ? [{ type: 'FactoryRepairForm', tip: '维修完成后上传；提交完工前必须有' }] : [];
+  return defs.map((f) => {
+    const items = (d.attachments || []).filter((a) => a.attachmentType === f.type);
+    return {
+      type: f.type,
+      title: enums.ATTACHMENT_TYPE[f.type].label,
+      count: items.length,
+      text: items.length ? '已上传 ' + items.length + ' 份' : '未上传',
+      optional: f.type === 'DeliveryNote',
+      tip: f.tip,
+      canAdd: !!d.canAddAttachment
+    };
+  });
 }
 
 /** v2.1 每日工作内容：按天分组，新的在前 */
@@ -679,7 +690,7 @@ Page(subscribe.bindTaps({
     attachGroups: [],         // 附件按类别分三组（见 buildAttachments）
     attachTotal: 0,
     attachTypes: GENERAL_ATT_OPTIONS,
-    formCard: null,           // v2.1 流程里的登记表卡片（见 buildFormCard）
+    formCards: [],            // v2.1 流程里的登记表卡片；v2.4 安装调试 = 验收报告 + 送货单（见 buildFormCards）
     workDays: [],             // v2.1 每日工作内容，按天分组
     canWriteWorkLog: false,
     myTodayWorkLog: '',
@@ -802,7 +813,8 @@ Page(subscribe.bindTaps({
       canRequestAssistant: actions.indexOf('requestAssistant') >= 0,
       factoryNodes: buildFactory(d),
       closeHintText: isSupervisor && (d.closeHints || []).length ? '闭环提示：' + d.closeHints.join('；') : '',
-      typeText: enums.label(enums.SERVICE_TYPE, d.serviceType),
+      typeText: d.kind === 'Install' ? '安装调试' : enums.label(enums.SERVICE_TYPE, d.serviceType),
+      isInstall: d.kind === 'Install',
       creatorLabel: d.creator && d.creator.role === 'Sales' ? '销售' : '建单人',
       assigneeSub: this.assigneeSub(d),
       infoRows: this.infoRows(d),
@@ -812,7 +824,7 @@ Page(subscribe.bindTaps({
       contactPhoneText: format.formatPhone(d.contactPhone),
       files: buildFiles(d, isEngineerView),
       attachGroups: attachGroups,
-      formCard: buildFormCard(d),
+      formCards: buildFormCards(d),
       workDays: buildWorkDays(d),
       canWriteWorkLog: !!d.canWriteWorkLog,
       myTodayWorkLog: d.myTodayWorkLog || '',
@@ -894,7 +906,8 @@ Page(subscribe.bindTaps({
       }
     }
     return {
-      priceText: format.formatPrice(d.price, false, d.priceSet),
+      // v2.4 安装调试工单：0 元显示「不收费」而不是「保内免费」
+      priceText: d.kind === 'Install' && d.priceSet && Number(d.price) === 0 ? '不收费' : format.formatPrice(d.price, false, d.priceSet),
       priceClass: unpriced ? (isSupervisor ? 'red unpriced' : 'muted-3 unpriced') : (Number(d.price) === 0 ? 'green' : ''),
       priceLink: link,
       suggestion: suggestion
@@ -935,10 +948,11 @@ Page(subscribe.bindTaps({
   /** 「工单信息」卡片；项目编号、SAT 信息已移到「设备资料」卡片（v1.3） */
   orderRows(d) {
     const rows = [
-      { label: '工单来源', value: enums.label(enums.SOURCE, d.source) },
-      { label: '问题类型', value: enums.label(enums.PROBLEM_TYPE, d.problemType) },
-      { label: '维修类型', value: enums.label(enums.SERVICE_TYPE, d.serviceType) },
-      { label: '紧急程度', value: enums.label(enums.URGENCY, d.urgency) },
+      { label: '工单种类', value: d.kind === 'Install' ? '安装调试（不收费）' : '' },
+      { label: '工单来源', value: d.kind === 'Install' ? '' : enums.label(enums.SOURCE, d.source) },
+      { label: '问题类型', value: d.kind === 'Install' ? '' : enums.label(enums.PROBLEM_TYPE, d.problemType) },
+      { label: '维修类型', value: d.kind === 'Install' ? '客户现场' : enums.label(enums.SERVICE_TYPE, d.serviceType) },
+      { label: '紧急程度', value: d.kind === 'Install' ? '' : enums.label(enums.URGENCY, d.urgency) },
       { label: '预约时间', value: d.appointmentTime ? format.formatDateTimeShort(d.appointmentTime) : '' },
       { label: '建单时间', value: d.createdAt ? format.formatDateTimeShort(d.createdAt) + (d.creator ? ' · ' + d.creator.name : '') : '' }
     ];
@@ -951,8 +965,10 @@ Page(subscribe.bindTaps({
     const run = enums.RUN_STATUS[c.runStatus];
     const rows = [
       { label: '故障原因', value: c.faultCause },
-      { label: '解决措施', value: c.solution },
-      { label: '更换备件', value: c.partsReplaced || '无' },
+      // v2.4 安装调试：solution 里放的是安装调试情况，没有故障原因和备件
+      { label: d.kind === 'Install' ? '安装调试情况' : '解决措施', value: c.solution },
+      { label: '遗留问题', value: c.openIssues, hide: !c.openIssues },
+      { label: '更换备件', value: d.kind === 'Install' ? '' : (c.partsReplaced || '无') },
       { label: '运行状况', value: run ? run.label : c.runStatus, color: run ? run.fg : '' },
       // v2.0：远程 = 客户确认方式；返厂 = 寄回前测试结果（没有就不显示）
       { label: '客户确认', value: c.customerConfirm, hide: !c.customerConfirm },
@@ -1826,7 +1842,7 @@ Page(subscribe.bindTaps({
     if (att.canChangeType) {
       const cur = attTypeOf(att);
       // v2.1：登记表类别只有本单服务方式对应的那一张可选
-      const svc = (this.detail && this.detail.serviceType) || '';
+      const svc = formKey(this.detail);
       ATT_TYPES.filter((t) => t !== cur && (!FORM_SERVICE[t] || FORM_SERVICE[t] === svc)).forEach((t) => {
         items.push({ key: 'type', type: t, label: '归为「' + enums.ATTACHMENT_TYPE[t].short + '」' });
       });
@@ -1873,7 +1889,7 @@ Page(subscribe.bindTaps({
     const type = ATT_TYPES.indexOf(t) >= 0 ? t : 'Other';
     // 登记表：只能从对应流程里的卡片进来，类别固定
     const fixed = !!FORM_SERVICE[type];
-    if (fixed && FORM_SERVICE[type] !== d.serviceType) return;
+    if (fixed && FORM_SERVICE[type] !== formKey(d)) return;
     if (this.attachRemaining() === 0) {
       wx.showToast({ title: this.attachLimitText(0), icon: 'none' });
       return;

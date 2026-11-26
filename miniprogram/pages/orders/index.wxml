@@ -79,6 +79,12 @@
         </view>
       </view>
 
+      <!-- v2.4 两个页签：维修工单 / 安装调试 -->
+      <view wx:if="{{!searchOpen}}" class="segmented kind-seg" aria-role="tablist">
+        <view class="segmented-item {{kind === 'Repair' ? 'active' : ''}}" data-kind="Repair" bindtap="onKind" aria-role="tab" aria-selected="{{kind === 'Repair'}}">维修工单<text class="kind-n">{{kindCounts.repair}}</text></view>
+        <view class="segmented-item {{kind === 'Install' ? 'active' : ''}}" data-kind="Install" bindtap="onKind" aria-role="tab" aria-selected="{{kind === 'Install'}}">安装调试<text class="kind-n">{{kindCounts.install}}</text></view>
+      </view>
+
       <!-- 无边框状态导航条（首项 = 待认领） -->
       <scroll-view scroll-x enhanced show-scrollbar="{{false}}" class="stage-scroll" aria-label="按状态筛选">
         <view class="stage-track" aria-role="tablist">

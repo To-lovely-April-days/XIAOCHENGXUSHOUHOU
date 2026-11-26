@@ -765,3 +765,7 @@
 /* 状态 */
 .state { padding: 100rpx 0; text-align: center; font-size: 28rpx; color: var(--text-3); }
 .load-more { padding: 28rpx 0 12rpx; text-align: center; font-size: 24rpx; color: var(--text-3); }
+
+/* v2.4 维修工单 / 安装调试 页签 */
+.kind-seg { margin: 4rpx 0 16rpx; }
+.kind-n { margin-left: 10rpx; font-family: var(--font-num); font-weight: 600; color: var(--text-2); }

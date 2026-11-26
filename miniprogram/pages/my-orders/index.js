@@ -75,6 +75,8 @@ function toRow(o) {
 
 Page(subscribe.bindTaps({
   data: {
+    kind: 'Repair', // v2.4 当前页签：Repair 维修工单 / Install 安装调试
+    kindCounts: { repair: 0, install: 0 },
     filter: 'doing',
     filters: FILTERS.map((f) => Object.assign({ count: 0 }, f)),
     rows: [],
@@ -96,15 +98,24 @@ Page(subscribe.bindTaps({
     this.load().then(() => wx.stopPullDownRefresh(), () => wx.stopPullDownRefresh());
   },
 
+  /** v2.4 切换页签：维修工单 / 安装调试 */
+  onKind(e) {
+    const kind = e.currentTarget.dataset.kind;
+    if (!kind || kind === this.data.kind) return;
+    this.setData({ kind: kind, rows: [], ready: false, error: '' });
+    this.load().catch(() => {});
+  },
+
   load() {
     const seq = ++this._seq;
-    return api.orders.mine(this.data.filter, { silent: true }).then((res) => {
+    return api.orders.mine(this.data.filter, { silent: true }, this.data.kind).then((res) => {
       if (seq !== this._seq) return;
       const counts = (res && res.counts) || {};
       this.setData({
         ready: true,
         error: '',
         rows: ((res && res.items) || []).map(toRow),
+        kindCounts: { repair: counts.repair || 0, install: counts.install || 0 },
         filters: FILTERS.map((f) => Object.assign({ count: counts[f.key] || 0 }, f))
       });
     }).catch((err) => {

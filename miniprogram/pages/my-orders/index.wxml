@@ -2,6 +2,12 @@
 <view class="page safe-bottom">
   <view class="desc">本人负责、协助或已转交的工单</view>
 
+  <!-- v2.4 两个页签：维修工单 / 安装调试 -->
+  <view class="segmented kind-seg" aria-role="tablist">
+    <view class="segmented-item {{kind === 'Repair' ? 'active' : ''}}" data-kind="Repair" bindtap="onKind" aria-role="tab" aria-selected="{{kind === 'Repair'}}">维修工单<text class="kind-n">{{kindCounts.repair}}</text></view>
+    <view class="segmented-item {{kind === 'Install' ? 'active' : ''}}" data-kind="Install" bindtap="onKind" aria-role="tab" aria-selected="{{kind === 'Install'}}">安装调试<text class="kind-n">{{kindCounts.install}}</text></view>
+  </view>
+
   <!-- v1.3 起有 5 个分组，小屏放不下：横向滚动（写法同「全部工单」的状态筛选） -->
   <scroll-view scroll-x enhanced show-scrollbar="{{false}}" class="chips-bleed" aria-label="筛选">
     <view class="chips-track">

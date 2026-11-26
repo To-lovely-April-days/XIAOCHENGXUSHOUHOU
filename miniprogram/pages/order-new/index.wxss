@@ -80,3 +80,6 @@ page { background: var(--bg); }
 
 /* v2.0 选填标记 */
 .lbl-opt { color: var(--text-3); font-weight: 400; }
+
+/* v2.4 工单种类 */
+.kind-seg { margin: 24rpx 0 8rpx; }

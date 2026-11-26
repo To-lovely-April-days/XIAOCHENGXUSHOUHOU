@@ -20,7 +20,9 @@ import { navigate } from '../router.js';
 /** 附件类别，顺序即分组顺序（Sat → RepairForm → Other） */
 const ATT_TYPES = Object.keys(ATTACHMENT_TYPE);
 /** v2.1 两张维修登记表跟着服务方式走：现场的只属于上门工单，返厂的只属于返厂工单 */
-const FORM_SERVICE = { OnsiteRepairForm: 'Onsite', FactoryRepairForm: 'Factory' };
+// v2.4：送货单 / 验收报告只属于安装调试工单（它没有维修登记表）
+const FORM_SERVICE = { OnsiteRepairForm: 'Onsite', FactoryRepairForm: 'Factory', DeliveryNote: 'Install', AcceptanceReport: 'Install' };
+const formKey = (d) => (d && d.kind === 'Install' ? 'Install' : ((d && d.serviceType) || ''));
 
 /**
  * 原型按状态的按钮映射。每项：
@@ -307,7 +309,7 @@ export default {
     /** 附件按类别分三组（顺序 Sat → RepairForm → Other，组内保持服务端顺序）；空组也显示标题 */
     /** 改类别下拉：其他类别 + 本单服务方式对应的那张登记表 */
     attTypeOptions() {
-      const st = this.d && this.d.serviceType;
+      const st = formKey(this.d);
       return ATTACHMENT_TYPE_OPTIONS.filter(o => !FORM_SERVICE[o.value] || FORM_SERVICE[o.value] === st);
     },
     /** v2.2 收费确认：没发起过就不显示 */
@@ -344,7 +346,7 @@ export default {
           adding: this.attOpen && this.attType === type,
         };
       // 登记表分组：只在对应服务方式的工单（或已经有文件）时显示
-      }).filter(g => !FORM_SERVICE[g.type] || g.count > 0 || FORM_SERVICE[g.type] === (this.d && this.d.serviceType)).map(g => {
+      }).filter(g => !FORM_SERVICE[g.type] || g.count > 0 || FORM_SERVICE[g.type] === formKey(this.d)).map(g => {
         return g;
       });
     },
