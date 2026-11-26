@@ -10,6 +10,8 @@ public class MeDto
     public int MonthTripDays { get; set; }
     /// <summary>v1.8 待审批的注册申请数；当前用户不能审批时为 null</summary>
     public int? PendingRegistrations { get; set; }
+    /// <summary>v2.2 等我处理的收费确认数（销售报价 / 销售总监审核 / 售后主管确认）</summary>
+    public int ChargeTodoCount { get; set; }
 }
 
 public class RecentCustomerDto
@@ -300,6 +302,34 @@ public class AdminHoursDto
 }
 
 /// <summary>GET /api/me/subscribe（v1.4）：小程序据此决定是否显示「工单提醒」入口、向微信申请哪些模板</summary>
+/// <summary>v2.2 等当前用户处理的收费确认</summary>
+public class ChargeTodoDto
+{
+    public int OrderId { get; set; }
+    public string OrderNo { get; set; } = "";
+    public string CustomerName { get; set; } = "";
+    public bool Urgent { get; set; }
+    /// <summary>Quote / Review / Confirm</summary>
+    public string Step { get; set; } = "";
+    public string Text { get; set; } = "";
+}
+
+/// <summary>v2.2 提醒设置里的一类提醒</summary>
+public class NoticeItemDto
+{
+    public string Key { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Desc { get; set; } = "";
+    public bool On { get; set; }
+}
+
+public class NoticeSettingsDto
+{
+    /// <summary>服务器是否配置了微信提醒；没配置时开关不起作用</summary>
+    public bool Enabled { get; set; }
+    public List<NoticeItemDto> Items { get; set; } = new();
+}
+
 public class SubscribeConfigDto
 {
     public bool Enabled { get; set; }

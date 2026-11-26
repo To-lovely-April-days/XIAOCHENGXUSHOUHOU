@@ -363,6 +363,7 @@ public class OrderViewBuilder
         }
 
         d.Requests = requests.Select(r => RequestToDto(r, user)).ToList();
+        d.Charge = await BuildCharge(o, user);
 
         // v2.1 每日工作内容
         var workLogs = await _db.WorkLogs.AsNoTracking().Include(x => x.Engineer).ThenInclude(e => e!.AvatarFile)
@@ -435,6 +436,81 @@ public class OrderViewBuilder
             if (o.ServiceType == ServiceType.Factory && !recorded.Contains(FactoryNode.CustomerSigned))
                 d.CloseHints.Add("客户签收尚未记录");
         }
+        return d;
+    }
+
+    /// <summary>
+    /// v2.2 收费确认。可见性在此统一处理：工程师永远拿不到金额、报价说明、销售总监意见（与价格同一条硬规则）。
+    /// </summary>
+    public async Task<ChargeDto> BuildCharge(WorkOrder o, CurrentUser user)
+    {
+        var c = await _db.OrderCharges.AsNoTracking()
+            .Include(x => x.Requester).ThenInclude(e => e!.AvatarFile)
+            .Include(x => x.Sales).ThenInclude(e => e!.AvatarFile)
+            .Include(x => x.Director).ThenInclude(e => e!.AvatarFile)
+            .Include(x => x.Supervisor).Include(x => x.FreeBy)
+            .FirstOrDefaultAsync(x => x.OrderId == o.Id);
+        var isEngineer = user.Role == Role.Engineer;
+        var open = o.Status is OrderStatus.Accepted or OrderStatus.InProgress or OrderStatus.OnHold;
+        var active = o.Status is OrderStatus.Accepted or OrderStatus.InProgress;
+        var d = new ChargeDto
+        {
+            Status = c?.Status.ToString() ?? "None", StatusText = ChargeRules.StatusText(c?.Status),
+            Pending = c != null && ChargeRules.Pending(c.Status) && open,
+            CanDecide = isEngineer && o.AssigneeId == user.Id && active && (c == null || c.Status == ChargeStatus.Free),
+            FixedSales = o.Creator is { Role: Role.Sales, Enabled: true } ? Brief(o.Creator) : null,
+        };
+        if (c == null) return d;
+        d.Reason = c.Reason;
+        d.ReturnNote = c.ReturnNote;
+        d.Paid = c.Paid;
+        d.PaidText = c.Paid == null ? null : ChargeRules.PaidText(c.Paid);
+        d.SupervisorNote = c.SupervisorNote;
+        d.Requester = c.Requester == null ? null : Brief(c.Requester);
+        d.Sales = c.Sales == null ? null : Brief(c.Sales);
+        d.Director = c.Director == null ? null : Brief(c.Director);
+        if (!isEngineer)
+        {
+            d.Amount = c.Amount;
+            d.QuoteNote = c.QuoteNote;
+            d.DirectorNote = c.DirectorNote;
+        }
+        d.CanQuote = user.Role == Role.Sales && c.Status == ChargeStatus.Quoting && open && (c.SalesId == user.Id || user.SalesManager);
+        d.CanReview = user.SalesManager && c.Status == ChargeStatus.DirectorReview && open;
+        d.CanConfirm = user.Role == Role.Supervisor && c.Status == ChargeStatus.SupervisorConfirm && open;
+
+        if (c.Status == ChargeStatus.Free)
+        {
+            // 走到过销售那一步才显示「发起」；工程师直接判断不收费的只有一步
+            if (c.SalesId != null)
+                d.Steps.Add(new ChargeStepDto { Title = "工程师发起收费", Done = true, Who = c.Requester?.Name, Time = c.CreatedAt, Note = c.Reason });
+            d.Steps.Add(new ChargeStepDto
+            {
+                Title = "定为不收费", Done = true, Who = c.FreeBy?.Name ?? c.Requester?.Name, Time = c.FreeAt ?? c.CreatedAt,
+                Note = c.SalesId != null ? null : c.Reason
+            });
+            return d;
+        }
+        var rank = (int)c.Status; // Quoting 0 → DirectorReview 1 → SupervisorConfirm 2 → Confirmed 3
+        d.Steps.Add(new ChargeStepDto { Title = "工程师发起收费", Done = true, Who = c.Requester?.Name, Time = c.CreatedAt, Note = c.Reason });
+        d.Steps.Add(new ChargeStepDto
+        {
+            Title = "销售报价", Done = rank > 0, Current = rank == 0, Who = c.Sales?.Name,
+            Time = rank > 0 ? c.QuotedAt : null, Note = rank > 0 ? "已报价" : null
+        });
+        // 公司没有销售总监、报价后直接到了售后主管：不显示这一步
+        if (rank <= 1 || c.DirectorId != null)
+            d.Steps.Add(new ChargeStepDto
+            {
+                Title = "销售总监审核", Done = rank > 1, Current = rank == 1, Who = rank > 1 ? c.Director?.Name : "销售总监",
+                Time = rank > 1 ? c.ReviewedAt : null, Note = rank > 1 ? $"同意 · {ChargeRules.PaidText(c.Paid)}" : null
+            });
+        d.Steps.Add(new ChargeStepDto
+        {
+            Title = "售后主管确认", Done = rank > 2, Current = rank == 2, Who = rank > 2 ? c.Supervisor?.Name : "售后主管",
+            Time = rank > 2 ? c.ConfirmedAt : null,
+            Note = rank > 2 ? (string.IsNullOrEmpty(c.SupervisorNote) ? "已确认" : $"已确认 · {c.SupervisorNote}") : null
+        });
         return d;
     }
 

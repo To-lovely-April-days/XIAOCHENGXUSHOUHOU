@@ -92,6 +92,32 @@ public class OrdersController : ApiControllerBase
         [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] CloseRequest? req = null) =>
         Ok(await _orders.Close(id, Me, req?.Note));
 
+    // ---------- v2.2：收费确认（工程师判断 → 销售报价 → 销售总监审核 → 售后主管确认）----------
+
+    [HttpPost("{id:int}/charge/decide")]
+    [Authorize(Roles = "Engineer")]
+    public async Task<ApiResponse<OrderDetail>> DecideCharge(int id, [FromBody] ChargeDecideRequest? req) =>
+        Ok(await _orders.DecideCharge(id, req ?? new(), Me));
+
+    [HttpPost("{id:int}/charge/quote")]
+    [Authorize(Roles = "Sales")]
+    public async Task<ApiResponse<OrderDetail>> QuoteCharge(int id, [FromBody] ChargeQuoteRequest? req) =>
+        Ok(await _orders.QuoteCharge(id, req ?? new(), Me));
+
+    [HttpPost("{id:int}/charge/review")]
+    [Authorize(Roles = "Sales")]
+    public async Task<ApiResponse<OrderDetail>> ReviewCharge(int id, [FromBody] ChargeReviewRequest? req) =>
+        Ok(await _orders.ReviewCharge(id, req ?? new(), Me));
+
+    [HttpPost("{id:int}/charge/confirm")]
+    [Authorize(Roles = "Supervisor")]
+    public async Task<ApiResponse<OrderDetail>> ConfirmCharge(int id, [FromBody] ChargeConfirmRequest? req) =>
+        Ok(await _orders.ConfirmCharge(id, req ?? new(), Me));
+
+    /// <summary>等我处理的收费确认（工程师恒为空）</summary>
+    [HttpGet("charge-todos")]
+    public async Task<ApiResponse<List<ChargeTodoDto>>> ChargeTodos() => Ok(await _orders.ChargeTodos(Me));
+
     // ---------- v1.1：价格 ----------
 
     [HttpPost("{id:int}/price")]

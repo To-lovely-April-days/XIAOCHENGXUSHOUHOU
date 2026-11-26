@@ -114,7 +114,7 @@ public class SubscribeService : ISubscribeNotifier
     {
         var cfg = _opt.Subscribe.Register;
         if (!cfg.Enabled) return Task.CompletedTask;
-        return Deliver(() => Compose(0, new[] { new SubscribeNotice(0, to, slots) }, cfg.TemplateId.Trim(), cfg.Fields, cfg.Page));
+        return Deliver(() => Compose(0, new[] { new SubscribeNotice(0, to, slots) }, cfg.TemplateId.Trim(), cfg.Fields, cfg.Page, NoticeRules.Register));
     }
 
     public IReadOnlyList<string> ResultTemplateIds =>
@@ -172,10 +172,11 @@ public class SubscribeService : ISubscribeNotifier
 
     /// <summary>过滤收件人并生成每个人的消息；同一个人（同一 OpenId）在一次调用里只收第一条</summary>
     private List<Outgoing> Compose(int actorId, IReadOnlyList<SubscribeNotice> notices) =>
-        Compose(actorId, notices, _opt.Subscribe.TemplateId.Trim(), _opt.Subscribe.Fields, _opt.Subscribe.Page);
+        Compose(actorId, notices, _opt.Subscribe.TemplateId.Trim(), _opt.Subscribe.Fields, _opt.Subscribe.Page, null, byTitle: true);
 
+    /// <param name="category">v2.2 这批提醒属于哪一类（收件人在「提醒设置」里关掉了就不发）；byTitle = 按每条的标题归类</param>
     private List<Outgoing> Compose(int actorId, IReadOnlyList<SubscribeNotice> notices, string templateId,
-        IEnumerable<KeyValuePair<string, string>> fields, string? pageTemplate)
+        IEnumerable<KeyValuePair<string, string>> fields, string? pageTemplate, string? category = null, bool byTitle = false)
     {
         var cfg = _opt.Subscribe;
         var state = string.IsNullOrWhiteSpace(cfg.MiniProgramState) ? "trial" : cfg.MiniProgramState.Trim();
@@ -184,9 +185,12 @@ public class SubscribeService : ISubscribeNotifier
         foreach (var n in notices)
         {
             Dictionary<string, string>? data = null;
+            var cat = byTitle ? NoticeRules.CategoryOf(n.Slots.Title) : category;
             foreach (var e in n.To)
             {
                 if (e == null || !e.Enabled || e.Id == actorId || string.IsNullOrWhiteSpace(e.OpenId)) continue;
+                // 本人在「提醒设置」里关掉了这一类：不发，也不占「同一个人只收一条」的名额
+                if (cat != null && NoticeRules.IsMuted(e, cat)) continue;
                 if (!seen.Add(e.OpenId)) continue;
                 data ??= SubscribeFields.Build(fields, n.Slots);
                 var page = (pageTemplate ?? "").Trim().Replace("{id}", n.OrderId.ToString());

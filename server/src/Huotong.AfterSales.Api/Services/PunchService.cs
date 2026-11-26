@@ -120,6 +120,10 @@ public class PunchService
         var blocked = await BlockedReason(d);
         if (blocked != null) throw BizException.Conflict(blocked);
         if (d.Kind != r.Kind) throw BizException.Conflict("打卡状态已变化，请刷新");
+        // v2.2 收费确认没走完：不能到场打卡（已经在现场的，离场卡照常打）
+        if (d.Kind == PunchKind.Arrive
+            && await _db.OrderCharges.AnyAsync(c => c.OrderId == order.Id && ChargeRules.PendingStatuses.Contains(c.Status)))
+            throw BizException.Conflict(ChargeRules.Blocked);
 
         // v2.1 离场打卡：今天在这张单上必须有工作内容（各写各的；一天多次进出只有第一次离场必须写）
         var workContent = d.Kind == PunchKind.Leave ? WorkLogRules.Clean(r.WorkContent) : null;

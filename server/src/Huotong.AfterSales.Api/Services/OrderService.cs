@@ -481,6 +481,7 @@ public partial class OrderService
         if (o.ServiceType == ServiceType.Factory) throw BizException.Conflict("返厂工单记录「工厂收货」后自动开始处理");
         if (o.ServiceType == ServiceType.Onsite) throw BizException.Conflict("现场工单请到场打卡后自动开始");
         var to = OrderStateMachine.Apply(o.Status, OrderAction.Start);
+        await EnsureChargeNotPending(id);
         var me = await _view.LoadEmployee(user.Id);
         var now = _clock.Now;
         o.Status = to;
@@ -503,6 +504,10 @@ public partial class OrderService
         if (o.ServiceType == ServiceType.Factory
             && !await _db.FactoryRecords.AnyAsync(x => x.OrderId == id && x.Node == FactoryNode.ShippedBack))
             throw BizException.Conflict("返厂工单请先记录「寄回客户」再提交完工");
+        // v2.2 收费确认没走完不能提交完工；新版客户端（formVersion ≥ 3）还要求先判断过要不要收费
+        await EnsureChargeNotPending(id);
+        if ((r.FormVersion ?? 1) >= 3 && !await _db.OrderCharges.AnyAsync(c => c.OrderId == id))
+            throw BizException.BadRequest(ChargeRules.DecideFirst);
         var now = _clock.Now;
         // 现场计时：先判本人（CompletionValidator 抛「请先离场打卡」），再判其他人（协助人或已退出的人，取到场最早的一位）
         var runningPairs = await RunningPairs(id, now);

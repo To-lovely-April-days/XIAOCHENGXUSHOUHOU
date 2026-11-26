@@ -31,6 +31,7 @@ public class HomeService
         var dto = new MeDto { User = _view.User(me) };
         if (me.IsAdmin || me.CanApprove)
             dto.PendingRegistrations = await _db.Registrations.CountAsync(r => r.Status == RegistrationStatus.Pending);
+        dto.ChargeTodoCount = (await _orders.ChargeTodos(user)).Count;
         switch (me.Role)
         {
             case Role.Engineer:
@@ -50,6 +51,35 @@ public class HomeService
                 break;
         }
         return dto;
+    }
+
+    /// <summary>v2.2 在职销售名单（销售总监也在内）</summary>
+    public async Task<List<UserBrief>> Sales() =>
+        (await _db.Employees.Include(e => e.AvatarFile).Where(e => e.Role == Role.Sales && e.Enabled).OrderBy(e => e.Id).ToListAsync())
+        .Select(_view.Brief).ToList();
+
+    // ---------- v2.2 提醒设置 ----------
+
+    private static NoticeSettingsDto NoticeDto(Employee me, bool enabled)
+    {
+        var muted = NoticeRules.Muted(me.MutedNotices);
+        return new NoticeSettingsDto
+        {
+            Enabled = enabled,
+            Items = NoticeRules.For(me).Select(c => new NoticeItemDto { Key = c.Key, Name = c.Name, Desc = c.Desc, On = !muted.Contains(c.Key) }).ToList()
+        };
+    }
+
+    public async Task<NoticeSettingsDto> Notices(CurrentUser user, bool enabled) => NoticeDto(await _view.LoadEmployee(user.Id), enabled);
+
+    public async Task<NoticeSettingsDto> SetNotice(CurrentUser user, NoticeToggleRequest r, bool enabled)
+    {
+        var me = await _db.Employees.FirstAsync(e => e.Id == user.Id);
+        var key = (r.Key ?? "").Trim();
+        if (r.On == null || NoticeRules.For(me).All(c => c.Key != key)) throw BizException.BadRequest("提醒类别不正确");
+        me.MutedNotices = NoticeRules.Toggle(me.MutedNotices, key, r.On.Value);
+        await _db.SaveChangesAsync();
+        return NoticeDto(me, enabled);
     }
 
     public async Task<UserDto> SetAvatar(CurrentUser user, int fileId)
@@ -202,6 +232,12 @@ public class HomeService
                 Type = "PriceSuggestion", OrderId = x.OrderId, Title = x.Order?.CustomerName ?? "", Urgent = x.Order?.Urgency == Urgency.Urgent,
                 Subtitle = $"{x.Sales?.Name} 建议价格 {EnumText.Money(x.Amount)}" + (string.IsNullOrEmpty(x.Note) ? "" : $"（{x.Note}）")
             });
+        }
+
+        // v2.2 等售后主管确认的收费
+        foreach (var x in await _orders.ChargeTodos(user))
+        {
+            dto.Todos.Add(new TodoDto { Type = "ChargeConfirm", OrderId = x.OrderId, Title = x.CustomerName, Urgent = x.Urgent, Subtitle = x.Text });
         }
 
         var active = await _db.Orders.Where(o => o.Status != OrderStatus.Voided).Select(o => o.Id).ToListAsync();

@@ -323,8 +323,51 @@ public class WorkLogDto
     public bool CanEdit { get; set; }
 }
 
+/// <summary>v2.2 收费确认的一步</summary>
+public class ChargeStepDto
+{
+    public string Title { get; set; } = "";
+    public bool Done { get; set; }
+    public bool Current { get; set; }
+    /// <summary>经办人；还没人办时是「等待 XX 处理」里的 XX</summary>
+    public string? Who { get; set; }
+    public DateTime? Time { get; set; }
+    /// <summary>办完后的一句话（不含金额）</summary>
+    public string? Note { get; set; }
+}
+
+/// <summary>v2.2 收费确认。金额、报价说明、销售总监意见对工程师一律不返回</summary>
+public class ChargeDto
+{
+    /// <summary>None（还没判断）/ Quoting / DirectorReview / SupervisorConfirm / Confirmed / Free</summary>
+    public string Status { get; set; } = "None";
+    public string StatusText { get; set; } = "";
+    /// <summary>进行中：工程师暂时不能开始处理 / 到场打卡 / 提交完工</summary>
+    public bool Pending { get; set; }
+    public string? Reason { get; set; }
+    public decimal? Amount { get; set; }
+    public string? QuoteNote { get; set; }
+    public bool? Paid { get; set; }
+    public string? PaidText { get; set; }
+    public string? DirectorNote { get; set; }
+    public string? SupervisorNote { get; set; }
+    public string? ReturnNote { get; set; }
+    public UserBrief? Requester { get; set; }
+    public UserBrief? Sales { get; set; }
+    public UserBrief? Director { get; set; }
+    public List<ChargeStepDto> Steps { get; set; } = new();
+    /// <summary>销售提的单：报价固定交给提单的销售；否则工程师自己选</summary>
+    public UserBrief? FixedSales { get; set; }
+    public bool CanDecide { get; set; }
+    public bool CanQuote { get; set; }
+    public bool CanReview { get; set; }
+    public bool CanConfirm { get; set; }
+}
+
 public class OrderDetail : OrderListItem
 {
+    /// <summary>v2.2 收费确认（永不为 null；还没判断时 status = None）</summary>
+    public ChargeDto Charge { get; set; } = new();
     /// <summary>v2.1 每日工作内容：日期新的在前，同一天按填写时间</summary>
     public List<WorkLogDto> WorkLogs { get; set; } = new();
     /// <summary>v2.1 当前用户现在能不能写今日工作（本单的负责人 / 协助人，工单在待启动、处理中、暂停搁置）</summary>

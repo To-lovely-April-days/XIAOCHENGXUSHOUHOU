@@ -203,3 +203,43 @@ public class EmployeeUpdateRequest : EmployeeCreateRequest
 {
     public bool? Enabled { get; set; }
 }
+
+// ---------- v2.2 收费确认 ----------
+
+/// <summary>工程师判断要不要收费。charge = true 时原因必填；不是销售提的单还要选一位销售</summary>
+public class ChargeDecideRequest
+{
+    public bool? Charge { get; set; }
+    public string? Reason { get; set; }
+    public int? SalesId { get; set; }
+}
+
+/// <summary>销售报价；free = true 表示改成不收费（金额不用填）</summary>
+public class ChargeQuoteRequest
+{
+    public decimal? Amount { get; set; }
+    public string? Note { get; set; }
+    public bool? Free { get; set; }
+}
+
+/// <summary>销售总监审核：approve = true 时必须选客户是否已付款；false = 退回销售（说明必填）</summary>
+public class ChargeReviewRequest
+{
+    public bool? Approve { get; set; }
+    public bool? Paid { get; set; }
+    public string? Note { get; set; }
+}
+
+/// <summary>售后主管确认；approve = false = 退回（说明必填）</summary>
+public class ChargeConfirmRequest
+{
+    public bool? Approve { get; set; }
+    public string? Note { get; set; }
+}
+
+/// <summary>v2.2 提醒设置：打开 / 关掉一类微信提醒</summary>
+public class NoticeToggleRequest
+{
+    public string? Key { get; set; }
+    public bool? On { get; set; }
+}

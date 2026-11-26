@@ -82,6 +82,12 @@ public enum ParticipantRole { Lead, Assistant, Former }
 /// <summary>状态记录类别；库中 null = Status</summary>
 /// <remarks>AttachmentPrivate（受限附件的记录）与 Price 一样不返回给 Engineer</remarks>
 /// <remarks>Info（v1.3）= 资料修改（SAT 信息），所有角色可见</remarks>
+/// <summary>
+/// v2.2 收费确认走到哪一步（落库）。Quoting 等销售报价 → DirectorReview 等销售总监审核 → SupervisorConfirm 等售后主管确认 → Confirmed；
+/// Free = 不收费（工程师判断，或销售报价时改成不收费）。前三个是「进行中」，期间工程师不能开始处理 / 到场打卡 / 提交完工。
+/// </summary>
+public enum ChargeStatus { Quoting, DirectorReview, SupervisorConfirm, Confirmed, Free }
+
 public enum LogKind { Status, Price, Hold, Assist, Factory, Attachment, AttachmentPrivate, Info }
 
 /// <summary>

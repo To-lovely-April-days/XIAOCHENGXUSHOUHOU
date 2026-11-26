@@ -34,6 +34,14 @@ public class MeController : ApiControllerBase
         return Ok(new SubscribeConfigDto { Enabled = ids.Count > 0, TemplateIds = ids });
     }
 
+    /// <summary>v2.2 提醒设置：我用得上的几类微信提醒，各自开着还是关着</summary>
+    [HttpGet("notices")]
+    public async Task<ApiResponse<NoticeSettingsDto>> Notices() => Ok(await _home.Notices(Me, _subscribe.Enabled));
+
+    [HttpPut("notices")]
+    public async Task<ApiResponse<NoticeSettingsDto>> SetNotice([FromBody] NoticeToggleRequest? req) =>
+        Ok(await _home.SetNotice(Me, req ?? new(), _subscribe.Enabled));
+
     [HttpPut("avatar")]
     public async Task<ApiResponse<UserDto>> Avatar([FromBody] AvatarRequest req) => Ok(await _home.SetAvatar(Me, req.FileId));
 

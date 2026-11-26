@@ -21,6 +21,10 @@ public class HomeController : ApiControllerBase
     [Authorize(Roles = "Supervisor")]
     public async Task<ApiResponse<SupervisorHomeDto>> Supervisor() => Ok(await _home.Supervisor(Me));
 
+    /// <summary>v2.2 在职销售名单（工程师发起收费确认时选人）</summary>
+    [HttpGet("api/sales")]
+    public async Task<ApiResponse<List<UserBrief>>> Sales() => Ok(await _home.Sales());
+
     /// <summary>工程师负载；v1.1 起对工程师开放（负责人申请协助人时要选人）</summary>
     [HttpGet("api/engineers")]
     [Authorize(Roles = "Supervisor,Engineer")]

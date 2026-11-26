@@ -21,6 +21,7 @@ public class AppDbContext : DbContext
     public DbSet<OrderExit> OrderExits => Set<OrderExit>();
     public DbSet<Registration> Registrations => Set<Registration>();
     public DbSet<WorkLog> WorkLogs => Set<WorkLog>();
+    public DbSet<OrderCharge> OrderCharges => Set<OrderCharge>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -30,6 +31,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.Phone).HasMaxLength(20);
             e.Property(x => x.Department).HasMaxLength(50);
             e.Property(x => x.OpenId).HasMaxLength(64);
+            e.Property(x => x.MutedNotices).HasMaxLength(100);
             e.Property(x => x.PasswordHash).HasMaxLength(256);
             e.Property(x => x.Role).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.Position).HasConversion<string>().HasMaxLength(20);
@@ -48,6 +50,25 @@ public class AppDbContext : DbContext
         });
         b.Entity<StoredFile>(e => e.Property(x => x.PhotoStage).HasMaxLength(10));
         b.Entity<OrderRequest>(e => e.Property(x => x.TargetServiceType).HasConversion<string>().HasMaxLength(20));
+
+        b.Entity<OrderCharge>(e =>
+        {
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Amount).HasConversion<double?>();
+            e.Property(x => x.Reason).HasMaxLength(200);
+            e.Property(x => x.QuoteNote).HasMaxLength(200);
+            e.Property(x => x.DirectorNote).HasMaxLength(200);
+            e.Property(x => x.SupervisorNote).HasMaxLength(200);
+            e.Property(x => x.ReturnNote).HasMaxLength(250);
+            e.HasIndex(x => x.OrderId).IsUnique();
+            e.HasIndex(x => x.Status);
+            e.HasOne(x => x.Order).WithMany().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Requester).WithMany().HasForeignKey(x => x.RequesterId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Sales).WithMany().HasForeignKey(x => x.SalesId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Director).WithMany().HasForeignKey(x => x.DirectorId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Supervisor).WithMany().HasForeignKey(x => x.SupervisorId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.FreeBy).WithMany().HasForeignKey(x => x.FreeById).OnDelete(DeleteBehavior.Restrict);
+        });
 
         b.Entity<WorkLog>(e =>
         {

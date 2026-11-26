@@ -24,6 +24,8 @@ public class Employee
     public int? AvatarFileId { get; set; }
     public StoredFile? AvatarFile { get; set; }
     public DateTime CreatedAt { get; set; }
+    /// <summary>v2.2 关掉的微信提醒类别（NoticeRules 里的 key，逗号分隔）；空 = 全部都收</summary>
+    public string MutedNotices { get; set; } = "";
 
     public string Surname => string.IsNullOrEmpty(Name) ? "" : Name.Substring(0, 1);
     /// <summary>显示用岗位：Position 与 Role 一致时用 Position，否则按 Role 推出</summary>
@@ -259,6 +261,45 @@ public class OrderRequest
     public Employee? Decider { get; set; }
     public DateTime? DecidedAt { get; set; }
     public string? Reply { get; set; }
+}
+
+/// <summary>
+/// v2.2 收费确认：工程师认领后判断要不要收费。要收费 → 销售报价 → 销售总监审核（选客户是否已付款）→ 售后主管确认 → 回到工程师。
+/// 每张工单最多一行；每一步的经办人和时间都记在这一行里，同时在状态记录里各记一笔。
+/// </summary>
+public class OrderCharge
+{
+    public int Id { get; set; }
+    public int OrderId { get; set; }
+    public WorkOrder? Order { get; set; }
+    public ChargeStatus Status { get; set; }
+    /// <summary>发起的工程师</summary>
+    public int RequesterId { get; set; }
+    public Employee? Requester { get; set; }
+    public string? Reason { get; set; }
+    public DateTime CreatedAt { get; set; }
+    /// <summary>负责报价的销售（销售提的单 = 提单的销售；否则是工程师选的）</summary>
+    public int? SalesId { get; set; }
+    public Employee? Sales { get; set; }
+    public decimal? Amount { get; set; }
+    public string? QuoteNote { get; set; }
+    public DateTime? QuotedAt { get; set; }
+    public int? DirectorId { get; set; }
+    public Employee? Director { get; set; }
+    /// <summary>销售总监审核时选的：客户是否已付款（false = 未付款，先服务）</summary>
+    public bool? Paid { get; set; }
+    public string? DirectorNote { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+    public int? SupervisorId { get; set; }
+    public Employee? Supervisor { get; set; }
+    public string? SupervisorNote { get; set; }
+    public DateTime? ConfirmedAt { get; set; }
+    /// <summary>定为不收费的人（工程师或销售）</summary>
+    public int? FreeById { get; set; }
+    public Employee? FreeBy { get; set; }
+    public DateTime? FreeAt { get; set; }
+    /// <summary>最近一次被退回的说明（「钱主管 退回：金额偏高」）；往下走一步就清空</summary>
+    public string? ReturnNote { get; set; }
 }
 
 /// <summary>销售的价格建议（保留历史，详情只展示最新一条）</summary>

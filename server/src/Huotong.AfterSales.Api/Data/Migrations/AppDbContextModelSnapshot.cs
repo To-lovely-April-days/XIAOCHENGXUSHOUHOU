@@ -43,6 +43,11 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                     b.Property<bool>("IsAdmin")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("MutedNotices")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -162,6 +167,96 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("OrderAssistants");
+                });
+
+            modelBuilder.Entity("Huotong.AfterSales.Api.Domain.OrderCharge", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double?>("Amount")
+                        .HasColumnType("REAL");
+
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("DirectorId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DirectorNote")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FreeAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("FreeById")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool?>("Paid")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("QuoteNote")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("QuotedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RequesterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ReturnNote")
+                        .HasMaxLength(250)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("SalesId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("SupervisorId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SupervisorNote")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DirectorId");
+
+                    b.HasIndex("FreeById");
+
+                    b.HasIndex("OrderId")
+                        .IsUnique();
+
+                    b.HasIndex("RequesterId");
+
+                    b.HasIndex("SalesId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("SupervisorId");
+
+                    b.ToTable("OrderCharges");
                 });
 
             modelBuilder.Entity("Huotong.AfterSales.Api.Domain.OrderDevice", b =>
@@ -897,6 +992,53 @@ namespace Huotong.AfterSales.Api.Data.Migrations
                     b.Navigation("Engineer");
 
                     b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("Huotong.AfterSales.Api.Domain.OrderCharge", b =>
+                {
+                    b.HasOne("Huotong.AfterSales.Api.Domain.Employee", "Director")
+                        .WithMany()
+                        .HasForeignKey("DirectorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Huotong.AfterSales.Api.Domain.Employee", "FreeBy")
+                        .WithMany()
+                        .HasForeignKey("FreeById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Huotong.AfterSales.Api.Domain.WorkOrder", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Huotong.AfterSales.Api.Domain.Employee", "Requester")
+                        .WithMany()
+                        .HasForeignKey("RequesterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Huotong.AfterSales.Api.Domain.Employee", "Sales")
+                        .WithMany()
+                        .HasForeignKey("SalesId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Huotong.AfterSales.Api.Domain.Employee", "Supervisor")
+                        .WithMany()
+                        .HasForeignKey("SupervisorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Director");
+
+                    b.Navigation("FreeBy");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Requester");
+
+                    b.Navigation("Sales");
+
+                    b.Navigation("Supervisor");
                 });
 
             modelBuilder.Entity("Huotong.AfterSales.Api.Domain.OrderDevice", b =>
