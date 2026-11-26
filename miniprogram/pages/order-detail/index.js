@@ -32,6 +32,10 @@ const MAX_AMOUNT = 100000000;
 const HOME = '/pages/home/index';
 /** 附件类别的展示顺序：Sat → RepairForm → Other */
 const ATT_TYPES = Object.keys(enums.ATTACHMENT_TYPE);
+/** v2.1 两张维修登记表跟着服务方式走：只能在对应流程里上传，不出现在通用的「添加附件」类别里 */
+const FORM_SERVICE = { OnsiteRepairForm: 'Onsite', FactoryRepairForm: 'Factory' };
+const FORM_OF = FORM_SERVICE;
+const GENERAL_ATT_OPTIONS = enums.ATTACHMENT_TYPE_OPTIONS.filter((o) => !FORM_SERVICE[o.value]);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function satDateLabelOf(satSigned) {
@@ -378,12 +382,39 @@ function buildAttachments(d) {
         hasMenu: !!(a.canDelete || a.canToggleRestricted || a.canChangeType)
       };
     });
-    return { type: type, label: enums.ATTACHMENT_TYPE[type].label, count: items.length, items: items };
-  });
+    return { type: type, label: enums.ATTACHMENT_TYPE[type].label, count: items.length, items: items, isForm: !!FORM_OF[type] };
+  }).filter((g) => !g.isForm || g.count > 0 || FORM_SERVICE[g.type] === d.serviceType);
 }
 
 function emptyAttachSheet() {
-  return { show: false, type: 'Other', canRestrict: false, restricted: false, items: [], uploading: false, doneCount: 0 };
+  // fixed：从流程里点「上传登记表」进来，类别固定，不显示类别选择
+  return { show: false, type: 'Other', fixed: false, title: '添加附件', canRestrict: false, restricted: false, items: [], uploading: false, doneCount: 0 };
+}
+
+/** v2.1 流程里的登记表卡片：上门 = 现场维修登记表，返厂 = 返厂维修登记表；远程没有 */
+function buildFormCard(d) {
+  const type = d.serviceType === 'Onsite' ? 'OnsiteRepairForm' : d.serviceType === 'Factory' ? 'FactoryRepairForm' : '';
+  if (!type) return null;
+  const items = (d.attachments || []).filter((a) => a.attachmentType === type);
+  return {
+    type: type,
+    title: enums.ATTACHMENT_TYPE[type].label,
+    count: items.length,
+    text: items.length ? '已上传 ' + items.length + ' 份' : '未上传',
+    tip: d.serviceType === 'Onsite' ? '客户签字后拍照上传；提交完工前必须有' : '维修完成后上传；提交完工前必须有',
+    canAdd: !!d.canAddAttachment
+  };
+}
+
+/** v2.1 每日工作内容：按天分组，新的在前 */
+function buildWorkDays(d) {
+  const days = [];
+  (d.workLogs || []).forEach((l) => {
+    let day = days.filter((x) => x.date === l.date)[0];
+    if (!day) { day = { date: l.date, dateText: format.formatDateDot ? format.formatDateDot(l.date) : l.date, items: [] }; days.push(day); }
+    day.items.push({ id: l.id, name: (l.engineer && l.engineer.name) || '', content: l.content, canEdit: !!l.canEdit });
+  });
+  return days;
 }
 
 /** 「设备资料」卡片：项目编号、逐台设备（只列填了的项）、SAT 信息 */
@@ -597,7 +628,12 @@ Page(subscribe.bindTaps({
     files: [],
     attachGroups: [],         // 附件按类别分三组（见 buildAttachments）
     attachTotal: 0,
-    attachTypes: enums.ATTACHMENT_TYPE_OPTIONS,
+    attachTypes: GENERAL_ATT_OPTIONS,
+    formCard: null,           // v2.1 流程里的登记表卡片（见 buildFormCard）
+    workDays: [],             // v2.1 每日工作内容，按天分组
+    canWriteWorkLog: false,
+    myTodayWorkLog: '',
+    workSheet: { show: false, text: '' },
     canAddAttachment: false,
     attachHint: attachments.HINT,
     attachSheet: emptyAttachSheet(),
@@ -722,6 +758,10 @@ Page(subscribe.bindTaps({
       contactPhoneText: format.formatPhone(d.contactPhone),
       files: buildFiles(d, isEngineerView),
       attachGroups: attachGroups,
+      formCard: buildFormCard(d),
+      workDays: buildWorkDays(d),
+      canWriteWorkLog: !!d.canWriteWorkLog,
+      myTodayWorkLog: d.myTodayWorkLog || '',
       attachTotal: attachGroups.reduce((s, g) => s + g.count, 0),
       canAddAttachment: !!d.canAddAttachment,
       issues: this.buildIssues(d),
@@ -1431,6 +1471,35 @@ Page(subscribe.bindTaps({
     this.setData({ priceSheet: sheet });
   },
 
+  /* ---------------- 每日工作内容（v2.1） ---------------- */
+  openWorkSheet() {
+    if (!this.data.canWriteWorkLog) return;
+    this.setData({ workSheet: { show: true, text: this.data.myTodayWorkLog || '' } });
+  },
+
+  closeWorkSheet() {
+    if (this.data.busy) return;
+    this.setData({ 'workSheet.show': false });
+  },
+
+  onWorkInput(e) {
+    this.setData({ 'workSheet.text': e.detail.value });
+  },
+
+  saveWork() {
+    if (this.data.busy) return;
+    const text = String(this.data.workSheet.text || '').trim();
+    if (!text) return wx.showToast({ title: '请填写今天的工作内容', icon: 'none' });
+    this.run(api.orders.saveWorkLog(this.orderId, text, { loading: '保存中' }), '已保存').then((d) => {
+      if (d) this.setData({ 'workSheet.show': false });
+    });
+  },
+
+  /** 流程里的登记表卡片：有文件时点「查看」跳到附件资料 */
+  goFiles() {
+    this.setData({ tab: 'files' });
+  },
+
   /* ---------------- 申请升级服务方式（v2.0） ---------------- */
   closeEscalateSheet() {
     if (this.data.busy) return;
@@ -1579,7 +1648,9 @@ Page(subscribe.bindTaps({
     const items = [];
     if (att.canChangeType) {
       const cur = attTypeOf(att);
-      ATT_TYPES.filter((t) => t !== cur).forEach((t) => {
+      // v2.1：登记表类别只有本单服务方式对应的那一张可选
+      const svc = (this.detail && this.detail.serviceType) || '';
+      ATT_TYPES.filter((t) => t !== cur && (!FORM_SERVICE[t] || FORM_SERVICE[t] === svc)).forEach((t) => {
         items.push({ key: 'type', type: t, label: '归为「' + enums.ATTACHMENT_TYPE[t].short + '」' });
       });
     }
@@ -1623,18 +1694,26 @@ Page(subscribe.bindTaps({
     if (!d || !d.canAddAttachment) return;
     const t = e && e.currentTarget && e.currentTarget.dataset.attType;
     const type = ATT_TYPES.indexOf(t) >= 0 ? t : 'Other';
+    // 登记表：只能从对应流程里的卡片进来，类别固定
+    const fixed = !!FORM_SERVICE[type];
+    if (fixed && FORM_SERVICE[type] !== d.serviceType) return;
     if (this.attachRemaining() === 0) {
       wx.showToast({ title: this.attachLimitText(0), icon: 'none' });
       return;
     }
     this.attachSeq = (this.attachSeq || 0) + 1;
-    this.setData({ attachSheet: Object.assign(emptyAttachSheet(), { show: true, type: type, canRestrict: !!d.canRestrictAttachment }) });
+    this.setData({
+      attachSheet: Object.assign(emptyAttachSheet(), {
+        show: true, type: type, fixed: fixed, title: fixed ? '上传' + enums.ATTACHMENT_TYPE[type].short : '添加附件',
+        canRestrict: !fixed && !!d.canRestrictAttachment
+      })
+    });
   },
 
   /** 弹层里切换类别（data-att-type）：只改本次添加的归类，不影响已选的文件 */
   onAttachType(e) {
     const t = e.currentTarget.dataset.attType;
-    if (!this.data.attachSheet.show || ATT_TYPES.indexOf(t) < 0) return;
+    if (!this.data.attachSheet.show || this.data.attachSheet.fixed || ATT_TYPES.indexOf(t) < 0 || FORM_SERVICE[t]) return;
     this.setData({ 'attachSheet.type': t });
   },
 

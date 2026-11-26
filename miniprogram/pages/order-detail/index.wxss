@@ -286,3 +286,22 @@
 
 /* v2.0 升级为上门时补客户地址 */
 .od-esc-addr { display: flex; align-items: center; gap: 12rpx; }
+
+/* v2.1 每日工作内容 */
+.od-work { margin-bottom: 20rpx; padding-bottom: 20rpx; }
+.od-work .od-h3, .od-form .od-h3 { padding-bottom: 8rpx; }
+.od-work-empty { padding: 4rpx 0 8rpx; font-size: 26rpx; line-height: 40rpx; color: var(--text-3); }
+.od-work-day { padding-top: 16rpx; }
+.od-work-date { font-size: 24rpx; font-weight: 600; color: var(--text-2); }
+.od-work-item { margin-top: 8rpx; display: flex; gap: 16rpx; font-size: 28rpx; line-height: 42rpx; }
+.od-work-name { flex-shrink: 0; font-weight: 600; color: var(--text); }
+.od-work-text { flex: 1; min-width: 0; color: var(--text); word-break: break-all; }
+.od-work-input { height: 260rpx; }
+/* v2.1 流程里的维修登记表 */
+.od-form { margin-bottom: 20rpx; padding-bottom: 24rpx; }
+.od-form-state { font-size: 26rpx; font-weight: 600; }
+.od-form-tip { font-size: 24rpx; line-height: 36rpx; color: var(--text-3); }
+.od-form-actions { margin-top: 20rpx; gap: 16rpx; }
+.od-form-btn { height: 76rpx; padding: 0 36rpx; border-radius: 20rpx; background: var(--bg); color: var(--text); font-size: 28rpx; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.od-form-btn.primary { background: var(--text); color: #FFFFFF; }
+.od-att-group-tip { flex-shrink: 0; font-size: 24rpx; color: var(--text-3); }

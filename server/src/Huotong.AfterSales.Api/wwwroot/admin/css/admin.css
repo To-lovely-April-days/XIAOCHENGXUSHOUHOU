@@ -966,3 +966,9 @@ h1, h2, h3, p { margin: 0; }
 .folder-section-empty { padding: 2px 0 10px; font-size: 13px; color: var(--muted); }
 .folder-table { table-layout: fixed; }
 .folder-table td { border-bottom: 0; }
+
+/* v2.1 工单抽屉：每日工作内容 */
+.orders-worklogs { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+.orders-worklog { display: grid; grid-template-columns: 86px 64px minmax(0, 1fr); gap: 10px; font-size: 13px; line-height: 20px; }
+.orders-worklog-name { font-weight: 600; }
+.orders-worklog-text { word-break: break-all; }

@@ -149,3 +149,17 @@ page { background: #000000; }
   background: rgba(0, 0, 0, 0.55); color: #FFFFFF; font-size: 26rpx; font-weight: 600;
   display: inline-flex; align-items: center;
 }
+
+/* v2.1 离场打卡：今天的工作内容 */
+.ck-work { margin: 20rpx 32rpx 0; padding: 20rpx 24rpx; border-radius: 24rpx; background: rgba(255, 255, 255, 0.14); display: flex; align-items: center; gap: 16rpx; }
+.ck-work-body { min-width: 0; }
+.ck-work-title { font-size: 26rpx; font-weight: 600; color: #FFFFFF; }
+.ck-work-req { margin-left: 12rpx; font-size: 22rpx; font-weight: 600; padding: 2rpx 14rpx; border-radius: 999rpx; background: #C81E2B; color: #FFFFFF; }
+.ck-work-text { margin-top: 6rpx; font-size: 26rpx; color: rgba(255, 255, 255, 0.82); }
+.ck-sheet { padding-left: 32rpx; padding-right: 32rpx; }
+.ck-sheet-head { display: flex; align-items: center; justify-content: space-between; }
+.ck-sheet-title { font-size: 34rpx; font-weight: 700; color: #1D1D1F; }
+.ck-sheet-cancel { font-size: 28rpx; color: #6E6E73; padding: 12rpx 0 12rpx 24rpx; }
+.ck-sheet-sub { margin-top: 8rpx; font-size: 26rpx; line-height: 40rpx; color: #6E6E73; }
+.ck-sheet-input { margin-top: 20rpx; width: 100%; height: 240rpx; box-sizing: border-box; padding: 22rpx 28rpx; border-radius: 20rpx; background: #F6F6F4; font-size: 30rpx; line-height: 44rpx; color: #1D1D1F; }
+.ck-sheet-btn { margin-top: 28rpx; }

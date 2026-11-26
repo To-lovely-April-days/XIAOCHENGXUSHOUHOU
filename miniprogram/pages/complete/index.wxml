@@ -45,6 +45,16 @@
       </view>
     </view>
 
+    <!-- v2.1 工作内容：之前一条都没写过时在这里补 -->
+    <view wx:if="{{needWork}}" class="cp-card cp-mt">
+      <view class="cp-field cp-field-last">
+        <view class="cp-label">工作内容 <text class="red">*</text></view>
+        <textarea class="cp-textarea" value="{{workContent}}" data-field="workContent" bindinput="onInput"
+          auto-height maxlength="1000" disable-default-padding placeholder="这张单上做了哪些工作。之后可以在工单详情里按天写"
+          placeholder-class="placeholder" />
+      </view>
+    </view>
+
     <!-- 运行状况 -->
     <view class="cp-card cp-mt" role="radiogroup">
       <view class="cp-label cp-radio-title">设备运行状况 <text class="red">*</text></view>

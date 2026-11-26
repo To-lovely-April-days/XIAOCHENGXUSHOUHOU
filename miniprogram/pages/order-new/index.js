@@ -18,7 +18,8 @@ const MAX_MEDIA = attachments.MAX_COUNT;
 const MAX_DEVICES = 20;
 const PERIODS = ['上午', '下午', '晚上'];
 /** 附件类别的展示顺序：Sat → RepairForm → Other */
-const TYPE_ORDER = Object.keys(enums.ATTACHMENT_TYPE);
+// v2.1：两张维修登记表只能在对应流程里上传，建单时的类别里不出现
+const TYPE_ORDER = Object.keys(enums.ATTACHMENT_TYPE).filter((k) => k !== 'OnsiteRepairForm' && k !== 'FactoryRepairForm');
 const SAT_LABEL_ANY = 'SAT 完成时间 / 发货时间';
 
 /** 校验顺序 = 页面从上到下的顺序 */

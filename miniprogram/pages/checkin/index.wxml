@@ -68,6 +68,15 @@
       <view class="ck-hint {{ctx.blockedReason ? 'warn' : ''}}">{{ctx.blockedReason ? '已暂停本次打卡' : hint}}</view>
     </view>
 
+    <!-- v2.1 离场：今天的工作内容（必填） -->
+    <view wx:if="{{ctx.nextKind === 'Leave' && !ctx.blockedReason}}" class="ck-work" hover-class="btn-hover" bindtap="openWorkSheet" aria-role="button">
+      <view class="flex1 ck-work-body">
+        <view class="ck-work-title">今天的工作内容 <text class="ck-work-req">{{workContent ? '已填写' : '必填'}}</text></view>
+        <view class="ck-work-text ellipsis">{{workContent || '点这里填写，写完才能打离场卡'}}</view>
+      </view>
+      <ui-icon name="right" color="#FFFFFF" size="18" stroke="2" />
+    </view>
+
     <!-- 操作 -->
     <view class="ck-ctrl">
       <view class="ck-round {{flash === 'on' ? 'on' : ''}}" hover-class="btn-hover" bindtap="onToggleFlash"
@@ -84,5 +93,21 @@
       </view>
     </view>
     <view class="ck-foot">到场 / 离场由系统自动判断 · 仅支持现场拍摄 · 时间以服务器为准</view>
+  </block>
+
+  <!-- v2.1 填写今天的工作内容 -->
+  <block wx:if="{{workSheet.show}}">
+    <view class="mask" bindtap="closeWorkSheet" catchtouchmove="noop"></view>
+    <view class="sheet ck-sheet" catchtouchmove="noop" aria-role="dialog" aria-label="今天的工作内容">
+      <view class="sheet-handle"></view>
+      <view class="ck-sheet-head">
+        <text class="ck-sheet-title">今天的工作内容</text>
+        <text class="ck-sheet-cancel" bindtap="closeWorkSheet">取消</text>
+      </view>
+      <view class="ck-sheet-sub">写今天在这张单上做了什么。每个人写自己的，当天可以再改。</view>
+      <textarea class="ck-sheet-input" value="{{workSheet.text}}" bindinput="onWorkInput" maxlength="1000" cursor-spacing="180"
+                placeholder="如：更换加热管，测试升温正常；明天复查密封" placeholder-class="placeholder" show-confirm-bar="{{false}}" focus="{{workSheet.show}}" />
+      <view class="btn-primary ck-sheet-btn" hover-class="btn-hover" bindtap="saveWorkSheet">确定</view>
+    </view>
   </block>
 </view>

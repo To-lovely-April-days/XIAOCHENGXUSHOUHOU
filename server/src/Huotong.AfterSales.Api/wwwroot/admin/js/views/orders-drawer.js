@@ -19,6 +19,8 @@ import { navigate } from '../router.js';
 
 /** 附件类别，顺序即分组顺序（Sat → RepairForm → Other） */
 const ATT_TYPES = Object.keys(ATTACHMENT_TYPE);
+/** v2.1 两张维修登记表跟着服务方式走：现场的只属于上门工单，返厂的只属于返厂工单 */
+const FORM_SERVICE = { OnsiteRepairForm: 'Onsite', FactoryRepairForm: 'Factory' };
 
 /**
  * 原型按状态的按钮映射。每项：
@@ -80,7 +82,6 @@ export default {
       attItems: [], // 待添加的附件条目（attachments-upload.js）
       attSaving: false,
       attBusy: 0, // 正在下载 / 删除 / 切换 / 改类别的附件 id
-      attTypeOptions: ATTACHMENT_TYPE_OPTIONS,
       satOpen: false, // 「修改 SAT 信息」弹窗
     };
   },
@@ -304,6 +305,15 @@ export default {
       });
     },
     /** 附件按类别分三组（顺序 Sat → RepairForm → Other，组内保持服务端顺序）；空组也显示标题 */
+    /** 改类别下拉：其他类别 + 本单服务方式对应的那张登记表 */
+    attTypeOptions() {
+      const st = this.d && this.d.serviceType;
+      return ATTACHMENT_TYPE_OPTIONS.filter(o => !FORM_SERVICE[o.value] || FORM_SERVICE[o.value] === st);
+    },
+    /** v2.1 每日工作内容（服务端已按日期新的在前） */
+    workLogs() {
+      return ((this.d && this.d.workLogs) || []).map(l => ({ id: l.id, date: l.date, name: (l.engineer && l.engineer.name) || '', content: l.content }));
+    },
     attGroups() {
       const rows = this.attRows;
       return ATT_TYPES.map(type => {
@@ -316,6 +326,9 @@ export default {
           items,
           adding: this.attOpen && this.attType === type,
         };
+      // 登记表分组：只在对应服务方式的工单（或已经有文件）时显示
+      }).filter(g => !FORM_SERVICE[g.type] || g.count > 0 || FORM_SERVICE[g.type] === (this.d && this.d.serviceType)).map(g => {
+        return g;
       });
     },
     /** 本单全部图片 / 视频附件（预览时左右切换） */
@@ -1016,6 +1029,16 @@ export default {
         </div>
       </section>
 
+      <template v-if="workLogs.length">
+        <h3 class="section-title">每日工作</h3>
+        <div class="orders-worklogs">
+          <div v-for="l in workLogs" :key="l.id" class="orders-worklog">
+            <span class="num text-muted orders-worklog-date">{{ l.date }}</span>
+            <span class="orders-worklog-name">{{ l.name }}</span>
+            <span class="orders-worklog-text">{{ l.content }}</span>
+          </div>
+        </div>
+      </template>
       <h3 class="section-title">打卡记录</h3>
       <div v-if="!punchRows.length" class="orders-dr-empty">{{ emptyPunchText }}</div>
       <div v-for="p in punchRows" :key="p.key" class="punch-row">

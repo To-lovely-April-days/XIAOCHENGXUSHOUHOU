@@ -58,6 +58,8 @@ Page(subscribe.bindTaps({
     confirmOptions: CONFIRM_OPTIONS,
     customerConfirm: '', // 远程：客户确认方式
     testResult: '',      // 返厂：寄回前测试结果
+    needWork: false,     // v2.1 负责人在这张单上还没写过工作内容：这里必须写
+    workContent: '',
     maxPhotos: MAX_PHOTOS,
     submitting: false
   },
@@ -108,10 +110,13 @@ Page(subscribe.bindTaps({
         const existing = sec.form ? atts.filter((a) => a.attachmentType === sec.form).length : 0;
         return Object.assign({}, sec, { existing: existing, required: sec.required && !existing });
       });
+      const me = auth.getUser() || {};
+      const needWork = !(o.workLogs || []).some((l) => l.engineer && l.engineer.id === me.id);
       this.setData({
         loading: false,
         loadError: '',
         order: o,
+        needWork: needWork,
         mode: mode,
         sections: sections,
         needSignature: needSignature,
@@ -282,6 +287,7 @@ Page(subscribe.bindTaps({
     if (!d.faultCause.trim()) return d.mode === 'Onsite' ? '请填写现场确认的故障原因' : '请填写故障原因';
     if (!d.solution.trim()) return '请填写解决措施';
     if (!d.runStatus) return '请选择设备运行状况';
+    if (d.needWork && !d.workContent.trim()) return '请填写工作内容';
     if (d.mode === 'Remote' && !d.customerConfirm) return '请选择客户确认方式';
     if (d.mode === 'Factory' && !d.testResult.trim()) return '请填写寄回前的测试结果';
     const shown = d.sections.map((sec) => d.lists[sec.list]);
@@ -327,7 +333,8 @@ Page(subscribe.bindTaps({
       afterPhotoIds: d.lists.after.map((x) => x.fileId),
       repairFormIds: d.sections.some((sec) => sec.list === 'forms') ? d.lists.forms.map((x) => x.fileId) : [],
       customerConfirm: d.mode === 'Remote' ? d.customerConfirm : '',
-      testResult: d.mode === 'Factory' ? d.testResult.trim() : ''
+      testResult: d.mode === 'Factory' ? d.testResult.trim() : '',
+      workContent: d.needWork ? d.workContent.trim() : ''
     };
     this.setData({ submitting: true });
     api.orders.complete(d.id, body, { silent: true, loading: '提交中' }).then(() => {

@@ -39,7 +39,11 @@ Page(subscribe.bindTaps({
     cameraError: '',
     devicePosition: 'back',
     flash: 'off',
-    busy: false
+    busy: false,
+
+    // v2.1 离场打卡要写今天的工作内容（当天已经写过的带出来，可以补充）
+    workContent: '',
+    workSheet: { show: false, text: '' }
   },
 
   onLoad(query) {
@@ -76,6 +80,8 @@ Page(subscribe.bindTaps({
         loading: false,
         loadError: '',
         empty: false,
+        // 只在还没填的时候用服务端的带出来，免得把正在写的冲掉
+        workContent: this.data.workContent || ctx.todayWorkContent || '',
         ctx: ctx,
         title: kindLabel + '打卡' + (ctx.myRole === 'Assistant' ? '（协助）' : ''),
         kindLabel: kindLabel,
@@ -231,6 +237,12 @@ Page(subscribe.bindTaps({
   onShutter() {
     const ctx = this.data.ctx;
     if (this.data.busy || !ctx || ctx.blockedReason || !this.data.showCamera) return;
+    // v2.1 离场前必须写今天的工作内容
+    if (ctx.nextKind === 'Leave' && !String(this.data.workContent || '').trim()) {
+      wx.showToast({ title: '离场前请先填写今天的工作内容', icon: 'none' });
+      this.openWorkSheet();
+      return;
+    }
     this.setData({ busy: true });
     wx.showLoading({ title: '拍照中', mask: true });
 
@@ -268,7 +280,9 @@ Page(subscribe.bindTaps({
         latitude: loc.latitude,
         longitude: loc.longitude,
         address: ctx.address || '',
-        photoFileId: file.id
+        photoFileId: file.id,
+        formVersion: 2,
+        workContent: ctx.nextKind === 'Leave' ? String(this.data.workContent || '').trim() : ''
       }, { silent: true });
     }).then((res) => {
       wx.hideLoading();
@@ -279,6 +293,28 @@ Page(subscribe.bindTaps({
       this.onPunchError(err);
     });
   },
+
+  /* ---------- 今天的工作内容（v2.1） ---------- */
+  openWorkSheet() {
+    if (this.data.busy) return;
+    this.setData({ workSheet: { show: true, text: this.data.workContent || '' } });
+  },
+
+  closeWorkSheet() {
+    this.setData({ 'workSheet.show': false });
+  },
+
+  onWorkInput(e) {
+    this.setData({ 'workSheet.text': e.detail.value });
+  },
+
+  saveWorkSheet() {
+    const text = String(this.data.workSheet.text || '').trim();
+    if (!text) return wx.showToast({ title: '请填写今天的工作内容', icon: 'none' });
+    this.setData({ workContent: text, 'workSheet.show': false });
+  },
+
+  noop() {},
 
   onPunched(res) {
     const punch = (res && res.punch) || {};

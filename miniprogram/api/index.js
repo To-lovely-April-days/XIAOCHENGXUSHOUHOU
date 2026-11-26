@@ -327,6 +327,13 @@ const orders = {
     return post('/api/orders/' + id + '/escalate-requests',
       Object.assign({ targetServiceType: target, reason: reason, findings: findings }, extra || {}), opts);
   },
+  /**
+   * POST /api/orders/{id}/work-logs（v2.1）写 / 改今天的工作内容（负责人或协助人；同一天再写 = 改）
+   * @returns {Promise<OrderDetail>} workLogs:[{id,date,content,engineer,createdAt,updatedAt,canEdit}], canWriteWorkLog, myTodayWorkLog
+   */
+  saveWorkLog(id, content, opts) {
+    return post('/api/orders/' + id + '/work-logs', { content: content }, opts);
+  },
   requestHold(id, reasonType, note, opts) {
     return post('/api/orders/' + id + '/hold-requests', { reasonType: reasonType, note: note || null }, opts);
   },
@@ -506,7 +513,8 @@ const punches = {
   },
   /**
    * POST /api/punches 打卡
-   * @param {{orderId:number,kind:'Arrive'|'Leave',latitude:number,longitude:number,address:string,photoFileId:number}} body
+   * @param {{orderId:number,kind:'Arrive'|'Leave',latitude:number,longitude:number,address:string,photoFileId:number,formVersion?:number,workContent?:string}} body
+   *   v2.1：formVersion=2 时，离场打卡当天还没写工作内容且 workContent 为空 → 40000「请先填写今天的工作内容」；context 返回 todayWorkContent
    * @returns {Promise<{punch:PunchDto,order:OrderListItem}>} 类型已变化 → 40900「打卡状态已变化，请刷新」
    */
   create(body, opts) {
