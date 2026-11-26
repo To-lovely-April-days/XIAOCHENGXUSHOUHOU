@@ -33,14 +33,18 @@
     <view class="sec-head">
       <text class="sec-title">待我确认的转交 <text class="sec-count tr-count">{{transfersToMe.length}}</text></text>
     </view>
-    <view wx:for="{{transfersToMe}}" wx:key="id" class="tr-item {{index > 0 ? 'mt-10' : ''}}" hover-class="row-hover" data-id="{{item.id}}" bindtap="toDetail" aria-role="button">
-      <view class="tr-dot"></view>
-      <view class="flex1">
-        <view class="tr-name ellipsis">{{item.customerName}}</view>
-        <view class="oh-sub ellipsis">{{item.line}}</view>
-        <view class="tr-reason ellipsis2">原因：{{item.reason}}</view>
+    <view class="nb-card">
+      <view wx:for="{{transfersToMe}}" wx:key="id" class="nb-row" hover-class="row-hover" data-id="{{item.id}}" bindtap="toDetail" aria-role="button">
+        <view class="nb-main">
+          <view class="nb-ic todo"><ui-icon name="transfer" color="#8A5A07" size="20" /></view>
+          <view class="nb-body">
+            <view class="nb-title ellipsis">{{item.customerName}}</view>
+            <view class="nb-text ellipsis">{{item.line}}</view>
+            <view class="nb-text ellipsis2">原因：{{item.reason}}</view>
+          </view>
+          <view class="nb-side"><ui-icon name="right" color="#8E8E93" size="20" /></view>
+        </view>
       </view>
-      <ui-icon name="right" color="#AEAEB2" size="18" stroke="2" />
     </view>
   </view>
 

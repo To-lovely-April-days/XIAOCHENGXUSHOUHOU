@@ -12,12 +12,21 @@
   </view>
 
   <!-- v1.4 开启工单提醒（订阅消息从未选择过时显示；关闭后 7 天内不再出现） -->
-  <view wx:if="{{subTip && role}}" class="sub-tip" aria-label="开启工单提醒">
-    <view class="sub-tip-icon"><ui-icon name="bell" color="#1D1D1F" size="18" stroke="1.8" /></view>
-    <text class="sub-tip-text">开启工单提醒，指派和审批结果第一时间通知你</text>
-    <view class="sub-tip-btn" hover-class="btn-hover" bindtap="onSubTipOpen" aria-role="button">去开启</view>
-    <view class="sub-tip-close" hover-class="btn-hover" bindtap="onSubTipClose" aria-role="button" aria-label="关闭提示">
-      <ui-icon name="close" color="#AEAEB2" size="16" stroke="2" />
+  <view wx:if="{{subTip && role}}" class="nb-card sub-tip" aria-label="开启工单提醒">
+    <view class="nb-row">
+      <view class="nb-main">
+        <view class="nb-ic"><ui-icon name="bell" color="#1D1D1F" size="20" /></view>
+        <view class="nb-body">
+          <view class="nb-title">开启工单提醒</view>
+          <view class="nb-text">指派和审批结果第一时间通知你</view>
+        </view>
+        <view class="nb-side">
+          <view class="nb-btn" hover-class="btn-hover" bindtap="onSubTipOpen" aria-role="button">去开启</view>
+          <view class="nb-x" hover-class="btn-hover" bindtap="onSubTipClose" aria-role="button" aria-label="关闭提示">
+            <ui-icon name="close" color="#8E8E93" size="18" />
+          </view>
+        </view>
+      </view>
     </view>
   </view>
 

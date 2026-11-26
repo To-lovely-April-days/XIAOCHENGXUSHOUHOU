@@ -9,8 +9,4 @@
 .state { padding: 160rpx 0; text-align: center; font-size: 28rpx; color: #6E6E73; }
 
 /* v1.4 开启工单提醒提示条 */
-.sub-tip { display: flex; align-items: center; gap: 16rpx; margin: 8rpx 0 16rpx; padding: 16rpx 8rpx 16rpx 24rpx; border-radius: 24rpx; background: #FFFFFF; box-shadow: inset 0 0 0 2rpx #E3E3E1; }
-.sub-tip-icon { display: flex; flex-shrink: 0; }
-.sub-tip-text { flex: 1; min-width: 0; font-size: 26rpx; line-height: 36rpx; color: #3A3A3C; }
-.sub-tip-btn { flex-shrink: 0; height: 56rpx; padding: 0 24rpx; border-radius: 28rpx; background: #1D1D1F; color: #FFFFFF; font-size: 26rpx; font-weight: 600; display: flex; align-items: center; justify-content: center; white-space: nowrap; }
-.sub-tip-close { flex-shrink: 0; width: 56rpx; height: 56rpx; display: flex; align-items: center; justify-content: center; }
+.sub-tip { margin: 8rpx 0 20rpx; }

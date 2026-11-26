@@ -483,6 +483,7 @@ function buildRequests(d, isEngineerView) {
   const list = all.filter((r) => r.status === 'Pending').map((r) => ({
     id: r.id,
     type: r.type,
+    icon: r.type === 'Hold' ? 'pause' : r.type === 'Escalate' ? 'upgrade' : 'team',
     title: enums.label(enums.REQUEST_TYPE, r.type),
     text: ((r.requester && r.requester.name) || '') + '：' + (r.text || ''),
     time: format.formatDateTimeShort(r.createdAt),

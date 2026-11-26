@@ -167,11 +167,7 @@
 .od-req-rejected { margin-top: 24rpx; padding: 20rpx 28rpx; border-radius: 24rpx; background: var(--soft); font-size: 26rpx; line-height: 40rpx; color: var(--text-body); }
 
 /* 暂停提示条（灰色） */
-.od-holdbar { display: flex; align-items: center; gap: 20rpx; margin-bottom: 24rpx; padding: 24rpx 28rpx; border-radius: 24rpx; background: #ECECEA; color: var(--gray); }
-.od-holdbar-mark { width: 52rpx; height: 52rpx; border-radius: 26rpx; background: #AEAEB2; display: flex; align-items: center; justify-content: center; gap: 8rpx; flex-shrink: 0; }
-.od-holdbar-bar { width: 6rpx; height: 20rpx; border-radius: 3rpx; background: #FFFFFF; }
-.od-holdbar-text { font-size: 28rpx; font-weight: 700; line-height: 40rpx; word-break: break-all; }
-.od-holdbar-sub { margin-top: 2rpx; font-size: 24rpx; line-height: 36rpx; }
+.od-holdbar { margin-bottom: 24rpx; }
 .od-step-dot.paused { background: #AEAEB2; }
 .od-step-title.paused { color: var(--gray); }
 .od-hint-line { margin-bottom: 24rpx; padding: 20rpx 28rpx; border-radius: 24rpx; background: var(--soft); font-size: 26rpx; line-height: 38rpx; color: var(--amber); font-weight: 600; }
@@ -339,3 +335,8 @@
 .od-charge-go { flex: 2; height: 96rpx; border-radius: 24rpx; display: flex; align-items: center; justify-content: center; background: var(--text); color: #FFFFFF; font-size: 32rpx; font-weight: 600; }
 .od-charge-go.disabled { background: var(--disabled); }
 .od-charge-amount { text-align: right; font-size: 40rpx; font-weight: 700; height: 92rpx; }
+
+/* v2.3 站内通知卡片（样式在 app.wxss 的 .nb-*） */
+.od-notices { margin-top: 24rpx; }
+.od-nb-plain { margin-top: 0; padding-top: 18rpx; color: var(--text-body); }
+.od-notices .od-supp { margin-top: 20rpx; margin-left: 100rpx; background: var(--bg); }

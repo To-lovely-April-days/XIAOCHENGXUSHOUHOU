@@ -70,19 +70,30 @@
       </view>
     </view>
 
-    <!-- 只读提示（v1.3：当前用户已退出本单——已转交 / 已改派） -->
-    <view wx:if="{{order.readOnlyText}}" class="od-readonly">{{order.readOnlyText}}</view>
-
-    <!-- 异常警示 -->
-    <view wx:for="{{issues}}" wx:key="key" class="od-alert {{item.tone}}">
-      <view class="row od-alert-head">
-        <ui-icon name="warning" color="{{item.tone === 'red' ? '#C81E2B' : '#9A5B00'}}" size="18" stroke="2" />
-        <text class="od-alert-title">{{item.title}}</text>
+    <!-- 站内通知（v2.3 B 样式）：只读提示、异常、转交、待审批申请、被驳回的结果收进一张卡片 -->
+    <view wx:if="{{order.readOnlyText || issues.length || transferCard || transferRejected || requests.length || requestRejected}}" class="nb-card od-notices">
+      <!-- 只读提示（当前用户已退出本单） -->
+      <view wx:if="{{order.readOnlyText}}" class="nb-row">
+        <view class="nb-main">
+          <view class="nb-ic hold"><ui-icon name="eye" color="#5E5E63" size="20" /></view>
+          <view class="nb-body">
+            <view class="nb-title">只能查看</view>
+            <view class="nb-text">{{order.readOnlyText}}</view>
+          </view>
+        </view>
       </view>
-      <view class="od-alert-text">{{item.text}}</view>
 
+      <!-- 异常警示 -->
+      <view wx:for="{{issues}}" wx:key="key" class="nb-row">
+        <view class="nb-main">
+          <view class="nb-ic {{item.tone === 'red' ? 'bad' : 'todo'}}"><ui-icon name="error" color="{{item.tone === 'red' ? '#B01A26' : '#8A5A07'}}" size="20" /></view>
+          <view class="nb-body">
+            <view class="nb-title">{{item.title}}</view>
+            <view class="nb-text">{{item.text}}</view>
+          </view>
+        </view>
       <block wx:if="{{item.canSupplement}}">
-        <view wx:if="{{!(supp.open && supp.punchId === item.punchId)}}" class="od-alert-btn" hover-class="btn-hover" data-id="{{item.punchId}}" bindtap="openSupp">补录离场时间</view>
+        <view wx:if="{{!(supp.open && supp.punchId === item.punchId)}}" class="nb-act"><view class="nb-btn" hover-class="btn-hover" data-id="{{item.punchId}}" bindtap="openSupp" aria-role="button">补录离场时间</view></view>
         <view wx:else class="od-supp">
           <view wx:if="{{supp.arriveText}}" class="od-supp-hint">对应 {{supp.arriveText}}，离场须晚于到场且同一天</view>
           <picker mode="time" value="{{supp.time || supp.minTime}}" start="{{supp.minTime}}" end="23:59" bindchange="onSuppTime">
@@ -100,45 +111,65 @@
           <view class="od-supp-note">保存后记录补录人和时间，导出时单独标注</view>
         </view>
       </block>
-    </view>
+      </view>
 
-    <!-- 转交待确认（v1.3；按钮只看 actions：接手人「确认接手 / 拒绝」，发起人「撤回转交」，主管「撤销转交」） -->
-    <view wx:if="{{transferCard}}" class="od-req">
-      <view class="row-between">
-        <text class="od-req-title">转交待确认</text>
-        <text class="od-req-time num-font">{{transferCard.time}}</text>
+      <!-- 转交待确认（按钮只看 actions：接手人「确认接手 / 拒绝」，发起人「撤回转交」，主管「撤销转交」） -->
+      <view wx:if="{{transferCard}}" class="nb-row">
+        <view class="nb-main">
+          <view class="nb-ic todo"><ui-icon name="transfer" color="#8A5A07" size="20" /></view>
+          <view class="nb-body">
+            <view class="nb-head">
+              <text class="nb-title">转交待确认</text>
+              <text class="nb-time num-font">{{transferCard.time}}</text>
+            </view>
+            <view class="nb-text">{{transferCard.text}}</view>
+            <view class="nb-text">原因：{{transferCard.reason}}</view>
+          </view>
+        </view>
+        <view wx:if="{{transferCard.canAccept || transferCard.canReject}}" class="nb-act">
+          <view wx:if="{{transferCard.canReject}}" class="nb-btn ghost" hover-class="btn-hover" bindtap="onRejectTransfer" aria-role="button">拒绝</view>
+          <view wx:if="{{transferCard.canAccept}}" class="nb-btn {{busy ? 'disabled' : ''}}" hover-class="btn-hover" bindtap="onAcceptTransfer" aria-role="button">确认接手</view>
+        </view>
+        <view wx:elif="{{transferCard.canCancel}}" class="nb-act">
+          <view class="nb-btn ghost" hover-class="btn-hover" bindtap="onCancelTransfer" aria-role="button">{{transferCard.cancelLabel}}</view>
+        </view>
       </view>
-      <view class="od-req-text">{{transferCard.text}}</view>
-      <view class="od-req-reason">原因：{{transferCard.reason}}</view>
-      <view wx:if="{{transferCard.canAccept || transferCard.canReject}}" class="row od-req-actions">
-        <view wx:if="{{transferCard.canAccept}}" class="od-req-btn primary {{busy ? 'disabled' : ''}}" hover-class="btn-hover" bindtap="onAcceptTransfer" aria-role="button">确认接手</view>
-        <view wx:if="{{transferCard.canReject}}" class="od-req-btn" hover-class="btn-hover" bindtap="onRejectTransfer" aria-role="button">拒绝</view>
+      <view wx:elif="{{transferRejected}}" class="nb-row">
+        <view class="nb-main">
+          <view class="nb-ic"><ui-icon name="info" color="#1D1D1F" size="20" /></view>
+          <view class="nb-body"><view class="nb-text od-nb-plain">{{transferRejected}}</view></view>
+        </view>
       </view>
-      <view wx:elif="{{transferCard.canCancel}}" class="row od-req-actions">
-        <view class="flex1"></view>
-        <view class="od-req-btn small" hover-class="btn-hover" bindtap="onCancelTransfer" aria-role="button">{{transferCard.cancelLabel}}</view>
-      </view>
-    </view>
-    <view wx:elif="{{transferRejected}}" class="od-req-rejected">{{transferRejected}}</view>
 
-    <!-- 待审批的申请（暂停 / 协助人） -->
-    <view wx:for="{{requests}}" wx:key="id" class="od-req">
-      <view class="row-between">
-        <text class="od-req-title">{{item.title}}</text>
-        <text class="od-req-time num-font">{{item.time}}</text>
+      <!-- 待审批的申请（暂停 / 协助人 / 升级服务方式） -->
+      <view wx:for="{{requests}}" wx:key="id" class="nb-row">
+        <view class="nb-main">
+          <view class="nb-ic todo"><ui-icon name="{{item.icon}}" color="#8A5A07" size="20" /></view>
+          <view class="nb-body">
+            <view class="nb-head">
+              <text class="nb-title">{{item.title}}</text>
+              <text class="nb-time num-font">{{item.time}}</text>
+            </view>
+            <view class="nb-text">{{item.text}}</view>
+          </view>
+        </view>
+        <view wx:if="{{item.canDecide}}" class="nb-act">
+          <view class="nb-btn ghost" hover-class="btn-hover" data-id="{{item.id}}" bindtap="onRejectRequest" aria-role="button">驳回</view>
+          <view class="nb-btn {{busy ? 'disabled' : ''}}" hover-class="btn-hover" data-id="{{item.id}}" bindtap="onApproveRequest" aria-role="button">同意</view>
+        </view>
+        <view wx:elif="{{item.canCancel}}" class="nb-act">
+          <text class="nb-wait">等待主管审批</text>
+          <view class="nb-btn ghost" hover-class="btn-hover" data-id="{{item.id}}" bindtap="onCancelRequest" aria-role="button">撤回</view>
+        </view>
+        <view wx:else class="nb-act"><text class="nb-wait">等待主管审批</text></view>
       </view>
-      <view class="od-req-text">{{item.text}}</view>
-      <view wx:if="{{item.canDecide}}" class="row od-req-actions">
-        <view class="od-req-btn primary {{busy ? 'disabled' : ''}}" hover-class="btn-hover" data-id="{{item.id}}" bindtap="onApproveRequest" aria-role="button">同意</view>
-        <view class="od-req-btn" hover-class="btn-hover" data-id="{{item.id}}" bindtap="onRejectRequest" aria-role="button">驳回</view>
+      <view wx:if="{{requestRejected}}" class="nb-row">
+        <view class="nb-main">
+          <view class="nb-ic"><ui-icon name="info" color="#1D1D1F" size="20" /></view>
+          <view class="nb-body"><view class="nb-text od-nb-plain">{{requestRejected}}</view></view>
+        </view>
       </view>
-      <view wx:elif="{{item.canCancel}}" class="row od-req-actions">
-        <text class="flex1 od-req-wait">等待主管审批</text>
-        <view class="od-req-btn small" hover-class="btn-hover" data-id="{{item.id}}" bindtap="onCancelRequest" aria-role="button">撤回</view>
-      </view>
-      <view wx:else class="od-req-wait od-req-wait-top">等待主管审批</view>
     </view>
-    <view wx:if="{{requestRejected}}" class="od-req-rejected">{{requestRejected}}</view>
 
     <!-- v2.2 收费确认：走到哪一步、等谁处理；轮到当前用户时有按钮 -->
     <view wx:if="{{chargeCard}}" class="od-charge">
@@ -206,11 +237,15 @@
       </view>
 
       <!-- 暂停提示：工程师在「信息」顶部（返厂单默认停在「返厂流程」，那里也显示），销售 / 主管在「进度」顶部 -->
-      <view wx:if="{{holdBar && (isEngineerView ? (tab === 'info' || tab === 'factory') : tab === 'progress')}}" class="od-holdbar">
-        <view class="od-holdbar-mark"><view class="od-holdbar-bar"></view><view class="od-holdbar-bar"></view></view>
-        <view class="flex1">
-          <view class="od-holdbar-text">{{holdBar.text}}</view>
-          <view class="od-holdbar-sub num-font">{{holdBar.sub}}</view>
+      <view wx:if="{{holdBar && (isEngineerView ? (tab === 'info' || tab === 'factory') : tab === 'progress')}}" class="nb-card od-holdbar">
+        <view class="nb-row">
+          <view class="nb-main">
+            <view class="nb-ic hold"><ui-icon name="pause" color="#5E5E63" size="20" /></view>
+            <view class="nb-body">
+              <view class="nb-title">{{holdBar.text}}</view>
+              <view class="nb-text num-font">{{holdBar.sub}}</view>
+            </view>
+          </view>
         </view>
       </view>
 

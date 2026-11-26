@@ -143,3 +143,25 @@ button:not([size=mini]) { margin-left: 0; margin-right: 0; padding-left: 0; padd
 .dot { display: inline-block; width: 14rpx; height: 14rpx; border-radius: 50%; background: var(--red); }
 .notice { border-radius: 24rpx; background: var(--bg); padding: 28rpx 32rpx; font-size: 28rpx; line-height: 44rpx; color: var(--text-body); }
 .alert { font-size: 26rpx; color: var(--red); }
+
+/* ========== 站内通知（v2.3，B 图标列表）：同一处的通知收进一张白卡片，每条 = 圆形图标 + 标题 + 说明 + 按钮 ========== */
+.nb-card { background: var(--card); border-radius: 36rpx; box-shadow: var(--shadow); padding: 0 28rpx; }
+.nb-row { padding: 28rpx 0; border-top: 2rpx solid var(--divider); }
+.nb-row:first-child { border-top: none; }
+.nb-main { display: flex; align-items: flex-start; gap: 20rpx; }
+.nb-ic { flex-shrink: 0; width: 80rpx; height: 80rpx; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #F0F0EE; }
+.nb-ic.todo { background: #FFF4DF; }
+.nb-ic.bad { background: #FBEAEB; }
+.nb-ic.hold { background: #ECECEA; }
+.nb-body { flex: 1; min-width: 0; }
+.nb-head { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
+.nb-title { flex: 1; min-width: 0; font-size: 30rpx; line-height: 44rpx; font-weight: 700; color: var(--text); }
+.nb-time { flex-shrink: 0; font-size: 24rpx; color: var(--text-2); }
+.nb-text { margin-top: 4rpx; font-size: 26rpx; line-height: 40rpx; color: var(--text-2); word-break: break-all; }
+.nb-side { align-self: center; flex-shrink: 0; display: flex; align-items: center; gap: 8rpx; }
+.nb-act { margin-top: 20rpx; padding-left: 100rpx; display: flex; justify-content: flex-end; align-items: center; gap: 16rpx; }
+.nb-wait { flex: 1; font-size: 26rpx; color: #8A5A07; }
+.nb-btn { flex-shrink: 0; height: 72rpx; padding: 0 32rpx; border-radius: 36rpx; display: flex; align-items: center; justify-content: center; background: var(--text); color: #FFFFFF; font-size: 28rpx; font-weight: 600; }
+.nb-btn.ghost { background: var(--soft); color: var(--text); }
+.nb-btn.disabled { background: var(--disabled); }
+.nb-x { width: 64rpx; height: 64rpx; display: flex; align-items: center; justify-content: center; }

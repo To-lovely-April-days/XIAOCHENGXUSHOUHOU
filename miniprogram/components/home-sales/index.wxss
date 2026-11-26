@@ -40,9 +40,4 @@
 
 /* v2.2 等我处理的收费确认 */
 .ct-count { margin-left: 8rpx; font-family: var(--font-num); color: var(--red); }
-.ct-item { padding: 24rpx 0; border-bottom: 2rpx solid #ECECEA; display: flex; align-items: center; gap: 24rpx; }
-.ct-item:last-child { border-bottom: none; }
-.ct-name { font-size: 32rpx; font-weight: 600; }
-.ct-urgent { margin-left: 12rpx; padding: 2rpx 12rpx; border-radius: 10rpx; background: #9A5B00; color: #FFFFFF; font-size: 22rpx; font-weight: 700; }
-.ct-sub { margin-top: 4rpx; font-size: 26rpx; line-height: 38rpx; color: #9A5B00; }
-.ct-btn { flex-shrink: 0; height: 72rpx; padding: 0 32rpx; border-radius: 20rpx; background: #1D1D1F; color: #FFFFFF; font-size: 28rpx; font-weight: 600; display: inline-flex; align-items: center; }
+.ct-urgent { flex-shrink: 0; padding: 2rpx 12rpx; border-radius: 10rpx; background: #9A5B00; color: #FFFFFF; font-size: 22rpx; font-weight: 700; }

@@ -24,7 +24,7 @@ const CENTER = {
 
 function decorate(t) {
   if (t.center) return Object.assign({}, t, { iconSrc: icons.get(t.icon, '#FFFFFF', 2.2) });
-  return Object.assign({}, t, { iconOn: icons.get(t.icon, ON, 2), iconOff: icons.get(t.icon, OFF, 1.8) });
+  return Object.assign({}, t, { iconOn: icons.get(t.icon + '-fill', ON), iconOff: icons.get(t.icon, OFF) });
 }
 
 function buildItems(role) {

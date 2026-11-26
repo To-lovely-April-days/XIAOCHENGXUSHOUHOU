@@ -13,13 +13,17 @@
 
 <view wx:else class="main">
   <!-- v1.5 待审批的注册申请；v1.8 能审批的人点进去直接审批 -->
-  <view wx:if="{{pendingRegistrations > 0}}" class="reg-banner" hover-class="row-hover" bindtap="toApprovals" aria-role="button">
-    <view class="reg-dot"></view>
-    <view class="reg-body">
-      <view class="reg-title">有 <text class="greet-num">{{pendingRegistrations}}</text> 个账号待审批</view>
-      <view class="reg-sub">{{canApprove ? '点这里审批' : '请到电脑后台「账号管理」里通过或驳回'}}</view>
+  <view wx:if="{{pendingRegistrations > 0}}" class="nb-card reg-banner" hover-class="row-hover" bindtap="toApprovals" aria-role="button">
+    <view class="nb-row">
+      <view class="nb-main">
+        <view class="nb-ic todo"><ui-icon name="user-add" color="#8A5A07" size="20" /></view>
+        <view class="nb-body">
+          <view class="nb-title">{{pendingRegistrations}} 个账号待审批</view>
+          <view class="nb-text">{{canApprove ? '新同事申请注册，点这里审批' : '请到电脑后台「账号管理」里通过或驳回'}}</view>
+        </view>
+        <view wx:if="{{canApprove}}" class="nb-side"><ui-icon name="right" color="#8E8E93" size="20" /></view>
+      </view>
     </view>
-    <ui-icon wx:if="{{canApprove}}" name="right" color="#AEAEB2" size="18" stroke="2" />
   </view>
 
   <!-- 今日现场时间轴 -->
