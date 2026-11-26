@@ -248,6 +248,8 @@ export const orders = {
   reject: (id, reason) => post(`/orders/${id}/reject`, { reason: reason || '' }),
   /** 确认闭环 @param {number} id @param {string} [note] 备注（选填，会写进状态记录） */
   close: (id, note) => post(`/orders/${id}/close`, { note: note || '' }),
+  /** v2.2 售后主管确认收费；approve=false = 退回（note 必填） */
+  confirmCharge: (id, approve, note) => post(`/orders/${id}/charge/confirm`, { approve, note: note || '' }),
   /** 定价 / 改价（0 = 保内免费） @param {number} id @param {number} price */
   setPrice: (id, price) => post(`/orders/${id}/price`, { price }),
   /** 同意申请（暂停 / 协助人共用） @param {number} id @param {number} requestId */

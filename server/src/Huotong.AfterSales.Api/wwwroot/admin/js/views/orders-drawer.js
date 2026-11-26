@@ -310,6 +310,23 @@ export default {
       const st = this.d && this.d.serviceType;
       return ATTACHMENT_TYPE_OPTIONS.filter(o => !FORM_SERVICE[o.value] || FORM_SERVICE[o.value] === st);
     },
+    /** v2.2 收费确认：没发起过就不显示 */
+    charge() {
+      const c = this.d && this.d.charge;
+      if (!c || c.status === 'None') return null;
+      const steps = (c.steps || []).map((s, i) => ({
+        key: i, title: s.title, state: s.done ? 'done' : s.current ? 'cur' : '',
+        sub: s.done ? [s.who, s.time ? fmtMDHM(s.time) : '', s.note].filter(Boolean).join(' · ') : s.current ? `等待 ${s.who || ''} 处理` : ''
+      }));
+      const facts = [];
+      if (c.amount !== null && c.amount !== undefined) facts.push(['收费金额', fmtPrice(c.amount)]);
+      if (c.paidText) facts.push(['付款情况', c.paidText]);
+      if (c.reason) facts.push(['收费原因', c.reason]);
+      if (c.quoteNote) facts.push(['报价说明', c.quoteNote]);
+      if (c.directorNote) facts.push(['销售总监意见', c.directorNote]);
+      if (c.returnNote) facts.push(['最近退回', c.returnNote]);
+      return { text: c.statusText, tone: c.status === 'Confirmed' ? 'green' : c.status === 'Free' ? 'gray' : 'amber', steps, facts, canConfirm: !!c.canConfirm };
+    },
     /** v2.1 每日工作内容（服务端已按日期新的在前） */
     workLogs() {
       return ((this.d && this.d.workLogs) || []).map(l => ({ id: l.id, date: l.date, name: (l.engineer && l.engineer.name) || '', content: l.content }));
@@ -806,6 +823,25 @@ export default {
         this.busy = '';
       }
     },
+    /** v2.2 售后主管确认 / 退回收费（销售报价、销售总监审核在小程序里做） */
+    async chargeDecision(approve) {
+      const d = this.d;
+      if (!d || this.busy) return;
+      const note = await confirm(approve ? '确认收费' : '退回收费确认',
+        approve ? `确认 ${d.customerName} 的收费？确认后工单回到 ${(d.assignee && d.assignee.name) || '工程师'} 手上继续处理，服务价格按报价记下。`
+          : '退回后回到上一步重新处理，请写明原因。',
+        { input: true, multiline: true, inputLabel: approve ? '备注' : '退回原因', placeholder: approve ? '选填' : '必填', okText: approve ? '确认' : '退回' });
+      if (note === null) return;
+      if (!approve && !String(note).trim()) { this.failed(new Error('请填写退回原因')); return; }
+      this.busy = 'charge';
+      try {
+        this.applied(await api.orders.confirmCharge(d.id, approve, note), approve ? '已确认收费' : '已退回');
+      } catch (e) {
+        this.failed(e);
+      } finally {
+        this.busy = '';
+      }
+    },
     onAssigned(res, name, mode) {
       const re = this.d && this.d.status !== 'Pending';
       this.assignOpen = false;
@@ -1028,6 +1064,26 @@ export default {
           </div>
         </div>
       </section>
+
+      <template v-if="charge">
+        <h3 class="section-title">收费确认 <span class="orders-charge-pill" :class="charge.tone">{{ charge.text }}</span></h3>
+        <div class="orders-charge">
+          <div v-for="f in charge.facts" :key="f[0]" class="orders-charge-fact">
+            <span class="text-muted">{{ f[0] }}</span><span>{{ f[1] }}</span>
+          </div>
+          <div class="orders-charge-steps">
+            <div v-for="s in charge.steps" :key="s.key" class="orders-charge-step">
+              <span class="orders-charge-dot" :class="s.state"></span>
+              <span class="orders-charge-title">{{ s.title }}</span>
+              <span class="orders-charge-sub" :class="{ wait: s.state === 'cur' }">{{ s.sub }}</span>
+            </div>
+          </div>
+          <div v-if="charge.canConfirm" class="orders-charge-actions">
+            <button type="button" class="btn btn-primary" :disabled="!!busy" @click="chargeDecision(true)">确认收费</button>
+            <button type="button" class="btn btn-secondary" :disabled="!!busy" @click="chargeDecision(false)">退回</button>
+          </div>
+        </div>
+      </template>
 
       <template v-if="workLogs.length">
         <h3 class="section-title">每日工作</h3>
